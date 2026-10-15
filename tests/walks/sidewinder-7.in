@@ -1,0 +1,15 @@
+look
+read
+study
+north
+map
+score
+cast (go up)
+cast
+(define (step)
+  (if (open? left) (begin (turn left) (go ahead))
+      (if (open? ahead) (go ahead) (turn right))))
+(until (gate?) (step))
+
+score
+who

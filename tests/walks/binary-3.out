@@ -1,0 +1,91 @@
+you comes down the stair into the hedge.
+The Hedge (binary, 8 by 8, seed 3). Find the far gate. Type help for the words.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+East, the way runs one pace and turns left.
+> study
+Every square opens north or east. Walk north and east and you reach the north-east corner from anywhere. From that corner, one way leads down to every square.
+> cast (until (gate?) (if (open? north) (go north) (if (open? east) (go east) (stop))))
+The spell holds (chibi). It runs one step a turn; stop ends it.
+Ring 1 of the Hedge
+North, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+Ring 2 of the Hedge
+East, the way runs three paces with openings on the right at one and two and goes on into the dark.
+South, the way runs one pace and turns right.
+Ring 3 of the Hedge
+East, the way runs three paces with an opening on the right at one and forks.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+Ring 4 of the Hedge
+East, the way runs two paces and forks.
+South, the way runs one pace to a dead end.
+West, the way runs two paces with an opening on the left at one and turns left.
+Ring 5 of the Hedge
+East, the way runs one pace and forks.
+West, the way runs three paces with openings on the left at one and two and turns left.
+Ring 6 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs one pace and turns right.
+West, the way runs three paces with openings on the left at two and three and goes on into the dark.
+Ring 7 of the Hedge
+East, the way runs one pace and forks.
+South, the way runs two paces with an opening on the right at one and turns right.
+Ring 8 of the Hedge
+North, the way runs three paces with openings on the left at one and two and turns right.
+South, the way runs two paces to a dead end.
+West, the way runs one pace and turns left.
+Ring 9 of the Hedge
+North, the way runs two paces with an opening on the left at one and turns right.
+South, the way runs three paces with an opening on the right at one to a dead end.
+West, the way runs one pace to a dead end.
+Ring 10 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs three paces with openings on the right at one and two and goes on into the dark.
+West, the way runs one pace to a dead end.
+Ring 11 of the Hedge
+East, the way runs one pace and forks.
+South, the way runs three paces with openings on the right at one, two and three and goes on into the dark.
+Ring 12 of the Hedge
+North, the way runs two paces with an opening on the left at one and turns left.
+South, the way runs three paces and goes on into the dark.
+West, the way runs one pace and turns left.
+Ring 13 of the Hedge
+North, the way runs one pace and turns left.
+South, the way runs three paces with an opening on the right at one and goes on into the dark.
+West, the way runs three paces with openings on the left at two and three and goes on into the dark.
+Ring 14 of the Hedge
+South, the way runs three paces with openings on the right at one and two and goes on into the dark.
+West, the way runs three paces and goes on into the dark.
+The spell ends.
+> map
++   +   +   +   +---+---+---+---+
+                              @ |
++   +   +   +   +---+---+---+   +
+                                |
++   +   +   +   +   +   +---+   +
+                        |       |
++   +   +   +   +   +---+   +   +
+                    |       |   |
++   +   +   +   +   +---+   +   +
+                    |       |   |
++   +   +   +   +   +---+   +   +
+                    |       |   |
++   +---+---+---+---+   +   +   +
+    |                   |   |    
++---+   +   +   +---+   +   +   +
+| <     |   |   |       |   |    
++---+---+---+---+   +---+---+   +
+> score
+14 turns. 16 turns of light and 2 torches to come. Facing north.
+> again
+You go back to the mouth of the hedge with fresh torches.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+East, the way runs one pace and turns left.
+> cast (repeat 3 (go south))
+The spell holds (chibi). It runs one step a turn; stop ends it.
+The spell walks into the hedge, south, and breaks.
+> score
+0 turns. 30 turns of light and 2 torches to come. Facing south.
+you has left.

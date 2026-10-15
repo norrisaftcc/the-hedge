@@ -1,0 +1,3 @@
+[submodule "vendor/MazeBuilder"]
+	path = vendor/MazeBuilder
+	url = https://github.com/norrisaftcc/MazeBuilder

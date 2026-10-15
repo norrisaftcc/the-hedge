@@ -1,0 +1,471 @@
+you comes down the stair into the hedge.
+The Hedge (sidewinder, 8 by 8, seed 7). Find the far gate. Type help for the words.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+North, the way runs one pace and turns left.
+> look
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+North, the way runs one pace and turns left.
+> read
+A long walk runs along the north edge. The rows below are broken into runs.
+> study
+Every row is runs of squares, and every run has one gate north. Go up to the long walk, along it, and down. The way down is the only way.
+> north
+Ring 1 of the Hedge
+South, the way runs one pace to a dead end.
+West, the way runs two paces with an opening on the left at one and turns right.
+> map
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +   +   +
+                                 
++   +   +   +   +   +   +---+---+
+                    |         @ |
++   +   +   +   +   +---+   +   +
+                            | < |
++   +   +   +   +   +   +   +---+
+> score
+1 turns. 29 turns of light and 2 torches to come. Facing north.
+> cast (go up)
+The spell does not hold (chibi): (go up): go needs one direction: north south east west ahead back left right
+> cast
+  . (define (step)
+  .   (if (open? left) (begin (turn left) (go ahead))
+  .       (if (open? ahead) (go ahead) (turn right))))
+  . (until (gate?) (step))
+  . 
+The spell holds (chibi). It runs one step a turn; stop ends it.
+You turn left. You face west.
+Ring 2 of the Hedge
+East, the way runs one pace and turns right.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns right.
+You turn left. You face south.
+Ring 3 of the Hedge
+A dead end.
+North, the way runs one pace and forks.
+You turn right. You face west.
+You turn right. You face north.
+Ring 2 of the Hedge
+East, the way runs one pace and turns right.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns right.
+You turn left. You face west.
+Ring 3 of the Hedge
+North, the way runs two paces with an opening on the right at one and forks.
+East, the way runs two paces with an opening on the right at one and turns right.
+You turn right. You face north.
+Ring 4 of the Hedge
+North, the way runs one pace and forks.
+East, the way runs two paces to a dead end.
+South, the way runs one pace and turns left.
+Ring 5 of the Hedge
+East, the way runs two paces to a dead end.
+South, the way runs two paces with an opening on the left at one and turns left.
+West, the way runs three paces with openings on the left at two and three and an opening on the right at two and goes on into the dark.
+You turn left. You face west.
+Ring 6 of the Hedge
+East, the way runs three paces with an opening on the right at one to a dead end.
+West, the way runs three paces with openings on the left at one and two and an opening on the right at one to a dead end.
+Ring 7 of the Hedge
+North, the way runs three paces with openings on the left at two and three and goes on into the dark.
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs two paces with an opening on the left at one and forks.
+West, the way runs two paces with an opening on the left at one to a dead end.
+You turn left. You face south.
+Ring 8 of the Hedge
+North, the way runs three paces with openings on the left at one and three and an opening on the right at one and goes on into the dark.
+East, the way runs one pace to a dead end.
+South, the way runs one pace and forks.
+You turn left. You face east.
+Ring 9 of the Hedge
+A dead end.
+West, the way runs one pace and forks.
+You turn right. You face south.
+You turn right. You face west.
+Ring 8 of the Hedge
+North, the way runs three paces with openings on the left at one and three and an opening on the right at one and goes on into the dark.
+East, the way runs one pace to a dead end.
+South, the way runs one pace and forks.
+You turn left. You face south.
+Ring 9 of the Hedge
+North, the way runs three paces with an opening on the left at two and openings on the right at one and two and goes on into the dark.
+East, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+You turn left. You face east.
+Ring 10 of the Hedge
+South, the way runs one pace and forks.
+West, the way runs two paces with an opening on the right at one to a dead end.
+You turn right. You face south.
+Ring 11 of the Hedge
+North, the way runs one pace and turns left.
+East, the way runs one pace to a dead end.
+West, the way runs one pace to a dead end.
+You turn left. You face east.
+Ring 12 of the Hedge
+A dead end.
+West, the way runs two paces with an opening on the right at one to a dead end.
+You turn right. You face south.
+You turn right. You face west.
+Ring 11 of the Hedge
+North, the way runs one pace and turns left.
+East, the way runs one pace to a dead end.
+West, the way runs one pace to a dead end.
+Ring 12 of the Hedge
+A dead end.
+East, the way runs two paces with an opening on the left at one to a dead end.
+You turn right. You face north.
+You turn right. You face east.
+Ring 11 of the Hedge
+North, the way runs one pace and turns left.
+East, the way runs one pace to a dead end.
+West, the way runs one pace to a dead end.
+You turn left. You face north.
+Ring 10 of the Hedge
+South, the way runs one pace and forks.
+West, the way runs two paces with an opening on the right at one to a dead end.
+You turn left. You face west.
+Ring 9 of the Hedge
+North, the way runs three paces with an opening on the left at two and openings on the right at one and two and goes on into the dark.
+East, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+Ring 10 of the Hedge
+A dead end.
+East, the way runs two paces with an opening on the left at one and turns right.
+You turn right. You face north.
+You turn right. You face east.
+Ring 9 of the Hedge
+North, the way runs three paces with an opening on the left at two and openings on the right at one and two and goes on into the dark.
+East, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+You turn left. You face north.
+Ring 8 of the Hedge
+North, the way runs three paces with openings on the left at one and three and an opening on the right at one and goes on into the dark.
+East, the way runs one pace to a dead end.
+South, the way runs one pace and forks.
+Ring 7 of the Hedge
+North, the way runs three paces with openings on the left at two and three and goes on into the dark.
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs two paces with an opening on the left at one and forks.
+West, the way runs two paces with an opening on the left at one to a dead end.
+You turn left. You face west.
+Ring 8 of the Hedge
+East, the way runs three paces with an opening on the left at one and openings on the right at one and three and goes on into the dark.
+South, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+You turn left. You face south.
+Ring 9 of the Hedge
+North, the way runs one pace and forks.
+West, the way runs two paces with an opening on the left at one and turns left.
+You turn right. You face west.
+Ring 10 of the Hedge
+East, the way runs one pace and turns left.
+South, the way runs two paces and turns left.
+West, the way runs one pace and turns left.
+You turn left. You face south.
+Ring 11 of the Hedge
+North, the way runs one pace and forks.
+South, the way runs one pace and turns left.
+Your torch gutters out. You light another.
+Ring 12 of the Hedge
+North, the way runs two paces and forks.
+East, the way runs one pace to a dead end.
+You turn left. You face east.
+Ring 13 of the Hedge
+A dead end.
+West, the way runs one pace and turns right.
+You turn right. You face south.
+You turn right. You face west.
+Ring 12 of the Hedge
+North, the way runs two paces and forks.
+East, the way runs one pace to a dead end.
+You turn right. You face north.
+Ring 11 of the Hedge
+North, the way runs one pace and forks.
+South, the way runs one pace and turns left.
+Ring 10 of the Hedge
+East, the way runs one pace and turns left.
+South, the way runs two paces and turns left.
+West, the way runs one pace and turns left.
+You turn left. You face west.
+Ring 11 of the Hedge
+East, the way runs two paces with an opening on the right at one and turns left.
+South, the way runs two paces to a dead end.
+You turn left. You face south.
+Ring 12 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs one pace to a dead end.
+Ring 13 of the Hedge
+A dead end.
+North, the way runs two paces and turns right.
+You turn right. You face west.
+You turn right. You face north.
+Ring 12 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs one pace to a dead end.
+Ring 11 of the Hedge
+East, the way runs two paces with an opening on the right at one and turns left.
+South, the way runs two paces to a dead end.
+You turn right. You face east.
+Ring 10 of the Hedge
+East, the way runs one pace and turns left.
+South, the way runs two paces and turns left.
+West, the way runs one pace and turns left.
+Ring 9 of the Hedge
+North, the way runs one pace and forks.
+West, the way runs two paces with an opening on the left at one and turns left.
+You turn left. You face north.
+Ring 8 of the Hedge
+East, the way runs three paces with an opening on the left at one and openings on the right at one and three and goes on into the dark.
+South, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+You turn left. You face west.
+Ring 9 of the Hedge
+A dead end.
+East, the way runs three paces with an opening on the left at two and openings on the right at one and two and goes on into the dark.
+You turn right. You face north.
+You turn right. You face east.
+Ring 8 of the Hedge
+East, the way runs three paces with an opening on the left at one and openings on the right at one and three and goes on into the dark.
+South, the way runs one pace and turns right.
+West, the way runs one pace to a dead end.
+Ring 7 of the Hedge
+North, the way runs three paces with openings on the left at two and three and goes on into the dark.
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs two paces with an opening on the left at one and forks.
+West, the way runs two paces with an opening on the left at one to a dead end.
+You turn left. You face north.
+Ring 8 of the Hedge
+North, the way runs three paces with openings on the left at one and two and forks.
+South, the way runs three paces with openings on the left at one and two and an opening on the right at one and forks.
+Ring 9 of the Hedge
+North, the way runs two paces with an opening on the left at one and forks.
+South, the way runs three paces with openings on the left at two and three and an opening on the right at two and goes on into the dark.
+West, the way runs two paces with an opening on the left at one and turns left.
+You turn left. You face west.
+Ring 10 of the Hedge
+East, the way runs one pace and forks.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+You turn left. You face south.
+Ring 11 of the Hedge
+A dead end.
+North, the way runs one pace and forks.
+You turn right. You face west.
+You turn right. You face north.
+Ring 10 of the Hedge
+East, the way runs one pace and forks.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+You turn left. You face west.
+Ring 11 of the Hedge
+East, the way runs two paces with an opening on the right at one and forks.
+South, the way runs one pace to a dead end.
+You turn left. You face south.
+Ring 12 of the Hedge
+A dead end.
+North, the way runs one pace and turns right.
+You turn right. You face west.
+You turn right. You face north.
+Ring 11 of the Hedge
+East, the way runs two paces with an opening on the right at one and forks.
+South, the way runs one pace to a dead end.
+You turn right. You face east.
+Ring 10 of the Hedge
+East, the way runs one pace and forks.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+Ring 9 of the Hedge
+North, the way runs two paces with an opening on the left at one and forks.
+South, the way runs three paces with openings on the left at two and three and an opening on the right at two and goes on into the dark.
+West, the way runs two paces with an opening on the left at one and turns left.
+You turn left. You face north.
+Ring 10 of the Hedge
+North, the way runs one pace and forks.
+South, the way runs three paces with an opening on the left at three and openings on the right at one and three and goes on into the dark.
+West, the way runs one pace to a dead end.
+You turn left. You face west.
+Ring 11 of the Hedge
+A dead end.
+East, the way runs one pace and forks.
+You turn right. You face north.
+You turn right. You face east.
+Ring 10 of the Hedge
+North, the way runs one pace and forks.
+South, the way runs three paces with an opening on the left at three and openings on the right at one and three and goes on into the dark.
+West, the way runs one pace to a dead end.
+You turn left. You face north.
+Ring 11 of the Hedge
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs three paces with openings on the right at one and two and goes on into the dark.
+West, the way runs three paces with an opening on the left at two and turns left.
+You turn left. You face west.
+Your torch gutters out. You light another.
+Ring 12 of the Hedge
+East, the way runs three paces with openings on the right at one and three and goes on into the dark.
+West, the way runs two paces with an opening on the left at one and turns left.
+Ring 13 of the Hedge
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+You turn left. You face south.
+Ring 14 of the Hedge
+A dead end.
+North, the way runs one pace and forks.
+You turn right. You face west.
+You turn right. You face north.
+Ring 13 of the Hedge
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+You turn left. You face west.
+Ring 14 of the Hedge
+East, the way runs three paces with openings on the right at one and three and goes on into the dark.
+South, the way runs three paces and goes on into the dark.
+You turn left. You face south.
+Ring 15 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs three paces to a dead end.
+Ring 16 of the Hedge
+North, the way runs two paces and turns right.
+South, the way runs two paces to a dead end.
+Ring 17 of the Hedge
+North, the way runs three paces and turns right.
+South, the way runs one pace to a dead end.
+Ring 18 of the Hedge
+A dead end.
+North, the way runs three paces and goes on into the dark.
+You turn right. You face west.
+You turn right. You face north.
+Ring 17 of the Hedge
+North, the way runs three paces and turns right.
+South, the way runs one pace to a dead end.
+Ring 16 of the Hedge
+North, the way runs two paces and turns right.
+South, the way runs two paces to a dead end.
+Ring 15 of the Hedge
+North, the way runs one pace and turns right.
+South, the way runs three paces to a dead end.
+Ring 14 of the Hedge
+East, the way runs three paces with openings on the right at one and three and goes on into the dark.
+South, the way runs three paces and goes on into the dark.
+You turn right. You face east.
+Ring 13 of the Hedge
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs one pace to a dead end.
+West, the way runs one pace and turns left.
+Ring 12 of the Hedge
+East, the way runs three paces with openings on the right at one and three and goes on into the dark.
+West, the way runs two paces with an opening on the left at one and turns left.
+Ring 11 of the Hedge
+East, the way runs three paces with an opening on the right at two and goes on into the dark.
+South, the way runs three paces with openings on the right at one and two and goes on into the dark.
+West, the way runs three paces with an opening on the left at two and turns left.
+Ring 12 of the Hedge
+East, the way runs three paces with an opening on the right at one and turns right.
+West, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 13 of the Hedge
+East, the way runs two paces and turns right.
+South, the way runs one pace and forks.
+West, the way runs three paces with an opening on the left at two and goes on into the dark.
+Ring 14 of the Hedge
+East, the way runs one pace and turns right.
+West, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 15 of the Hedge
+South, the way runs three paces and turns right.
+West, the way runs three paces with an opening on the left at two and goes on into the dark.
+You turn right. You face south.
+Ring 16 of the Hedge
+North, the way runs one pace and turns left.
+South, the way runs two paces and turns right.
+Ring 17 of the Hedge
+North, the way runs two paces and turns left.
+South, the way runs one pace and turns right.
+Ring 18 of the Hedge
+North, the way runs three paces and turns left.
+West, the way runs one pace to a dead end.
+You turn right. You face west.
+Ring 19 of the Hedge
+A dead end.
+East, the way runs one pace and turns left.
+You turn right. You face north.
+You turn right. You face east.
+Ring 18 of the Hedge
+North, the way runs three paces and turns left.
+West, the way runs one pace to a dead end.
+You turn left. You face north.
+Ring 17 of the Hedge
+North, the way runs two paces and turns left.
+South, the way runs one pace and turns right.
+Ring 16 of the Hedge
+North, the way runs one pace and turns left.
+South, the way runs two paces and turns right.
+Ring 15 of the Hedge
+South, the way runs three paces and turns right.
+West, the way runs three paces with an opening on the left at two and goes on into the dark.
+You turn left. You face west.
+Ring 14 of the Hedge
+East, the way runs one pace and turns right.
+West, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 13 of the Hedge
+East, the way runs two paces and turns right.
+South, the way runs one pace and forks.
+West, the way runs three paces with an opening on the left at two and goes on into the dark.
+You turn left. You face south.
+Your last torch gutters out. It is dark.
+Ring 14 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: north, east and west.
+You turn left. You face east.
+Ring 15 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: south and west.
+You turn right. You face south.
+Ring 16 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: north.
+You turn right. You face west.
+You turn right. You face north.
+Ring 15 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: south and west.
+You turn left. You face west.
+Ring 14 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: north, east and west.
+Ring 15 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: east and south.
+You turn left. You face south.
+Ring 16 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: north and east.
+You turn left. You face east.
+Ring 17 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: south and west.
+You turn right. You face south.
+Ring 18 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: north and west.
+You turn right. You face west.
+The Far Gate
+It is dark. You feel along the hedge.
+Open ways: east.
+You climb the stair into daylight. 99 turns.
+you has found the far gate in 99 turns.
+> score
+99 turns. no light. Facing west.
+> who
+In the hedge:
+  you: out, past the far gate, 99 turns
+you has left.

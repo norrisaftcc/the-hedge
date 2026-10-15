@@ -1,0 +1,7 @@
+study
+cast (until (gate?) (if (open? north) (go north) (if (open? east) (go east) (stop))))
+map
+score
+again
+cast (repeat 3 (go south))
+score
