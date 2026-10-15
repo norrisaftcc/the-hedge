@@ -19,7 +19,6 @@ import os
 import struct
 
 from .. import render
-from .telnet import STEP_SECONDS
 
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 WEB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "web")
@@ -77,7 +76,7 @@ class WebSocketTransport:
     async def run_spell(self, name):
         try:
             while True:
-                await asyncio.sleep(STEP_SECONDS)
+                await asyncio.sleep(self.hub.pace)
                 if not self.hub.tick(name):
                     w = self.writers.get(name)
                     if w:

@@ -5,34 +5,41 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Hedge</title>
 <style>
-  :root { --paper: #f2ead3; --ink: #1b1712; --muted: #6b6253; --accent: #7a2e1c; }
-  @media (prefers-color-scheme: dark) { :root { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; } }
+  :root { --paper: #f2ead3; --ink: #1b1712; --muted: #6b6253; --accent: #7a2e1c; --faint: #d8cfb4; }
+  @media (prefers-color-scheme: dark) { :root { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; --faint: #2b2721; } }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.4 Georgia, serif; }
-  main { max-width: 720px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
-  #log { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; min-height: 50vh; max-height: 60vh; overflow-y: auto; border: 1px solid var(--muted); padding: 8px; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+  #hud { color: var(--muted); font-size: 14px; }
+  #views { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+  @media (max-width: 520px) { #views { grid-template-columns: 1fr; } }
+  canvas { width: 100%; height: auto; border: 1px solid var(--ink); border-radius: 4px; background: var(--paper); display: block; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; height: 36vh; overflow-y: auto; border: 1px solid var(--muted); padding: 8px; }
   #log .say { color: var(--accent); }
   #log .room { font-family: Georgia, serif; font-size: 16px; }
+  #log .map { display: none; }
   #exits button, #line { font: inherit; }
   #exits { display: flex; gap: 8px; flex-wrap: wrap; }
   #exits button { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 6px; }
   #exits button:disabled { opacity: .3; }
   form { display: flex; gap: 8px; }
   #line { flex: 1; padding: 8px; border: 1px solid var(--muted); background: transparent; color: var(--ink); font-family: ui-monospace, Menlo, Consolas, monospace; }
-  #hud { color: var(--muted); font-size: 14px; }
   textarea { width: 100%; box-sizing: border-box; font: 14px ui-monospace, Menlo, Consolas, monospace; background: transparent; color: var(--ink); border: 1px solid var(--muted); padding: 8px; min-height: 5em; }
 </style>
 </head>
 <body>
 <main>
   <div id="hud">The Hedge. Connecting…</div>
+  <div id="views">
+    <canvas id="eye" width="600" height="400" aria-label="What you see ahead"></canvas>
+    <canvas id="chart" width="300" height="400" aria-label="The squares you have seen"></canvas>
+  </div>
   <div id="log"></div>
   <div id="exits">
-    <button data-verb="go" data-direction="north">north</button>
-    <button data-verb="go" data-direction="west">west</button>
-    <button data-verb="go" data-direction="east">east</button>
-    <button data-verb="go" data-direction="south">south</button>
+    <button data-verb="go" data-direction="ahead">ahead</button>
+    <button data-verb="turn" data-which="left">turn left</button>
+    <button data-verb="turn" data-which="right">turn right</button>
+    <button data-verb="turn" data-which="around">about</button>
     <button data-verb="look">look</button>
-    <button data-verb="map">map</button>
     <button data-verb="stop">stop</button>
   </div>
   <form id="f"><input id="line" autocomplete="off" placeholder="your name"><button>send</button></form>
@@ -46,14 +53,100 @@
 </main>
 <script>
 (() => {
-  const log = document.getElementById("log"), hud = document.getElementById("hud");
-  const input = document.getElementById("line"), form = document.getElementById("f");
-  const exits = document.getElementById("exits");
-  let named = false, room = null;
+  const $ = id => document.getElementById(id);
+  const log = $("log"), hud = $("hud"), input = $("line"), form = $("f"), exits = $("exits");
+  const eye = $("eye"), chart = $("chart");
+  const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const DIRS = ["north", "east", "south", "west"];
+  const RIGHT_OF = h => DIRS[(DIRS.indexOf(h) + 1) % 4], LEFT_OF = h => DIRS[(DIRS.indexOf(h) + 3) % 4];
+  let named = false, room = null, map = null;
+
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/");
   const show = (text, cls) => { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; log.appendChild(d); log.scrollTop = log.scrollHeight; };
-  const send = s => ws.readyState === 1 && ws.send(s);
-  ws.onopen = () => { hud.textContent = "Connected. What is your name?"; };
+  const send = s => ws.readyState === 1 && ws.send(typeof s === "string" ? s : JSON.stringify(s));
+
+  /* ---- the first-person view: drawn from room.exits and room.sight[heading] ----
+     The room description says how far the way ahead runs, where it opens, and what ends it.
+     These are the same numbers, so the picture cannot disagree with the words. */
+  function drawEye() {
+    const ctx = eye.getContext("2d"), W = eye.width, H = eye.height;
+    ctx.fillStyle = css("--paper"); ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 3; ctx.lineJoin = "round";
+    if (!room) return;
+    if (!room.lit) {
+      ctx.fillStyle = css("--ink"); ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = css("--paper"); ctx.font = "italic 20px Georgia"; ctx.textAlign = "center";
+      ctx.fillText("It is dark. Open ways: " + room.exits.join(", ") + ".", W / 2, H / 2);
+      return;
+    }
+    const h = room.heading, ahead = room.sight[h];
+    const run = ahead ? ahead.run : 0, end = ahead ? ahead.end : "wall";
+    const openAt = { left: new Set(), right: new Set() };
+    if (room.exits.includes(LEFT_OF(h))) openAt.left.add(0);
+    if (room.exits.includes(RIGHT_OF(h))) openAt.right.add(0);
+    if (ahead) for (const [pace, side] of ahead.openings) openAt[side].add(pace);
+    // Depth d is the near edge of pace d. Perspective: a frame shrinks toward the centre.
+    const frame = d => { const s = Math.pow(0.62, d); const w = W * s, hh = H * s; return { x: (W - w) / 2, y: (H - hh) / 2, w, h: hh }; };
+    const depth = Math.min(run, 4);
+    for (let d = 0; d < depth; d++) {
+      const a = frame(d), b = frame(d + 1);
+      for (const side of ["left", "right"]) {
+        const sx = side === "left" ? [a.x, b.x] : [a.x + a.w, b.x + b.w];
+        if (openAt[side].has(d)) {
+          // an opening: the wall stops, a doorway's edges go straight back
+          ctx.beginPath(); ctx.moveTo(sx[0], a.y); ctx.lineTo(sx[0], a.y + a.h); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(sx[1], b.y); ctx.lineTo(sx[1], b.y + b.h); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(sx[0], b.y); ctx.lineTo(sx[1], b.y); ctx.moveTo(sx[0], b.y + b.h); ctx.lineTo(sx[1], b.y + b.h); ctx.stroke();
+        } else {
+          // a wall: top and bottom edges converge
+          ctx.beginPath(); ctx.moveTo(sx[0], a.y); ctx.lineTo(sx[1], b.y); ctx.moveTo(sx[0], a.y + a.h); ctx.lineTo(sx[1], b.y + b.h); ctx.stroke();
+        }
+      }
+    }
+    const far = frame(depth);
+    if (end === "dark" || run > 4) {
+      ctx.fillStyle = css("--ink"); ctx.fillRect(far.x, far.y, far.w, far.h);
+    } else {
+      ctx.strokeRect(far.x, far.y, far.w, far.h);           // the hedge across the way
+      ctx.fillStyle = css("--faint"); ctx.fillRect(far.x, far.y, far.w, far.h);
+      if (end === "the gate") { ctx.fillStyle = css("--accent"); ctx.font = `${Math.max(12, far.h / 4)}px Georgia`; ctx.textAlign = "center"; ctx.fillText("the gate", far.x + far.w / 2, far.y + far.h / 2); }
+      if (end.startsWith("turns") || end === "a fork") {       // the way turns: an opening at the end, on that side
+        const sides = end === "a fork" ? ["left", "right"] : [end.split(" ")[1]];
+        for (const side of sides) { const x = side === "left" ? far.x : far.x + far.w * 0.8; ctx.fillStyle = css("--paper"); ctx.fillRect(x, far.y + far.h * 0.1, far.w * 0.2, far.h * 0.8); ctx.strokeRect(x, far.y + far.h * 0.1, far.w * 0.2, far.h * 0.8); }
+      }
+    }
+    ctx.fillStyle = css("--muted"); ctx.font = "13px ui-monospace, Menlo, monospace"; ctx.textAlign = "left";
+    ctx.fillText(`facing ${h} · ${run} pace${run === 1 ? "" : "s"} · ${end}`, 8, H - 10);
+  }
+
+  /* ---- the overhead map: only the squares you have seen, from the map event's cells ---- */
+  function drawChart() {
+    const ctx = chart.getContext("2d"), W = chart.width, H = chart.height;
+    ctx.fillStyle = css("--paper"); ctx.fillRect(0, 0, W, H);
+    if (!map) return;
+    const cell = Math.floor(Math.min((W - 20) / map.cols, (H - 20) / map.rows));
+    const ox = (W - cell * map.cols) / 2, oy = (H - cell * map.rows) / 2;
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2;
+    for (const [key, ways] of Object.entries(map.cells)) {
+      const [r, c] = key.split(",").map(Number), x = ox + c * cell, y = oy + r * cell;
+      ctx.fillStyle = css("--faint"); ctx.fillRect(x, y, cell, cell);
+      ctx.beginPath();
+      if (!ways.includes("north")) { ctx.moveTo(x, y); ctx.lineTo(x + cell, y); }
+      if (!ways.includes("south")) { ctx.moveTo(x, y + cell); ctx.lineTo(x + cell, y + cell); }
+      if (!ways.includes("west")) { ctx.moveTo(x, y); ctx.lineTo(x, y + cell); }
+      if (!ways.includes("east")) { ctx.moveTo(x + cell, y); ctx.lineTo(x + cell, y + cell); }
+      ctx.stroke();
+    }
+    const mark = (pos, glyph, color) => { if (!pos) return; ctx.fillStyle = color; ctx.font = `${cell * 0.7}px Georgia`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(glyph, ox + pos[1] * cell + cell / 2, oy + pos[0] * cell + cell / 2); };
+    mark(map.entrance, "<", css("--muted"));
+    mark(map.gate, ">", css("--accent"));
+    // you: an arrowhead the way you face
+    const [r, c] = map.pos, cx = ox + c * cell + cell / 2, cy = oy + r * cell + cell / 2, a = { north: -Math.PI / 2, east: 0, south: Math.PI / 2, west: Math.PI }[map.heading];
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(a); ctx.fillStyle = css("--accent");
+    ctx.beginPath(); ctx.moveTo(cell * 0.35, 0); ctx.lineTo(-cell * 0.25, -cell * 0.25); ctx.lineTo(-cell * 0.1, 0); ctx.lineTo(-cell * 0.25, cell * 0.25); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  ws.onopen = () => { hud.textContent = "Connected. What is your name?"; drawEye(); drawChart(); };
   ws.onclose = () => { hud.textContent = "The connection closed. Reload to come back."; };
   ws.onmessage = m => {
     const ev = JSON.parse(m.data);
@@ -62,8 +155,12 @@
     if (ev.kind === "room") {
       room = ev;
       hud.textContent = `${ev.name} · light ${ev.light} · torches ${ev.torches} · facing ${ev.heading}`;
-      for (const b of exits.querySelectorAll("button[data-direction]")) b.disabled = !ev.exits.includes(b.dataset.direction);
+      $("exits").querySelector('[data-direction="ahead"]').disabled = !ev.exits.includes(ev.heading);
+      drawEye();
+      send({ verb: "map" });   // the chart follows every step; a quiet verb, allowed while a spell runs
     }
+    if (ev.kind === "face") { if (room) { room.heading = ev.heading; drawEye(); } send({ verb: "map" }); }
+    if (ev.kind === "map") { map = ev; drawChart(); return; }
     show(ev.text, ev.kind);
   };
   form.onsubmit = e => {
@@ -75,15 +172,19 @@
   };
   exits.onclick = e => {
     const b = e.target.closest("button"); if (!b || !named) return;
-    const msg = { verb: b.dataset.verb }; if (b.dataset.direction) msg.direction = b.dataset.direction;
-    send(JSON.stringify(msg));   // the structured path: a verb and its arguments, no line to parse
+    const msg = { verb: b.dataset.verb };
+    if (b.dataset.direction) msg.direction = b.dataset.direction;
+    if (b.dataset.which) msg.which = b.dataset.which;
+    send(msg);   // the structured path: a verb and its arguments, no line to parse
   };
-  document.getElementById("cast").onclick = () => {
-    if (!named) return;
-    const text = document.getElementById("spell").value;
-    show("> cast …");
-    send(JSON.stringify({ verb: "cast", words: text }));
-  };
+  document.addEventListener("keydown", e => {
+    if (document.activeElement === input || document.activeElement.tagName === "TEXTAREA" || !named) return;
+    const key = { ArrowUp: { verb: "go", direction: "ahead" }, ArrowDown: { verb: "go", direction: "back" },
+                  ArrowLeft: { verb: "turn", which: "left" }, ArrowRight: { verb: "turn", which: "right" } }[e.key];
+    if (key) { e.preventDefault(); send(key); }
+  });
+  $("cast").onclick = () => { if (!named) return; show("> cast …"); send({ verb: "cast", words: $("spell").value }); };
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawEye(); drawChart(); });
 })();
 </script>
 </body>

@@ -15,7 +15,8 @@ from .world import Hedge
 
 
 def make_hub(args):
-    return Hub(Game(Hedge(args.size, args.size, args.algorithm, args.seed)))
+    pace = getattr(args, "pace", None)
+    return Hub(Game(Hedge(args.size, args.size, args.algorithm, args.seed)), pace=0.6 if pace is None else pace)
 
 
 async def serve(args):
@@ -48,10 +49,16 @@ def main(argv=None):
     parser.add_argument("--algorithm", "-a", choices=("binary", "sidewinder", "aldous-broder"), default="sidewinder")
     parser.add_argument("--size", type=int, default=8, help="rows and columns")
     parser.add_argument("--solo", action="store_true", help="play alone on this terminal, no network")
+    parser.add_argument("--pace", type=float, default=None, metavar="SECONDS",
+                        help="seconds between spell steps (default 0.6 on the network, 0.3 solo; 0 for a transcript)")
     args = parser.parse_args(argv)
     if args.solo:
         from .transports.stdin import run
-        return run(make_hub(args), sys.stdin)
+        pace = 0.3 if args.pace is None else args.pace
+        args.pace = pace
+        return run(make_hub(args), sys.stdin, pace=pace)
+    if args.pace is None:
+        args.pace = 0.6
     try:
         asyncio.run(serve(args))
     except KeyboardInterrupt:

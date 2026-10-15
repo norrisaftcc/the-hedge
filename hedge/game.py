@@ -135,7 +135,12 @@ class Game:
         return [Event("face", p.name, f"You turn {t}. You face {p.heading}.", heading=p.heading)]
 
     def do_map(self, p):
-        return [Event("map", p.name, self.hedge.map_text(p.seen, p.pos), seen=sorted(p.seen), pos=list(p.pos))]
+        """The map: the text, and for every seen cell its open ways, so a client can draw the walls."""
+        h = self.hedge
+        cells = {f"{r},{c}": h.ways((r, c)) for r, c in sorted(p.seen)}
+        return [Event("map", p.name, h.map_text(p.seen, p.pos), cells=cells, pos=list(p.pos), heading=p.heading,
+                      rows=h.rows, cols=h.cols, entrance=list(h.entrance),
+                      gate=list(h.gate) if h.gate in p.seen else None)]
 
     def do_read(self, p):
         return self.read(p, fully=False)

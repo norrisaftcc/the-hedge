@@ -71,7 +71,9 @@ spells/               example spells
 tests/                pytest; tests/walks/ holds transcripts as test vectors
 ```
 
-**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. The same numbers ride in the `room` event's data, so a window drawn from them cannot disagree with the text. The browser page enables a button per open way from that data; the first-person window is the next client, and it is a page, not a change to the game.
+**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. The same numbers ride in the `room` event's data, so a window drawn from them cannot disagree with the text. The browser page draws its first-person view and its overhead map (only the squares you have seen) from that data, and needed no change below the transport.
+
+**Spell pace:** 0.6 s a step on telnet and in the browser, so the room can watch; 0.3 s solo and in `api.Table`; `--pace 0` for a transcript.
 
 **Ways in today:** `telnet localhost 4000`; a GMCP client (Mudlet, for one) on the same port gets `Hedge.Room` packets beside the text; a browser at `http://localhost:4001/`; `--solo` on the terminal; and `hedge.api.Table` from Python.
 

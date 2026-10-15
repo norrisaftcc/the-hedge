@@ -11,6 +11,8 @@
 Same layers as telnet and the browser; only the sink differs.
 """
 
+import time
+
 from .game import Game
 from .hub import Hub
 from .world import Hedge
@@ -18,7 +20,10 @@ from . import render
 
 
 class Table:
-    def __init__(self, seed=1, algorithm="sidewinder", size=8, hedge=None):
+    PACE = 0.3  # seconds between spell steps in run_spell; pass pace=0 for tests
+
+    def __init__(self, seed=1, algorithm="sidewinder", size=8, hedge=None, pace=PACE):
+        self.pace = pace
         self.hedge = hedge or Hedge(size, size, algorithm, seed)
         self.game = Game(self.hedge)
         self.hub = Hub(self.game)
@@ -57,6 +62,8 @@ class Table:
         self.take(name)
         steps = 0
         while self.hub.running(name) and steps < max_steps:
+            if self.pace:
+                time.sleep(self.pace)
             self.hub.tick(name)
             steps += 1
         return self.take(name), steps

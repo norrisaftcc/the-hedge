@@ -8,5 +8,5 @@ from .server import make_hub
 from .transports.stdin import run
 
 
-def solo(args, lines, out=None):
-    run(make_hub(args), lines, out)
+def solo(args, lines, out=None, pace=None):
+    run(make_hub(args), lines, out, pace=getattr(args, "pace", 0.3) if pace is None else pace)

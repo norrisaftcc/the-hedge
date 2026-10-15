@@ -232,7 +232,7 @@ def test_a_grammar_is_data():
 # ---- the game, through the local API ----
 
 def test_two_players_see_each_other():
-    t = Table(seed=7, algorithm="sidewinder")
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
     t.join("Ash")
     assert "Ash is here." in t.text("Brook", t.join("Brook"))
     assert "Brook comes down the stair" in t.text("Ash")
@@ -244,7 +244,7 @@ def test_two_players_see_each_other():
 
 
 def test_room_event_carries_the_numbers_behind_the_words():
-    t = Table(seed=7, algorithm="sidewinder")
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
     room = [e for e in t.join("Ash") if e.kind == "room"][0]
     assert room.data["exits"] == t.hedge.ways(t.hedge.entrance)
     assert room.data["entrance"] is True and room.data["lit"] is True
@@ -261,7 +261,7 @@ def test_room_event_carries_the_numbers_behind_the_words():
 
 
 def test_structured_verbs_skip_the_grammar():
-    t = Table(seed=7, algorithm="sidewinder")
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
     t.join("Ash")
     d = t.hedge.ways(t.hedge.entrance)[0]
     events = t.act("Ash", "go", direction=d)
@@ -270,7 +270,7 @@ def test_structured_verbs_skip_the_grammar():
 
 
 def test_walking_into_the_hedge_and_out_of_the_light():
-    t = Table(seed=7, algorithm="aldous-broder")
+    t = Table(pace=0, seed=7, algorithm="aldous-broder")
     t.join("Ash")
     p = t.player("Ash")
     closed = [d for d in ("north", "east", "south", "west") if not t.hedge.is_open(p.pos, d)][0]
@@ -283,7 +283,7 @@ def test_walking_into_the_hedge_and_out_of_the_light():
 
 
 def test_a_spell_walks_to_the_gate_in_the_game():
-    t = Table(seed=3, algorithm="binary")
+    t = Table(pace=0, seed=3, algorithm="binary")
     t.join("Ash")
     assert "The spell holds" in t.text("Ash", t.line("Ash", "cast " + read_spell("left-hand.scm")))
     events, steps = t.run_spell("Ash")
@@ -292,7 +292,7 @@ def test_a_spell_walks_to_the_gate_in_the_game():
 
 
 def test_a_spell_that_walks_into_the_hedge_breaks():
-    t = Table(seed=3, algorithm="binary")
+    t = Table(pace=0, seed=3, algorithm="binary")
     t.join("Ash")
     t.line("Ash", "cast (repeat 20 (go south))")  # the entrance of this hedge has no way south
     assert not t.tick("Ash")
@@ -300,7 +300,7 @@ def test_a_spell_that_walks_into_the_hedge_breaks():
 
 
 def test_bad_spell_does_not_hold_and_quiet_verbs_during_a_spell():
-    t = Table(seed=1, algorithm="binary", size=4)
+    t = Table(pace=0, seed=1, algorithm="binary", size=4)
     t.join("Ash")
     assert "does not hold" in t.text("Ash", t.line("Ash", "cast (go up)"))
     assert t.player("Ash").spell is None
@@ -311,7 +311,7 @@ def test_bad_spell_does_not_hold_and_quiet_verbs_during_a_spell():
 
 
 def test_multi_line_spell_typed_until_a_blank_line():
-    t = Table(seed=7, algorithm="sidewinder")
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
     t.join("Ash")
     assert t.hub.line("Ash", "cast") == "spell"
     assert "Type the spell" in t.text("Ash", t.take("Ash"))
@@ -335,7 +335,7 @@ def test_walk_transcript(name):
     with open(os.path.join(WALKS, name + ".out")) as f:
         expected = f.read()
     out = io.StringIO()
-    solo(Args, lines, out)
+    solo(Args, lines, out, pace=0)
     # The transcript does not depend on whether chibi-scheme is installed.
     plain = lambda t: t.replace(" (chibi)", "").replace(" (python)", "")
     assert plain(out.getvalue()) == plain(expected)
@@ -351,7 +351,7 @@ def test_telnet_round_trip_with_gmcp():
     assert balanced("(go north)") and not balanced("(go north") and balanced('(say ")")')
 
     async def run():
-        t = Table(seed=7, algorithm="sidewinder")
+        t = Table(pace=0, seed=7, algorithm="sidewinder")
         transport = TelnetTransport(t.hub)
         srv = await asyncio.start_server(transport.handle, "127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]
@@ -405,7 +405,7 @@ def test_websocket_round_trip_and_the_page():
         return json.loads(await r.readexactly(n))
 
     async def run():
-        t = Table(seed=7, algorithm="sidewinder")
+        t = Table(pace=0, seed=7, algorithm="sidewinder")
         transport = WebSocketTransport(t.hub)
         srv = await asyncio.start_server(transport.handle, "127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]
@@ -444,3 +444,22 @@ def test_websocket_round_trip_and_the_page():
     rooms = [g for g in got if g["kind"] == "room"]
     assert len(rooms) == 2 and rooms[1]["ring"] == 1 and "exits" in rooms[1] and "sight" in rooms[1]
     assert any(g["kind"] == "say" and g["words"] == "over the wire" for g in got)
+
+
+def test_map_event_carries_only_the_seen_cells():
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    t.join("Ash")
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    seen = set(tuple(map(int, k.split(","))) for k in ev.data["cells"])
+    assert seen == t.player("Ash").seen and len(seen) < t.hedge.rows * t.hedge.cols
+    for key, ways in ev.data["cells"].items():
+        r, c = map(int, key.split(","))
+        assert ways == t.hedge.ways((r, c))
+    assert ev.data["pos"] == list(t.hedge.entrance) and ev.data["gate"] is None
+    assert ev.data["rows"] == 8 and ev.data["heading"] == "north"
+
+
+def test_pace_is_a_hub_setting_and_zero_in_tests():
+    from hedge.hub import Hub
+    assert Hub(None).pace == 0.6
+    assert Table.PACE == 0.3 and Table(pace=0, seed=1).pace == 0

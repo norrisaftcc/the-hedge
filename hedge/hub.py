@@ -9,7 +9,7 @@ rendering; the transport knows nothing about the game.
     hub.connect("Ash", lambda events: ...)
     mode = hub.line("Ash", "look")        # "command", or "spell" while a spell is being typed
     hub.act("Ash", "go", direction="north")  # the structured path, for a browser
-    while hub.tick("Ash"): ...             # one spell step; the transport sets the pace
+    while hub.tick("Ash"): ...             # one spell step; hub.pace says how long to wait between steps
 """
 
 from .events import Event, recipients
@@ -29,9 +29,10 @@ def balanced(text):
 
 
 class Hub:
-    def __init__(self, game, grammar=GRAMMAR):
+    def __init__(self, game, grammar=GRAMMAR, pace=0.6):
         self.game = game
         self.grammar = grammar
+        self.pace = pace  # seconds between spell steps on the network transports, so the room can watch
         self.sinks = {}
         self.typing = {}  # name -> lines of a spell being typed
 

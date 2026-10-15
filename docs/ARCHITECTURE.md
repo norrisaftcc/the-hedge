@@ -28,7 +28,7 @@ Adding a verb: one `when` line in the grammar, one `do_` method in the game. No 
 
 ## The hub
 
-`Hub.connect(name, sink)` joins a player; `sink` is a callable that takes the player's events. `Hub.line(name, text)` parses and acts, and returns the session's mode: `"spell"` while a multi-line spell is being typed (a `cast` with no text, or with parentheses still open, until a blank line), else `"command"`. `Hub.tick(name)` runs one spell step and returns whether the spell is still running. The **transport sets the pace**: telnet and the browser tick every 0.6 s so the room can watch; stdin and the API tick in a loop.
+`Hub.connect(name, sink)` joins a player; `sink` is a callable that takes the player's events. `Hub.line(name, text)` parses and acts, and returns the session's mode: `"spell"` while a multi-line spell is being typed (a `cast` with no text, or with parentheses still open, until a blank line), else `"command"`. `Hub.tick(name)` runs one spell step and returns whether the spell is still running. The **pace is a hub setting**: `Hub(pace=0.6)` is what telnet and the browser wait between steps, so the room can watch. The stdin transport and `api.Table` have their own default of 0.3 s; transcripts and tests pass `pace=0`. `--pace` on the command line overrides all of it.
 
 While a spell runs, only `QUIET` verbs are allowed (`stop look map who say score help spells read study`).
 
@@ -36,12 +36,12 @@ While a spell runs, only `QUIET` verbs are allowed (`stop look map who say score
 
 | Transport | In | Out | Pace |
 |-----------|----|-----|------|
-| `transports/telnet.py` | lines | text lines; GMCP packets (`Hedge.Room {json}` …) when the client answers IAC DO 201 | 0.6 s per step |
-| `transports/stdin.py` | lines from a file or the terminal | text lines | at once |
-| `transports/ws.py` | the name, then lines or `{"verb": …}` JSON | one JSON object per event, plus `{"kind":"prompt"}` | 0.6 s per step |
-| `api.Table` | Python calls: `line`, `act`, `tick`, `run_spell` | lists of `Event` | the caller's |
+| `transports/telnet.py` | lines | text lines; GMCP packets (`Hedge.Room {json}` …) when the client answers IAC DO 201 | `hub.pace`, 0.6 s |
+| `transports/stdin.py` | lines from a file or the terminal | text lines | 0.3 s; 0 for a transcript |
+| `transports/ws.py` | the name, then lines or `{"verb": …}` JSON | one JSON object per event, plus `{"kind":"prompt"}` | `hub.pace`, 0.6 s |
+| `api.Table` | Python calls: `line`, `act`, `tick`, `run_spell` | lists of `Event` | 0.3 s in `run_spell`; `pace=0` for tests |
 
-The WebSocket server also answers a plain `GET /` with `web/index.html`, a small page that prints the text, enables a button per open way (from `room.exits`), and casts a spell from a textarea. It is the first client drawn from the data. The first-person window is the second, and it is a page, not a change to the game.
+The WebSocket server also answers a plain `GET /` with `web/index.html`. The page prints the text and draws two pictures from the data. The **first-person view** is a wireframe built from `room.exits` and `room.sight[heading]`: how far the way ahead runs, which paces open left or right, and what ends it (a wall, the dark, a turn, a fork, the gate). The **overhead map** draws only the squares the player has seen, from the `map` event's `cells` (each seen cell's open ways); the page asks for `map` after every room, which is a quiet verb and so allowed while a spell runs. Arrow keys walk and turn through the structured path. Neither picture needed a change below the transport.
 
 ## Tests
 

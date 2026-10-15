@@ -14,7 +14,6 @@ from .. import render
 IAC, SB, SE, WILL, WONT, DO, DONT, GMCP = 255, 250, 240, 251, 252, 253, 254, 201
 PROMPT = "> "
 SPELL_PROMPT = "  . "
-STEP_SECONDS = 0.6  # a spell's pace, so the room can watch it walk
 
 
 def split_telnet(data):
@@ -73,7 +72,7 @@ class TelnetTransport:
     async def run_spell(self, name):
         try:
             while True:
-                await asyncio.sleep(STEP_SECONDS)
+                await asyncio.sleep(self.hub.pace)
                 if not self.hub.tick(name):
                     await self.write(name, PROMPT)
                     return
