@@ -20,7 +20,7 @@ Then, from any terminal: `telnet localhost 4000` or `nc localhost 4000`. Or open
 
 Alone, with no network: `python -m hedge --solo --seed 7`. It reads commands from the terminal or a file, so a transcript is a test.
 
-Algorithms: `binary`, `sidewinder`, `aldous-broder`. Same seed, same hedge, every time and in every language, because the dice are our own (`hedge/rng.py`, six lines, the classroom's mulberry32).
+Algorithms: `binary`, `sidewinder`, `aldous-broder`. `--braid 0.5` joins half the dead ends to a neighbour, which makes loops; `--braid 1.0` leaves none. In a braided hedge the left-hand rule goes round for ever, and the plate says so. Same seed, same hedge, every time and in every language, because the dice are our own (`hedge/rng.py`, six lines, the classroom's mulberry32).
 
 ## Play
 
@@ -30,6 +30,7 @@ Algorithms: `binary`, `sidewinder`, `aldous-broder`. Same seed, same hedge, ever
 | `north` `south` `east` `west` (or `n s e w`), `go left` | a step. A step costs a turn of light. Three torches of thirty. |
 | `face north`, `turn left` | face a way without stepping. Free. |
 | `read`, `study` | the plate at the mouth: the tell, briefly or in full |
+| `mark` | chalk a mark here; the map shows it, and a spell can test `(marked? left)` |
 | `cast (until (gate?) (go north))` | a spell on one line |
 | `cast`, then lines, then a blank line | a spell over several lines |
 | `stop` | end a running spell |
@@ -91,5 +92,5 @@ The chibi tests skip when `chibi-scheme` is not found. A test vector in `tests/w
 
 - The first-person window: a client that draws the wireframe from the room description's numbers.
 - The algorithms in C++ beside the Python, byte-identical, for the classroom.
-- Braided hedges (loops), where the left-hand rule fails and breadth-first search is the lesson.
+- Floors, then polar hedges, then rooms as a graph: see [docs/TOPOLOGIES.md](docs/TOPOLOGIES.md).
 - The Fort Country: whose hedge this is, and what the conjurer wanted.

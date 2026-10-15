@@ -21,6 +21,7 @@ from grid import Grid  # noqa: E402
 from algorithms.binary_tree import BinaryTreeMaze  # noqa: E402
 from algorithms.sidewinder import SidewinderMaze  # noqa: E402
 from algorithms.aldous_broder import AldousBroderMaze  # noqa: E402
+from algorithms.braid import Braid  # noqa: E402
 from pathfinding.dijkstra import Dijkstra  # noqa: E402
 
 ALGORITHMS = ("binary", "sidewinder", "aldous-broder")
@@ -43,8 +44,12 @@ class SeededGrid(Grid):
         return self.rng.randint(min_val, max_val)
 
 
-def grow(rows, cols, algorithm, seed):
-    """Build the maze. Same arguments, same maze, byte for byte."""
+def grow(rows, cols, algorithm, seed, braid=0.0):
+    """Build the maze. Same arguments, same maze, byte for byte.
+
+    braid is the fraction of dead ends to join to a neighbour (0.0 to 1.0). Each
+    one makes a loop, and with loops the left-hand rule can circle forever.
+    """
     if algorithm not in ALGORITHMS:
         raise ValueError(f"unknown algorithm {algorithm!r}; choose from {', '.join(ALGORITHMS)}")
     grid = SeededGrid(rows, cols, seed)
@@ -54,6 +59,8 @@ def grow(rows, cols, algorithm, seed):
         SidewinderMaze.on(grid)
     else:
         AldousBroderMaze.on(grid)  # no seed argument: it would reseed Python's random, which we do not use
+    if braid:
+        Braid.on(grid, braid)
     return grid
 
 

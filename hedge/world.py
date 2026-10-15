@@ -29,6 +29,12 @@ TELLS = {
     },
 }
 
+BRAIDED_TELL = {
+    "brush": "The hedge has few dead ends, or none. Ways that part meet again.",
+    "rule": ("The hedge has loops. A hand on the hedge goes round and round and never reaches the gate. "
+             "Remember where you have been: chalk a mark, keep a map, or search outward from the mouth."),
+}
+
 NUMBER = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine"}
 
 
@@ -48,13 +54,13 @@ def join(items):
 class Hedge:
     """One maze, grown once, shared by everyone on the server."""
 
-    def __init__(self, rows=8, cols=8, algorithm="sidewinder", seed=1):
-        self.rows, self.cols, self.algorithm, self.seed = rows, cols, algorithm, seed
-        self.grid = maze.grow(rows, cols, algorithm, seed)
+    def __init__(self, rows=8, cols=8, algorithm="sidewinder", seed=1, braid=0.0):
+        self.rows, self.cols, self.algorithm, self.seed, self.braid = rows, cols, algorithm, seed, braid
+        self.grid = maze.grow(rows, cols, algorithm, seed, braid)
         self.path = maze.longest_path(self.grid)
         self.entrance, self.gate = self.path[0], self.path[-1]
         self.dist = maze.distances_from(self.grid, *self.entrance)
-        self.tell = TELLS[algorithm]
+        self.tell = BRAIDED_TELL if braid else TELLS[algorithm]
 
     # ---- geometry ----
     def ways(self, pos):

@@ -95,6 +95,7 @@ GRAMMAR = (
     .when("study", "study")
     .when("cast WORDS", "cast")
     .when("stop", "stop")
+    .when("mark", "mark")
     .when("spells", "spells")
     .when("say WORDS", "say")
     .when("who", "who")

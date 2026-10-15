@@ -12,6 +12,7 @@ from .spell import COMPASS, RELATIVE, SpellError
 
 TORCHES = 3
 TORCH_TURNS = 30
+SPELL_REACH = 1000  # steps a spell may take before it wears thin; a loop in a braided hedge ends here
 TURN_BY = {"left": "left", "right": "right", "around": "back"}
 
 HELP = """\
@@ -21,17 +22,18 @@ face <compass>      turn without a step   turn left|right|around
 read                the plate, briefly    study         the plate, all of it
 cast <spell>        run a spell, one step a turn; 'cast' alone takes lines until a blank one
 stop                end a running spell   spells        the spell words
+mark                chalk a mark here; a spell can test (marked? <way>)
 say <words>         speak to the room     who           who is in the hedge
 score               your turns and light  again         back to the mouth, fresh torches
 help (h, ?)         this                  quit          leave"""
 
 SPELLS = """\
 (go D)  D: north south east west ahead back left right    (face D)  (turn left|right|around)
-(wall? D) (open? D) (gate?) (dead-end?)                     tests
+(wall? D) (open? D) (gate?) (dead-end?) (marked?) (marked? D)   tests      (mark)  chalk a mark here
 (until TEST BODY...) (while TEST BODY...) (repeat N BODY...)
 (if TEST THEN ELSE) (when TEST BODY...) (unless TEST BODY...) (and ...) (or ...) (not X) (begin ...)
 (define (NAME) BODY...) then (NAME)      (say "words")      (stop)      #t #f
-A spell runs one step a turn. It breaks if it walks into the hedge. 'stop' ends it."""
+A spell runs one step a turn. It breaks if it walks into the hedge. 'stop' ends it; so do a thousand steps."""
 
 
 class Player:
@@ -45,6 +47,8 @@ class Player:
         self.turns = 0
         self.out = False
         self.spell = None
+        self.marks = set()  # chalk marks: the player's own memory
+        self.spell_steps = 0
 
     @property
     def lit(self):
@@ -69,6 +73,13 @@ class SpellWorld:
     def dead_end(self):
         return self.game.hedge.is_dead_end(self.p.pos)
 
+    def marked(self, d=None):
+        """Is there a chalk mark here (d None) or in the open cell one step that way?"""
+        if d is None:
+            return self.p.pos in self.p.marks
+        there = self.game.hedge.move(self.p.pos, self.resolve(d))
+        return there is not None and there in self.p.marks
+
 
 class Game:
     def __init__(self, hedge):
@@ -85,8 +96,8 @@ class Game:
         h = self.hedge
         return [
             Event("arrive", "all", f"{name} comes down the stair into the hedge.", who=name),
-            Event("info", name, f"The Hedge ({h.algorithm}, {h.rows} by {h.cols}, seed {h.seed}). Find the far gate. Type help for the words.",
-                  algorithm=h.algorithm, rows=h.rows, cols=h.cols, seed=h.seed),
+            Event("info", name, f"The Hedge ({h.algorithm}, {h.rows} by {h.cols}, seed {h.seed}{', braided' if h.braid else ''}). Find the far gate. Type help for the words.",
+                  algorithm=h.algorithm, rows=h.rows, cols=h.cols, seed=h.seed, braid=h.braid),
             self.room(p),
         ]
 
@@ -134,12 +145,16 @@ class Game:
         p.heading = self.hedge.relative(p.heading, TURN_BY[t])
         return [Event("face", p.name, f"You turn {t}. You face {p.heading}.", heading=p.heading)]
 
+    def do_mark(self, p):
+        p.marks.add(p.pos)
+        return [Event("mark", p.name, "You chalk a mark on the hedge here.", pos=list(p.pos))]
+
     def do_map(self, p):
         """The map: the text, and for every seen cell its open ways, so a client can draw the walls."""
         h = self.hedge
         cells = {f"{r},{c}": h.ways((r, c)) for r, c in sorted(p.seen)}
         return [Event("map", p.name, h.map_text(p.seen, p.pos), cells=cells, pos=list(p.pos), heading=p.heading,
-                      rows=h.rows, cols=h.cols, entrance=list(h.entrance),
+                      rows=h.rows, cols=h.cols, entrance=list(h.entrance), marks=[list(m) for m in sorted(p.marks)],
                       gate=list(h.gate) if h.gate in p.seen else None)]
 
     def do_read(self, p):
@@ -268,6 +283,7 @@ class Game:
         except SpellError as e:
             return [Event("spell", p.name, f"The spell does not hold: {e}", state="refused", backend="python", reason=str(e))]
         p.spell = spell.run(forms, SpellWorld(self, p))
+        p.spell_steps = 0
         return [Event("spell", p.name, f"The spell holds ({backend}). It runs one step a turn; stop ends it.", state="holds", backend=backend),
                 Event("spell", ("room", p.pos, p.name), f"{p.name} begins to murmur.", state="holds", who=p.name)]
 
@@ -285,6 +301,10 @@ class Game:
             p.spell = None
             return [Event("spell", name, f"The spell breaks: {e}", state="breaks", reason=str(e))], False
         kind, arg = action
+        p.spell_steps += 1
+        if p.spell_steps > SPELL_REACH:
+            p.spell = None
+            return [Event("spell", name, "The spell wears thin and ends. You have gone round and round.", state="ends", reason="reach")], False
         if kind == "go":
             d = self.hedge.relative(p.heading, arg)
             if self.hedge.move(p.pos, d) is None:
@@ -298,4 +318,6 @@ class Game:
             return self.do_turn(p, arg), True
         if kind == "say":
             return self.do_say(p, arg), True
+        if kind == "mark":
+            return self.do_mark(p), True
         return [], True

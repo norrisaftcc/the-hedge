@@ -13,6 +13,8 @@ A spell is a small program in a Scheme subset. It walks the hedge one step a tur
 | `(open? D)` | Is there a way? | `#t` or `#f` |
 | `(gate?)` | Am I at the far gate? | `#t` or `#f` |
 | `(dead-end?)` | Is there only one way out of here? | `#t` or `#f` |
+| `(mark)` | Chalk a mark on this cell. Free. The map shows it. | `#t` |
+| `(marked?)` `(marked? D)` | Is this cell marked? Is the open cell one step that way marked? A wall is never marked. | `#t` or `#f` |
 | `(until TEST BODY...)` | Run `BODY` until `TEST` is true. The test runs first. | `#t` |
 | `(while TEST BODY...)` | Run `BODY` while `TEST` is true. | `#t` |
 | `(repeat N BODY...)` | `BODY`, `N` times. `N` is a whole number. | `#t` |
@@ -26,13 +28,14 @@ A spell is a small program in a Scheme subset. It walks the hedge one step a tur
 | `#t` `#f` | True and false. | |
 | `; words` | A comment, to the end of the line. | |
 
-Nothing else is in the language. No numbers except in `repeat`, no variables, no arguments. That is on purpose: a spell is a repeated process, and these are the parts of one.
+Nothing else is in the language. No numbers except in `repeat`, no variables, no arguments. That is on purpose: a spell is a repeated process, and these are the parts of one. Chalk is the only memory, and it is on the hedge, not in the spell.
 
 ## Rules
 
 - A spell runs one action a turn: `go`, `face`, `turn`, `say`. Tests are free.
 - A loop that goes round ten thousand times without a step **spins**, and the hedge refuses it.
 - A spell that walks into the hedge breaks, and tells you which way it walked.
+- A spell wears thin after a thousand actions. In a braided hedge that is how a circling spell ends when nobody types `stop`.
 - `stop` at the prompt ends a running spell. While a spell runs you may `look`, `map`, `who`, `say`, `score`.
 - The hedge is case-sensitive, like Scheme. `(GO north)` is not a word.
 
@@ -59,7 +62,7 @@ The hedges have tells. Read the plate at the mouth (`read`, then `study`).
 (repeat 8 (seek) (climb))
 ```
 
-**Any perfect maze.** The left-hand rule: keep one hand on the hedge. Slow, and sure. It is the general process, and it fails only in a hedge with loops, which is where breadth-first search comes in.
+**Any perfect maze.** The left-hand rule: keep one hand on the hedge. Slow, and sure. It is the general process for a hedge without loops.
 
 ```scheme
 (define (step)
@@ -68,6 +71,22 @@ The hedges have tells. Read the plate at the mouth (`read`, then `study`).
       (if (open? ahead)
           (go ahead)
           (turn right))))
+(until (gate?) (step))
+```
+
+**A braided hedge** (`--braid 0.5` or `1.0`) has loops, and there the left hand goes round for ever. Chalk helps: mark where you stand, prefer a way whose far cell is unmarked, fall back to the left hand. It is not a proof. With marks on cells and no memory of the way back, it can still circle. The sure process is a search outward from the mouth with a map, which no spell this small can say; that is the classroom's stage 7.
+
+```scheme
+(define (fresh-left) (and (open? left) (not (marked? left))))
+(define (fresh-ahead) (and (open? ahead) (not (marked? ahead))))
+(define (fresh-right) (and (open? right) (not (marked? right))))
+(define (step)
+  (mark)
+  (if (fresh-left) (begin (turn left) (go ahead))
+      (if (fresh-ahead) (go ahead)
+          (if (fresh-right) (begin (turn right) (go ahead))
+              (if (open? left) (begin (turn left) (go ahead))
+                  (if (open? ahead) (go ahead) (turn right)))))))
 (until (gate?) (step))
 ```
 

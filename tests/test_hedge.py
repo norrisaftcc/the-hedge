@@ -114,7 +114,15 @@ class Walker:
     def dead_end(self):
         return self.h.is_dead_end(self.pos)
 
-    def walk(self, text):
+    def marked(self, d=None):
+        if d is None:
+            return self.pos in self.marks
+        there = self.h.move(self.pos, self.resolve(d))
+        return there is not None and there in self.marks
+
+    def walk(self, text, cap=None):
+        """Walk the spell. Returns the steps taken; with a cap, stops there and returns the cap."""
+        self.marks = getattr(self, "marks", set())
         steps = 0
         for kind, arg in spell.run(spell.parse(text), self):
             if kind == "go":
@@ -122,10 +130,14 @@ class Walker:
                 nxt = self.h.move(self.pos, d)
                 assert nxt is not None, f"walked into the hedge at {self.pos} going {d}"
                 self.pos, self.heading, steps = nxt, d, steps + 1
+                if cap and steps >= cap:
+                    return steps
             elif kind == "turn":
                 self.heading = self.resolve({"left": "left", "right": "right", "around": "back"}[arg])
             elif kind == "face":
                 self.heading = arg
+            elif kind == "mark":
+                self.marks.add(self.pos)
         return steps
 
 
@@ -184,7 +196,8 @@ def test_stop_ends_a_spell_and_say_speaks():
 # ---- chibi ----
 
 CASES = ["(until (gate?) (go north))", "(go up)", "(go north", "north", "(fly)", "(define (x) (go north)) (x)",
-         "(define x 3)", '(repeat 2 (say "hi"))', "", "(say hi)", "(x)", "(if (wall? left) (turn right))"]
+         "(define x 3)", '(repeat 2 (say "hi"))', "", "(say hi)", "(x)", "(if (wall? left) (turn right))",
+         "(mark)", "(marked?)", "(marked? left)", "(marked? up)", "(mark here)"]
 
 
 @pytest.mark.skipif(verify.chibi_path() is None, reason="chibi-scheme not found")
@@ -463,3 +476,72 @@ def test_pace_is_a_hub_setting_and_zero_in_tests():
     from hedge.hub import Hub
     assert Hub(None).pace == 0.6
     assert Table.PACE == 0.3 and Table(pace=0, seed=1).pace == 0
+
+
+# ---- braided hedges: where the left-hand rule fails ----
+
+def test_a_braided_hedge_has_loops_and_the_same_dice():
+    perfect = Hedge(8, 8, "sidewinder", 7)
+    half = Hedge(8, 8, "sidewinder", 7, braid=0.5)
+    full = Hedge(8, 8, "sidewinder", 7, braid=1.0)
+    dead = lambda h: sum(1 for pos in h.dist if h.is_dead_end(pos))
+    assert dead(full) == 0 < dead(half) < dead(perfect)
+    assert Hedge(8, 8, "sidewinder", 7, braid=0.5).grid.display() == half.grid.display()
+    assert full.tell is not perfect.tell and "loops" in full.plate(True)
+    assert len(full.dist) == 64  # every cell still reachable
+
+
+@pytest.mark.parametrize("seed", [20, 23])
+def test_left_hand_circles_a_braided_hedge_and_chalk_gets_out(seed):
+    # Measured over 40 seeds per algorithm: the left hand fails on 7 to 18 of them once braided,
+    # chalk on 3 to 7. These two seeds are ones where the left hand circles and chalk does not.
+    h = Hedge(8, 8, "binary", seed, braid=1.0)
+    left = Walker(h)
+    assert left.walk(read_spell("left-hand.scm"), cap=600) == 600 and not left.gate()
+    chalk = Walker(h)
+    chalk.walk(read_spell("chalk.scm"), cap=600)
+    assert chalk.gate()
+
+
+def test_chalk_is_not_a_proof():
+    # Seed 11 defeats both. The plate says why: cell marks and no memory of the way back.
+    h = Hedge(8, 8, "binary", 11, braid=1.0)
+    w = Walker(h)
+    assert w.walk(read_spell("chalk.scm"), cap=600) == 600 and not w.gate()
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHMS)
+def test_chalk_still_solves_a_perfect_hedge(algorithm):
+    w = Walker(Hedge(8, 8, algorithm, 5))
+    w.walk(read_spell("chalk.scm"))
+    assert w.gate()
+
+
+def test_a_procedure_returns_its_last_value():
+    # The bug the braid found: (if (fresh-left) ...) always took the first branch.
+    w = Walker(Hedge(4, 4, "binary", 1))
+    actions = list(spell.run(spell.parse('(define (no) (not (gate?)) #f) (if (no) (say "yes") (say "no")) (if (begin #t #f) (say "yes") (say "no"))'), w))
+    assert actions == [("say", "no"), ("say", "no")]
+
+
+def test_mark_in_the_game_and_on_the_map():
+    t = Table(pace=0, seed=7, algorithm="sidewinder", braid=0.5)
+    events = t.join("Ash")
+    assert "braided" in t.text("Ash", events)
+    assert kinds(t.line("Ash", "mark")) == ["mark"]
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    assert ev.data["marks"] == [list(t.hedge.entrance)]
+    t.line("Ash", "cast (if (marked?) (say \"chalk\") (say \"clean\"))")
+    events, _ = t.run_spell("Ash")
+    assert any(e.kind == "say" and e.data["words"] == "chalk" for e in events)
+
+
+def test_a_circling_spell_wears_thin(monkeypatch):
+    from hedge import game as game_module
+    monkeypatch.setattr(game_module, "SPELL_REACH", 12)
+    t = Table(pace=0, seed=11, algorithm="binary", braid=1.0)
+    t.join("Ash")
+    t.line("Ash", "cast " + read_spell("left-hand.scm"))
+    events, steps = t.run_spell("Ash", max_steps=100)
+    assert steps <= 13 and any(e.kind == "spell" and e.data.get("reason") == "reach" for e in events)
+    assert t.player("Ash").spell is None
