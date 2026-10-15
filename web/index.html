@@ -6,7 +6,12 @@
 <title>The Hedge</title>
 <style>
   :root { --paper: #f2ead3; --ink: #1b1712; --muted: #6b6253; --accent: #7a2e1c; --faint: #d8cfb4; }
-  @media (prefers-color-scheme: dark) { :root { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; --faint: #2b2721; } }
+  /* Dark ink on paper is the default. The system setting picks dark unless the player chose light;
+     the player's own choice (data-theme on the root, remembered in this browser) wins either way. */
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; --faint: #2b2721; } }
+  :root[data-theme="dark"] { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; --faint: #2b2721; }
+  #hud { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  #theme { font: 13px Georgia, serif; padding: 4px 10px; border: 1px solid var(--muted); background: transparent; color: var(--ink); border-radius: 6px; }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.4 Georgia, serif; }
   main { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
   #hud { color: var(--muted); font-size: 14px; }
@@ -28,7 +33,7 @@
 </head>
 <body>
 <main>
-  <div id="hud">The Hedge. Connecting…</div>
+  <div id="hud"><span id="status">The Hedge. Connecting…</span><button id="theme" type="button" title="Light, dark, or as the system says">theme</button></div>
   <div id="views">
     <canvas id="eye" width="600" height="400" aria-label="What you see ahead"></canvas>
     <canvas id="chart" width="300" height="400" aria-label="The squares you have seen"></canvas>
@@ -54,7 +59,21 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const log = $("log"), hud = $("hud"), input = $("line"), form = $("f"), exits = $("exits");
+  const log = $("log"), hud = $("status"), input = $("line"), form = $("f"), exits = $("exits");
+
+  /* ---- theme: light, dark, or system; remembered in this browser only ---- */
+  const THEMES = ["system", "light", "dark"];
+  const themeButton = $("theme");
+  function applyTheme(choice) {
+    if (choice === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", choice);
+    themeButton.textContent = { system: "theme: system", light: "theme: light", dark: "theme: dark" }[choice];
+    try { localStorage.setItem("hedge-theme", choice); } catch (e) { /* a private window: the choice lasts the page */ }
+    if (typeof drawEye === "function") { drawEye(); drawChart(); }
+  }
+  let theme = "system";
+  try { theme = THEMES.includes(localStorage.getItem("hedge-theme")) ? localStorage.getItem("hedge-theme") : "system"; } catch (e) { /* no storage */ }
+  themeButton.onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; applyTheme(theme); };
   const eye = $("eye"), chart = $("chart");
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   const DIRS = ["north", "east", "south", "west"];
@@ -146,6 +165,7 @@
     ctx.beginPath(); ctx.moveTo(cell * 0.35, 0); ctx.lineTo(-cell * 0.25, -cell * 0.25); ctx.lineTo(-cell * 0.1, 0); ctx.lineTo(-cell * 0.25, cell * 0.25); ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
+  applyTheme(theme);  // drawEye and drawChart exist by now; the first paint is in the chosen theme
   ws.onopen = () => { hud.textContent = "Connected. What is your name?"; drawEye(); drawChart(); };
   ws.onclose = () => { hud.textContent = "The connection closed. Reload to come back."; };
   ws.onmessage = m => {
@@ -184,7 +204,7 @@
     if (key) { e.preventDefault(); send(key); }
   });
   $("cast").onclick = () => { if (!named) return; show("> cast …"); send({ verb: "cast", words: $("spell").value }); };
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawEye(); drawChart(); });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (theme === "system") { drawEye(); drawChart(); } });
 })();
 </script>
 </body>
