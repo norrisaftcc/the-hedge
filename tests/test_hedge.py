@@ -1,9 +1,11 @@
-"""Tests for the hedge: dice, mazes, rooms, spells, the game, the server."""
+"""Tests for the hedge: dice, mazes, rooms, spells, the grammar, the game, the transports."""
 
 import asyncio
 import io
+import json
 import os
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -12,9 +14,10 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from hedge import spell, verify  # noqa: E402
-from hedge.game import Game, TORCH_TURNS  # noqa: E402
+from hedge import render, spell, verify  # noqa: E402
+from hedge.api import Table  # noqa: E402
 from hedge.maze import ALGORITHMS, grow  # noqa: E402
+from hedge.parser import GRAMMAR, Grammar  # noqa: E402
 from hedge.rng import Mulberry32, seed_from_text  # noqa: E402
 from hedge.world import Hedge  # noqa: E402
 
@@ -25,6 +28,10 @@ WALKS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "walks")
 def read_spell(name):
     with open(os.path.join(SPELLS, name)) as f:
         return f.read()
+
+
+def kinds(events):
+    return [e.kind for e in events]
 
 
 # ---- dice ----
@@ -200,70 +207,118 @@ def test_verify_falls_back_to_python(monkeypatch):
     assert not ok and backend == "python"
 
 
-# ---- the game ----
+# ---- the grammar ----
 
-def names(msgs, who):
-    return "\n".join(t for to, t in msgs if to == who or to == "all")
+def test_grammar_verbs_and_nouns():
+    assert GRAMMAR.parse("n") == ("go", {"direction": "north"})
+    assert GRAMMAR.parse("go W") == ("go", {"direction": "west"})
+    assert GRAMMAR.parse("Go left") == ("go", {"direction": "left"})
+    assert GRAMMAR.parse("say Hello, Hedge!") == ("say", {"words": "Hello, Hedge!"})
+    assert GRAMMAR.parse("cast (until (gate?) (go North))") == ("cast", {"words": "(until (gate?) (go North))"})
+    assert GRAMMAR.parse("turn around") == ("turn", {"which": "around"})
+    assert GRAMMAR.parse("?") == ("help", {})
+    assert GRAMMAR.parse("dance") is None and GRAMMAR.parse("") is None
+    assert GRAMMAR.parse("look harder") is None  # look takes nothing
 
+
+def test_a_grammar_is_data():
+    g = Grammar().when("take ITEM", "take").when("put ITEM in PLACE", "put")
+    assert g.parse("take lamp") == ("take", {"item": "lamp"})
+    assert g.parse("put lamp in the bag") == ("put", {"item": "lamp", "place": "the bag"})
+    assert g.parse("take") is None
+    assert g.verbs() == ["put", "take"]
+
+
+# ---- the game, through the local API ----
 
 def test_two_players_see_each_other():
-    g = Game(Hedge(8, 8, "sidewinder", 7))
-    g.join("Ash")
-    msgs = g.join("Brook")
-    assert "Ash is here." in names(msgs, "Brook")
-    msgs = g.command("Ash", "say hello")
-    assert any(to == ("room", g.hedge.entrance, "Ash") and "hello" in t for to, t in msgs)
-    d = g.hedge.ways(g.hedge.entrance)[0]
-    msgs = g.command("Ash", d)
-    assert any(to == ("room", g.hedge.entrance, "Ash") and f"goes {d}" in t for to, t in msgs)
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    t.join("Ash")
+    assert "Ash is here." in t.text("Brook", t.join("Brook"))
+    assert "Brook comes down the stair" in t.text("Ash")
+    t.line("Ash", "say hello")
+    assert 'Ash says, "hello"' in t.text("Brook", t.take("Brook"))
+    d = t.hedge.ways(t.hedge.entrance)[0]
+    t.line("Ash", d)
+    assert f"Ash goes {d}." in t.text("Brook", t.take("Brook"))
+
+
+def test_room_event_carries_the_numbers_behind_the_words():
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    room = [e for e in t.join("Ash") if e.kind == "room"][0]
+    assert room.data["exits"] == t.hedge.ways(t.hedge.entrance)
+    assert room.data["entrance"] is True and room.data["lit"] is True
+    for d, s in room.data["sight"].items():
+        run, openings, end = t.hedge.sight(t.hedge.entrance, d)
+        assert s == {"run": run, "openings": [list(o) for o in openings], "end": end}
+    # The words and the numbers agree.
+    for d in room.data["exits"]:
+        assert d.capitalize() + "," in room.text
+    as_json = render.json(room)
+    assert as_json["kind"] == "room" and as_json["text"] == room.text and as_json["exits"] == room.data["exits"]
+    package, payload = render.gmcp(room)
+    assert package == "Hedge.Room" and payload["pos"] == room.data["pos"]
+
+
+def test_structured_verbs_skip_the_grammar():
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    t.join("Ash")
+    d = t.hedge.ways(t.hedge.entrance)[0]
+    events = t.act("Ash", "go", direction=d)
+    assert "room" in kinds(events) and t.player("Ash").turns == 1
+    assert kinds(t.act("Ash", "dance")) == ["error"]
 
 
 def test_walking_into_the_hedge_and_out_of_the_light():
-    g = Game(Hedge(8, 8, "aldous-broder", 7))
-    g.join("Ash")
-    p = g.players["Ash"]
-    closed = [d for d in ("north", "east", "south", "west") if not g.hedge.is_open(p.pos, d)][0]
-    assert "The hedge is in the way." in names(g.command("Ash", closed), "Ash")
+    t = Table(pace=0, seed=7, algorithm="aldous-broder")
+    t.join("Ash")
+    p = t.player("Ash")
+    closed = [d for d in ("north", "east", "south", "west") if not t.hedge.is_open(p.pos, d)][0]
+    assert kinds(t.line("Ash", closed)) == ["bump"]
     assert p.turns == 0
-    # Burn every torch with the left-hand rule, which walks far.
-    g.command("Ash", "cast " + read_spell("left-hand.scm"))
-    seen_dark = False
-    for _ in range(400):
-        msgs, running = g.step_spell("Ash")
-        if "It is dark." in names(msgs, "Ash"):
-            seen_dark = True
-        if not running:
-            break
-    assert p.out or seen_dark
+    t.line("Ash", "cast " + read_spell("left-hand.scm"))
+    events, steps = t.run_spell("Ash")
+    assert p.out or any(e.kind == "light" and e.data["torches"] == 0 for e in events)
     assert p.turns > 0
 
 
 def test_a_spell_walks_to_the_gate_in_the_game():
-    g = Game(Hedge(8, 8, "binary", 3))
-    g.join("Ash")
-    msgs = g.command("Ash", "cast " + read_spell("left-hand.scm"))
-    assert "The spell holds" in names(msgs, "Ash")
-    for _ in range(1000):
-        msgs, running = g.step_spell("Ash")
-        if not running:
-            break
-    assert g.players["Ash"].out
-    assert "found the far gate" in names(msgs, "Ash")
+    t = Table(pace=0, seed=3, algorithm="binary")
+    t.join("Ash")
+    assert "The spell holds" in t.text("Ash", t.line("Ash", "cast " + read_spell("left-hand.scm")))
+    events, steps = t.run_spell("Ash")
+    assert t.player("Ash").out
+    assert any(e.kind == "out" for e in events)
 
 
 def test_a_spell_that_walks_into_the_hedge_breaks():
-    g = Game(Hedge(8, 8, "binary", 3))
-    g.join("Ash")
-    g.command("Ash", "cast (repeat 20 (go south))")  # the entrance of this hedge has no way south
-    msgs, running = g.step_spell("Ash")
-    assert not running and "breaks" in names(msgs, "Ash")
+    t = Table(pace=0, seed=3, algorithm="binary")
+    t.join("Ash")
+    t.line("Ash", "cast (repeat 20 (go south))")  # the entrance of this hedge has no way south
+    assert not t.tick("Ash")
+    assert "breaks" in t.text("Ash", t.take("Ash"))
 
 
-def test_bad_spell_does_not_hold():
-    g = Game(Hedge(4, 4, "binary", 1))
-    g.join("Ash")
-    assert "does not hold" in names(g.command("Ash", "cast (go up)"), "Ash")
-    assert g.players["Ash"].spell is None
+def test_bad_spell_does_not_hold_and_quiet_verbs_during_a_spell():
+    t = Table(pace=0, seed=1, algorithm="binary", size=4)
+    t.join("Ash")
+    assert "does not hold" in t.text("Ash", t.line("Ash", "cast (go up)"))
+    assert t.player("Ash").spell is None
+    t.line("Ash", "cast " + read_spell("left-hand.scm"))
+    assert kinds(t.line("Ash", "north")) == ["error"]
+    assert kinds(t.line("Ash", "who")) == ["who"]
+    assert "You let the spell go." in t.text("Ash", t.line("Ash", "stop"))
+
+
+def test_multi_line_spell_typed_until_a_blank_line():
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    t.join("Ash")
+    assert t.hub.line("Ash", "cast") == "spell"
+    assert "Type the spell" in t.text("Ash", t.take("Ash"))
+    assert t.hub.line("Ash", "(define (step) (go north))") == "spell"
+    assert t.hub.line("Ash", "(step)") == "spell"
+    assert t.hub.line("Ash", "") == "command"
+    assert "The spell holds" in t.text("Ash", t.take("Ash"))
 
 
 # ---- transcripts as test vectors ----
@@ -280,29 +335,31 @@ def test_walk_transcript(name):
     with open(os.path.join(WALKS, name + ".out")) as f:
         expected = f.read()
     out = io.StringIO()
-    solo(Args, lines, out)
+    solo(Args, lines, out, pace=0)
     # The transcript does not depend on whether chibi-scheme is installed.
     plain = lambda t: t.replace(" (chibi)", "").replace(" (python)", "")
     assert plain(out.getvalue()) == plain(expected)
 
 
-# ---- the server ----
+# ---- transports ----
 
-def test_server_round_trip():
-    from hedge.server import Server, strip_telnet, balanced
+def test_telnet_round_trip_with_gmcp():
+    from hedge.transports.telnet import TelnetTransport, split_telnet
+    from hedge.hub import balanced
 
-    assert strip_telnet(b"\xff\xfb\x01look\r\n") == "look\r\n"
+    assert split_telnet(b"\xff\xfd\xc9look\r\n") == ("look\r\n", [(253, 201)])
     assert balanced("(go north)") and not balanced("(go north") and balanced('(say ")")')
 
     async def run():
-        server = Server(Game(Hedge(8, 8, "sidewinder", 7)))
-        srv = await asyncio.start_server(server.handle, "127.0.0.1", 0)
+        t = Table(pace=0, seed=7, algorithm="sidewinder")
+        transport = TelnetTransport(t.hub)
+        srv = await asyncio.start_server(transport.handle, "127.0.0.1", 0)
         port = srv.sockets[0].getsockname()[1]
 
-        async def client(name, lines):
+        async def client(name, lines, gmcp=False):
             r, w = await asyncio.open_connection("127.0.0.1", port)
             await r.readuntil(b"? ")
-            w.write((name + "\n").encode())
+            w.write((bytes([255, 253, 201]) if gmcp else b"") + (name + "\n").encode())
             for line in lines:
                 await asyncio.sleep(0.05)
                 w.write((line + "\n").encode())
@@ -312,15 +369,97 @@ def test_server_round_trip():
             await w.drain()
             data = await r.read()
             w.close()
-            return data.decode()
+            return data
 
-        a, b = await asyncio.gather(client("Ash", ["say hi", "cast", "(go north)", "", "look"]),
+        a, b = await asyncio.gather(client("Ash", ["say hi", "cast", "(go north)", "", "look"], gmcp=True),
                                     client("Brook", ["look", "who"]))
         srv.close()
         await srv.wait_closed()
         return a, b
 
     a, b = asyncio.run(run())
-    assert "Type the spell. A blank line ends it." in a and "The spell holds" in a
-    assert "Ash says" in b or "Ash is here" in b
-    assert "In the hedge:" in b
+    assert b"Type the spell. A blank line ends it." in a and b"The spell holds" in a
+    assert bytes([255, 250, 201]) + b"Hedge.Room {" in a      # GMCP for the client that asked
+    assert bytes([255, 250, 201]) not in b                      # none for the one that did not
+    assert b"Ash says" in b or b"Ash is here" in b
+    assert b"In the hedge:" in b
+
+
+def test_websocket_round_trip_and_the_page():
+    from hedge.transports.ws import WebSocketTransport, GUID
+    import base64
+    import hashlib
+    import os as _os
+
+    def mask_frame(text):
+        data = text.encode()
+        mask = _os.urandom(4)
+        head = bytes([0x81, 0x80 | len(data)]) if len(data) < 126 else bytes([0x81, 0x80 | 126]) + struct.pack(">H", len(data))
+        return head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+
+    async def read_frame(r):
+        b1, b2 = await r.readexactly(2)
+        n = b2 & 0x7F
+        if n == 126:
+            n = struct.unpack(">H", await r.readexactly(2))[0]
+        return json.loads(await r.readexactly(n))
+
+    async def run():
+        t = Table(pace=0, seed=7, algorithm="sidewinder")
+        transport = WebSocketTransport(t.hub)
+        srv = await asyncio.start_server(transport.handle, "127.0.0.1", 0)
+        port = srv.sockets[0].getsockname()[1]
+        # The page.
+        r, w = await asyncio.open_connection("127.0.0.1", port)
+        w.write(b"GET / HTTP/1.1\r\nHost: x\r\n\r\n")
+        page = await r.read()
+        w.close()
+        # The socket.
+        r, w = await asyncio.open_connection("127.0.0.1", port)
+        key = base64.b64encode(_os.urandom(16)).decode()
+        w.write(f"GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
+        head = (await r.readuntil(b"\r\n\r\n")).decode()
+        accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest()).decode()
+        w.write(mask_frame("Ash"))
+        got = []
+        for _ in range(4):
+            got.append(await read_frame(r))
+        w.write(mask_frame(json.dumps({"verb": "go", "direction": t.hedge.ways(t.hedge.entrance)[0]})))
+        for _ in range(2):
+            got.append(await read_frame(r))
+        w.write(mask_frame("say over the wire"))
+        for _ in range(2):
+            got.append(await read_frame(r))
+        w.write(bytes([0x88, 0x80]) + _os.urandom(4))
+        w.close()
+        srv.close()
+        await srv.wait_closed()
+        return page, head, accept, got
+
+    page, head, accept, got = asyncio.run(run())
+    assert page.startswith(b"HTTP/1.1 200") and b"<title>The Hedge</title>" in page
+    assert "101" in head and accept in head
+    kinds_seen = [g["kind"] for g in got]
+    assert kinds_seen[:4] == ["arrive", "info", "room", "prompt"]
+    rooms = [g for g in got if g["kind"] == "room"]
+    assert len(rooms) == 2 and rooms[1]["ring"] == 1 and "exits" in rooms[1] and "sight" in rooms[1]
+    assert any(g["kind"] == "say" and g["words"] == "over the wire" for g in got)
+
+
+def test_map_event_carries_only_the_seen_cells():
+    t = Table(pace=0, seed=7, algorithm="sidewinder")
+    t.join("Ash")
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    seen = set(tuple(map(int, k.split(","))) for k in ev.data["cells"])
+    assert seen == t.player("Ash").seen and len(seen) < t.hedge.rows * t.hedge.cols
+    for key, ways in ev.data["cells"].items():
+        r, c = map(int, key.split(","))
+        assert ways == t.hedge.ways((r, c))
+    assert ev.data["pos"] == list(t.hedge.entrance) and ev.data["gate"] is None
+    assert ev.data["rows"] == 8 and ev.data["heading"] == "north"
+
+
+def test_pace_is_a_hub_setting_and_zero_in_tests():
+    from hedge.hub import Hub
+    assert Hub(None).pace == 0.6
+    assert Table.PACE == 0.3 and Table(pace=0, seed=1).pace == 0

@@ -38,6 +38,7 @@ West, the way runs two paces with an opening on the left at one and turns right.
 > cast (go up)
 The spell does not hold (chibi): (go up): go needs one direction: north south east west ahead back left right
 > cast
+Type the spell. A blank line ends it.
   . (define (step)
   .   (if (open? left) (begin (turn left) (go ahead))
   .       (if (open? ahead) (go ahead) (turn right))))
