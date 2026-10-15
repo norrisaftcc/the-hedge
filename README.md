@@ -13,10 +13,10 @@ Python 3.8 or newer, standard library only. MazeBuilder comes as a submodule.
 ```
 git clone --recurse-submodules <this repository>
 cd the-hedge
-python -m hedge --seed 7 --algorithm sidewinder --size 8      # a server on port 4000
+python -m hedge --seed 7 --algorithm sidewinder --size 8      # telnet on 4000, browser on http://localhost:4001/
 ```
 
-Then, from any terminal: `telnet localhost 4000` or `nc localhost 4000`. Give a name. Type `help`.
+Then, from any terminal: `telnet localhost 4000` or `nc localhost 4000`. Or open the browser page. Give a name. Type `help`.
 
 Alone, with no network: `python -m hedge --solo --seed 7`. It reads commands from the terminal or a file, so a transcript is a test.
 
@@ -50,21 +50,30 @@ git clone https://github.com/ashinn/chibi-scheme && cd chibi-scheme && make && s
 
 ## How it is built
 
+Layers, bottom up. A new way in is a new transport; nothing below it changes. The whole story is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ```
-hedge/rng.py       the dice: mulberry32
-hedge/maze.py      grows a hedge with MazeBuilder's algorithms (vendor/MazeBuilder), rolling our dice
-hedge/world.py     the hedge as rooms: descriptions, sight lines, the plate, the map
-hedge/spell.py     the spell language: reader, grammar check, and a stepping evaluator
-hedge/check.scm    the same grammar in Scheme, for chibi
-hedge/verify.py    runs chibi, or falls back to the Python reader
-hedge/game.py      players, commands, spells one step at a time. No sockets, no clock.
-hedge/server.py    the telnet server (asyncio)
-hedge/solo.py      one player, stdin to stdout
-spells/            example spells
-tests/             pytest; tests/walks/ holds transcripts as test vectors
+hedge/rng.py          the dice: mulberry32
+hedge/maze.py         grows a hedge with MazeBuilder's algorithms (vendor/MazeBuilder), rolling our dice
+hedge/world.py        the hedge as rooms: descriptions, sight lines, the plate, the map
+hedge/spell.py        the spell language: reader, grammar check, and a stepping evaluator
+hedge/check.scm       the same grammar in Scheme, for chibi
+hedge/verify.py       runs chibi, or falls back to the Python reader
+hedge/events.py       Event(kind, to, text, **data): the words, and the numbers behind them
+hedge/game.py         Game.act(name, verb, **args) -> events. Players, light, spells. No text parsing.
+hedge/parser.py       verb and noun, adventurelib style: "go DIRECTION" -> ("go", {"direction": ...})
+hedge/hub.py          sessions, typed lines, multi-line spells, routing events to sinks
+hedge/render.py       text(event), json(event), gmcp(event)
+hedge/transports/     telnet (with GMCP), stdin, ws (WebSocket, and it serves web/index.html)
+hedge/api.py          Table: play from Python, for tests and other programs
+web/index.html        a small browser client drawn from the events' data
+spells/               example spells
+tests/                pytest; tests/walks/ holds transcripts as test vectors
 ```
 
-**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. A first-person window drawn from the same numbers cannot disagree with the text. That window is the next thing to build, and it is a client, not a change to the game.
+**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. The same numbers ride in the `room` event's data, so a window drawn from them cannot disagree with the text. The browser page enables a button per open way from that data; the first-person window is the next client, and it is a page, not a change to the game.
+
+**Ways in today:** `telnet localhost 4000`; a GMCP client (Mudlet, for one) on the same port gets `Hedge.Room` packets beside the text; a browser at `http://localhost:4001/`; `--solo` on the terminal; and `hedge.api.Table` from Python.
 
 ## Tests
 

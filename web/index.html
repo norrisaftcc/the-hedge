@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Hedge</title>
+<style>
+  :root { --paper: #f2ead3; --ink: #1b1712; --muted: #6b6253; --accent: #7a2e1c; }
+  @media (prefers-color-scheme: dark) { :root { --paper: #14120f; --ink: #e9e0c9; --muted: #9c927f; --accent: #d0704e; } }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.4 Georgia, serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+  #log { white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; min-height: 50vh; max-height: 60vh; overflow-y: auto; border: 1px solid var(--muted); padding: 8px; }
+  #log .say { color: var(--accent); }
+  #log .room { font-family: Georgia, serif; font-size: 16px; }
+  #exits button, #line { font: inherit; }
+  #exits { display: flex; gap: 8px; flex-wrap: wrap; }
+  #exits button { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 6px; }
+  #exits button:disabled { opacity: .3; }
+  form { display: flex; gap: 8px; }
+  #line { flex: 1; padding: 8px; border: 1px solid var(--muted); background: transparent; color: var(--ink); font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #hud { color: var(--muted); font-size: 14px; }
+  textarea { width: 100%; box-sizing: border-box; font: 14px ui-monospace, Menlo, Consolas, monospace; background: transparent; color: var(--ink); border: 1px solid var(--muted); padding: 8px; min-height: 5em; }
+</style>
+</head>
+<body>
+<main>
+  <div id="hud">The Hedge. Connecting…</div>
+  <div id="log"></div>
+  <div id="exits">
+    <button data-verb="go" data-direction="north">north</button>
+    <button data-verb="go" data-direction="west">west</button>
+    <button data-verb="go" data-direction="east">east</button>
+    <button data-verb="go" data-direction="south">south</button>
+    <button data-verb="look">look</button>
+    <button data-verb="map">map</button>
+    <button data-verb="stop">stop</button>
+  </div>
+  <form id="f"><input id="line" autocomplete="off" placeholder="your name"><button>send</button></form>
+  <details><summary>A spell (several lines, then Cast)</summary>
+    <textarea id="spell">(define (step)
+  (if (open? left) (begin (turn left) (go ahead))
+      (if (open? ahead) (go ahead) (turn right))))
+(until (gate?) (step))</textarea>
+    <button id="cast">Cast</button>
+  </details>
+</main>
+<script>
+(() => {
+  const log = document.getElementById("log"), hud = document.getElementById("hud");
+  const input = document.getElementById("line"), form = document.getElementById("f");
+  const exits = document.getElementById("exits");
+  let named = false, room = null;
+  const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/");
+  const show = (text, cls) => { const d = document.createElement("div"); d.textContent = text; if (cls) d.className = cls; log.appendChild(d); log.scrollTop = log.scrollHeight; };
+  const send = s => ws.readyState === 1 && ws.send(s);
+  ws.onopen = () => { hud.textContent = "Connected. What is your name?"; };
+  ws.onclose = () => { hud.textContent = "The connection closed. Reload to come back."; };
+  ws.onmessage = m => {
+    const ev = JSON.parse(m.data);
+    if (ev.kind === "prompt") return;
+    if (ev.kind === "info" && !named) { named = true; input.placeholder = "look, north, say hello, cast (go north) …"; }
+    if (ev.kind === "room") {
+      room = ev;
+      hud.textContent = `${ev.name} · light ${ev.light} · torches ${ev.torches} · facing ${ev.heading}`;
+      for (const b of exits.querySelectorAll("button[data-direction]")) b.disabled = !ev.exits.includes(b.dataset.direction);
+    }
+    show(ev.text, ev.kind);
+  };
+  form.onsubmit = e => {
+    e.preventDefault();
+    const v = input.value; input.value = "";
+    if (!v.trim()) return;
+    show((named ? "> " : "") + v);
+    send(v);
+  };
+  exits.onclick = e => {
+    const b = e.target.closest("button"); if (!b || !named) return;
+    const msg = { verb: b.dataset.verb }; if (b.dataset.direction) msg.direction = b.dataset.direction;
+    send(JSON.stringify(msg));   // the structured path: a verb and its arguments, no line to parse
+  };
+  document.getElementById("cast").onclick = () => {
+    if (!named) return;
+    const text = document.getElementById("spell").value;
+    show("> cast …");
+    send(JSON.stringify({ verb: "cast", words: text }));
+  };
+})();
+</script>
+</body>
+</html>
