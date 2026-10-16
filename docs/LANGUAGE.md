@@ -6,8 +6,8 @@ A spell is a small program in a Scheme subset. It walks the hedge one step a tur
 
 | Form | Does | Value |
 |------|------|-------|
-| `(go D)` | One step. `D` is `north`, `south`, `east`, `west`, or `ahead`, `back`, `left`, `right` from where you face, or `up`, `down` where there is a stair. A step costs a turn of light. A step into the hedge **breaks the spell**. | `#t` |
-| `(face D)` | Face a compass direction. Free. | `#t` |
+| `(go D)` | One step. `D` is one of the hedge's four ways (`north`, `south`, `east`, `west`; on a polar hedge `in`, `out`, `sunwise`, `widdershins`), or `ahead`, `back`, `left`, `right` from where you face, or `up`, `down` where there is a stair. A step costs a turn of light. A step into the hedge **breaks the spell**. | `#t` |
+| `(face D)` | Face one of the hedge's four ways. Free. | `#t` |
 | `(turn T)` | `left`, `right` or `around`. Free. | `#t` |
 | `(wall? D)` | Is the hedge there? `(wall? up)` is true where there is no stair. | `#t` or `#f` |
 | `(open? D)` | Is there a way? | `#t` or `#f` |
@@ -38,6 +38,7 @@ Nothing else is in the language. No numbers except in `repeat`, no variables, no
 - A spell wears thin after a thousand actions. In a braided hedge that is how a circling spell ends when nobody types `stop`.
 - `stop` at the prompt ends a running spell. While a spell runs you may `look`, `map`, `who`, `say`, `score`.
 - The hedge is case-sensitive, like Scheme. `(GO north)` is not a word.
+- The four way words are the hedge's own. A polar hedge has no north: `(go north)` does not hold there, and `(go in)` does not hold in a square one. Read the plate.
 
 ## Three spells
 
@@ -100,9 +101,21 @@ The hedges have tells. Read the plate at the mouth (`read`, then `study`).
 (until (gate?) (step))
 ```
 
+**A polar hedge** (`--shape polar`) is rings round a well. Its ways are `in`, `out`, `sunwise` (clockwise) and `widdershins`; facing the well, sunwise is on your left. A ring comes back to where it began, but one wall, the seam, runs from the well to the rim. The same algorithms leave the same tells in new words. Binary Tree: every square opens in or sunwise, so this reaches the well at the seam from anywhere.
+
+```scheme
+(until (gate?)
+  (if (open? in) (go in)
+      (if (open? sunwise) (go sunwise)
+          (stop))))
+```
+
+Sidewinder: the long walk circles the well, and every run has one gate in. `seek` and `climb` are `long-walk.scm` with the words changed (`spells/round-the-well.scm`). The left-hand rule needs no change at all: `left` is still left.
+
 ## Checking a spell by hand
 
 ```
 chibi-scheme hedge/check.scm < spells/left-hand.scm      # ok
-echo '(go up)' | chibi-scheme hedge/check.scm             # error: (go up): go needs one direction ...
+echo '(go sideways)' | chibi-scheme hedge/check.scm       # error: (go sideways): go needs one direction ...
+echo '(go north)' | chibi-scheme hedge/check.scm polar     # error: a polar hedge has in, out, sunwise, widdershins
 ```

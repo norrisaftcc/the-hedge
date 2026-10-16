@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 from . import spell
+from .topology import TOPOLOGIES
 
 CHECK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check.scm")
 
@@ -18,12 +19,14 @@ def chibi_path():
     return os.environ.get("HEDGE_CHIBI") or shutil.which("chibi-scheme")
 
 
-def verify(text, timeout=5):
-    """Returns (ok, message, backend). backend is "chibi" or "python"."""
+def verify(text, shape="square", timeout=5):
+    """Returns (ok, message, backend). backend is "chibi" or "python".
+
+    shape is the hedge's: square or polar. It picks the four way words."""
     exe = chibi_path()
     if exe:
         try:
-            r = subprocess.run([exe, CHECK], input=text, capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run([exe, CHECK, shape], input=text, capture_output=True, text=True, timeout=timeout)
             out = (r.stdout + r.stderr).strip()
             if r.returncode == 0 and out.endswith("ok"):
                 return True, "ok", "chibi"
@@ -34,7 +37,7 @@ def verify(text, timeout=5):
         except (OSError, subprocess.TimeoutExpired) as e:
             return False, f"chibi-scheme failed: {e}", "chibi"
     try:
-        spell.parse(text)
+        spell.parse(text, TOPOLOGIES[shape].dirs)
         return True, "ok", "python"
     except spell.SpellError as e:
         return False, str(e), "python"

@@ -79,7 +79,8 @@ class Grammar:
         return sorted({verb for _, verb, _ in self.rules})
 
 
-DIRECTIONS = {"n": "north", "s": "south", "e": "east", "w": "west", "u": "up"}
+DIRECTIONS = {"n": "north", "s": "south", "e": "east", "w": "west", "u": "up",
+              "i": "in", "o": "out", "sw": "sunwise", "wd": "widdershins"}
 
 GRAMMAR = (
     Grammar()
@@ -92,6 +93,10 @@ GRAMMAR = (
     .when("west|w", "go", direction="west")
     .when("up|u", "go", direction="up")
     .when("down", "go", direction="down")
+    .when("in|i", "go", direction="in")              # a polar hedge's ways; a square hedge says there is no in here
+    .when("out|o", "go", direction="out")
+    .when("sunwise|sw", "go", direction="sunwise")
+    .when("widdershins|wd", "go", direction="widdershins")
     .when("go DIRECTION", "go")
     .when("face DIRECTION", "face")
     .when("turn WHICH", "turn")

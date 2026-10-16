@@ -36,7 +36,7 @@ West, the way runs two paces with an opening on the left at one and turns right.
 > score
 1 turns. 29 turns of light and 2 torches to come. Facing north.
 > cast (go sideways)
-The spell does not hold (chibi): (go sideways): go needs one direction: north south east west ahead back left right up down
+The spell does not hold (chibi): (go sideways): go needs one direction: north east south west ahead back left right up down
 > cast
 Type the spell. A blank line ends it.
   . (define (step)

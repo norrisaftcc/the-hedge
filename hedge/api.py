@@ -15,16 +15,16 @@ import time
 
 from .game import Game
 from .hub import Hub
-from .world import Hedge
+from .server import make_hedge
 from . import render
 
 
 class Table:
     PACE = 0.3  # seconds between spell steps in run_spell; pass pace=0 for tests
 
-    def __init__(self, seed=1, algorithm="sidewinder", size=8, hedge=None, pace=PACE, braid=0.0, floors=1):
+    def __init__(self, seed=1, algorithm="sidewinder", size=8, hedge=None, pace=PACE, braid=0.0, floors=1, shape="square", spokes=None):
         self.pace = pace
-        self.hedge = hedge or Hedge(size, size, algorithm, seed, braid=braid, floors=floors)
+        self.hedge = hedge or make_hedge(size, algorithm, seed, shape=shape, spokes=spokes, braid=braid, floors=floors)
         self.game = Game(self.hedge)
         self.hub = Hub(self.game)
         self.seen = {}   # name -> all events, in order

@@ -19,6 +19,7 @@ from hedge.api import Table  # noqa: E402
 from hedge.maze import ALGORITHMS, grow  # noqa: E402
 from hedge.parser import GRAMMAR, Grammar  # noqa: E402
 from hedge.rng import Mulberry32, seed_from_text  # noqa: E402
+from hedge.topology import POLAR, SQUARE  # noqa: E402
 from hedge.world import Hedge  # noqa: E402
 
 SPELLS = os.path.join(ROOT, "spells")
@@ -100,7 +101,7 @@ class Walker:
     """A spell's world over a hedge, with no game around it."""
 
     def __init__(self, h):
-        self.h, self.pos, self.heading = h, h.entrance, "north"
+        self.h, self.pos, self.heading = h, h.entrance, h.dirs[0]
 
     def resolve(self, d):
         return self.h.relative(self.heading, d)
@@ -124,13 +125,13 @@ class Walker:
         """Walk the spell. Returns the steps taken; with a cap, stops there and returns the cap."""
         self.marks = getattr(self, "marks", set())
         steps = 0
-        for kind, arg in spell.run(spell.parse(text), self):
+        for kind, arg in spell.run(spell.parse(text, self.h.dirs), self):
             if kind == "go":
                 d = self.resolve(arg)
                 nxt = self.h.move(self.pos, d)
                 assert nxt is not None, f"walked into the hedge at {self.pos} going {d}"
                 self.pos, steps = nxt, steps + 1
-                if d in ("north", "east", "south", "west"):
+                if d in self.h.dirs:
                     self.heading = d
                 if cap and steps >= cap:
                     return steps
@@ -343,8 +344,13 @@ def test_multi_line_spell_typed_until_a_blank_line():
 def test_walk_transcript(name):
     from hedge.solo import solo
 
+    *rest, seed = name.split("-")
+    shape = "polar" if rest[0] == "polar" else "square"
+
     class Args:
-        size, algorithm, seed = 8, name.split("-")[0], int(name.split("-")[1])
+        algorithm = "-".join(rest[1:] if shape == "polar" else rest)
+        size = 5 if shape == "polar" else 8
+    Args.seed, Args.shape = int(seed), shape
 
     with open(os.path.join(WALKS, name + ".in")) as f:
         lines = f.readlines()
@@ -608,3 +614,114 @@ def test_floors_in_the_game_and_on_the_map():
     assert "Floor 2 of 2." in ev.text
     assert "You go down the stair." in t.text("Ash", t.line("Ash", "down"))
     assert GRAMMAR.parse("u") == ("go", {"direction": "up"}) and GRAMMAR.parse("go Down") == ("go", {"direction": "down"})
+
+
+# ---- polar hedges: rings round a well ----
+
+def test_the_topology_owns_the_ways():
+    assert SQUARE.right("north") == "east" and SQUARE.left("north") == "west" and SQUARE.opposite("east") == "west"
+    # Facing the well, sunwise (clockwise) is on your left.
+    assert POLAR.left("in") == "sunwise" and POLAR.right("in") == "widdershins" and POLAR.opposite("in") == "out"
+    assert POLAR.right("out") == "sunwise" and POLAR.relative("sunwise", "back") == "widdershins"
+    assert POLAR.relative("in", "up") == "up" and SQUARE.opposite("up") == "down"
+    assert POLAR.size_words(5, 10) == "5 rings of 10 spokes"
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHMS)
+def test_a_polar_hedge_is_perfect_and_its_rings_wrap(algorithm):
+    h = Hedge(5, 10, algorithm, 3, shape="polar")
+    assert len(h.dist) == 50 and h.is_dead_end(h.entrance) and h.is_dead_end(h.gate)
+    assert h.dirs == ("in", "widdershins", "out", "sunwise")
+    for pos in h.dist:
+        for d in h.dirs:
+            assert (h.topo.label(d) + "," in h.describe(pos)) == h.is_open(pos, d)
+        assert h.move(pos, "in") is None or h.move(pos, "in")[1] == pos[1] - 1
+    # Round a ring and back to where you began.
+    here = (0, 2, 0)
+    for _ in range(10):
+        here = h.neighbour(here, "sunwise")
+    assert here == (0, 2, 0) and h.neighbour((0, 0, 0), "in") is None and h.neighbour((0, 4, 0), "out") is None
+    assert "well" in h.describe((0, 0, 3)) and "Ring 1 of the Hedge" in h.describe((0, 0, 3)) or (0, 0, 3) in (h.entrance, h.gate)
+    assert "there is no north here" in h.plate(True) and "rings round a well" in h.plate(False)
+    assert "the ':' ends join" in h.map_text(set(h.dist), h.entrance)
+
+
+def test_the_same_dice_grow_the_same_polar_hedge():
+    a, b = Hedge(5, 10, "sidewinder", 7, shape="polar"), Hedge(5, 10, "sidewinder", 7, shape="polar")
+    assert a.grid.display() == b.grid.display() != Hedge(5, 10, "sidewinder", 8, shape="polar").grid.display()
+    assert Hedge(5, 10, "sidewinder", 7, shape="polar").grid.display() != Hedge(5, 10, "sidewinder", 7).grid.display()
+
+
+@pytest.mark.parametrize("seed", [1, 3, 7, 42])
+def test_sunwise_spell_reaches_the_well_at_the_seam(seed):
+    h = Hedge(5, 10, "binary", seed, shape="polar")
+    w = Walker(h)
+    w.walk(read_spell("sunwise.scm"))
+    assert w.pos == (0, 0, 9) or w.gate()   # the innermost ring, at the seam
+
+
+@pytest.mark.parametrize("seed", [1, 3, 7, 42])
+def test_round_the_well_spell_climbs_a_polar_sidewinder(seed):
+    h = Hedge(8, 12, "sidewinder", seed, shape="polar")
+    w = Walker(h)
+    w.walk(read_spell("round-the-well.scm"))
+    assert w.pos[1] == 0   # on the walk round the well
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHMS)
+@pytest.mark.parametrize("seed", [1, 7, 42])
+def test_left_hand_rule_reaches_the_gate_of_a_polar_hedge(algorithm, seed):
+    w = Walker(Hedge(6, 12, algorithm, seed, shape="polar"))
+    w.walk(read_spell("left-hand.scm"))
+    assert w.gate()
+
+
+def test_a_polar_hedge_has_no_north():
+    with pytest.raises(spell.SpellError, match="go needs one direction: in widdershins out sunwise"):
+        spell.parse("(go north)", POLAR.dirs)
+    with pytest.raises(spell.SpellError, match="face needs in, widdershins, out or sunwise"):
+        spell.parse("(face north)", POLAR.dirs)
+    with pytest.raises(spell.SpellError):
+        spell.parse("(go in)")   # the square hedge's language
+    assert spell.parse("(go in) (face sunwise) (marked? widdershins)", POLAR.dirs)
+    assert verify.verify("(go north)", "polar")[0] is False and verify.verify("(go in)", "polar")[0] is True
+    assert verify.verify("(go in)")[0] is False
+
+
+@pytest.mark.skipif(verify.chibi_path() is None, reason="chibi-scheme not found")
+def test_chibi_agrees_with_python_on_a_polar_hedge():
+    for text in CASES + ["(go in)", "(face out)", "(go sunwise)", "(wall? widdershins)", "(face north)"] + [read_spell(f) for f in os.listdir(SPELLS)]:
+        ok, msg, backend = verify.verify(text, "polar")
+        assert backend == "chibi"
+        try:
+            spell.parse(text, POLAR.dirs)
+            python_ok = True
+        except spell.SpellError:
+            python_ok = False
+        assert ok == python_ok, f"{text!r}: chibi says {msg}, python says {python_ok}"
+
+
+def test_a_polar_hedge_in_the_game_and_on_the_map():
+    t = Table(pace=0, seed=3, algorithm="binary", shape="polar", size=5)
+    events = t.join("Ash")
+    assert "5 rings of 10 spokes" in t.text("Ash", events)
+    room = [e for e in events if e.kind == "room"][0]
+    assert room.data["shape"] == "polar" and room.data["dirs"] == ["in", "widdershins", "out", "sunwise"]
+    assert t.player("Ash").heading == "in"
+    assert "There is no north in this hedge" in t.text("Ash", t.line("Ash", "north"))
+    assert "does not hold" in t.text("Ash", t.line("Ash", "cast (go north)"))
+    assert GRAMMAR.parse("sw") == ("go", {"direction": "sunwise"}) and GRAMMAR.parse("go Widdershins") == ("go", {"direction": "widdershins"})
+    assert "Face in, widdershins, out or sunwise." in t.text("Ash", t.line("Ash", "face north"))
+    t.line("Ash", "face in")
+    assert "You turn left. You face sunwise." in t.text("Ash", t.line("Ash", "turn left"))
+    t.line("Ash", "cast " + read_spell("sunwise.scm"))
+    events, steps = t.run_spell("Ash")
+    assert t.player("Ash").pos[1] == 0 and steps > 1
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    assert ev.data["shape"] == "polar" and ev.data["rows"] == 5 and ev.data["cols"] == 10
+    assert all(set(ways) <= {"in", "widdershins", "out", "sunwise"} for ways in ev.data["cells"].values())
+    assert "inward (the well)" in ev.text
+    # A square hedge still says there is no in.
+    sq = Table(pace=0, seed=3, algorithm="binary")
+    sq.join("Ash")
+    assert "There is no in in this hedge" in sq.text("Ash", sq.line("Ash", "in"))
