@@ -88,9 +88,9 @@ def test_description_matches_geometry():
 def test_sight_stops_at_the_light():
     h = Hedge(8, 8, "binary", 1)
     # The top row of a binary-tree maze is one corridor east: a long sight line.
-    run, _, end = h.sight((0, 0), "east", paces=3)
+    run, _, end = h.sight((0, 0, 0), "east", paces=3)
     assert run == 3 and end == "dark"
-    run, _, end = h.sight((0, 0), "east", paces=99)
+    run, _, end = h.sight((0, 0, 0), "east", paces=99)
     assert run == 7 and end in ("dead end", "turns right")  # the corner may open south
 
 
@@ -129,7 +129,9 @@ class Walker:
                 d = self.resolve(arg)
                 nxt = self.h.move(self.pos, d)
                 assert nxt is not None, f"walked into the hedge at {self.pos} going {d}"
-                self.pos, self.heading, steps = nxt, d, steps + 1
+                self.pos, steps = nxt, steps + 1
+                if d in ("north", "east", "south", "west"):
+                    self.heading = d
                 if cap and steps >= cap:
                     return steps
             elif kind == "turn":
@@ -153,18 +155,19 @@ def test_left_hand_rule_reaches_the_gate(algorithm, seed):
 def test_north_east_spell_reaches_the_corner_of_a_binary_tree(seed):
     w = Walker(Hedge(8, 8, "binary", seed))
     w.walk(read_spell("north-east.scm"))
-    assert w.pos == (0, 7) or w.gate()
+    assert w.pos == (0, 0, 7) or w.gate()
 
 
 @pytest.mark.parametrize("seed", [1, 7, 42])
 def test_long_walk_spell_climbs_a_sidewinder_to_the_corner(seed):
     w = Walker(Hedge(8, 8, "sidewinder", seed))
     w.walk(read_spell("long-walk.scm"))
-    assert w.pos == (0, 0)
+    assert w.pos == (0, 0, 0)
 
 
 @pytest.mark.parametrize("bad, words", [
-    ("(go up)", "go needs one direction"),
+    ("(go sideways)", "go needs one direction"),
+    ("(face up)", "face needs north"),
     ("(until (gate?))", "needs a test and a body"),
     ("(go north", "never closes"),
     ("north", "not a thing on its own"),
@@ -197,7 +200,7 @@ def test_stop_ends_a_spell_and_say_speaks():
 
 CASES = ["(until (gate?) (go north))", "(go up)", "(go north", "north", "(fly)", "(define (x) (go north)) (x)",
          "(define x 3)", '(repeat 2 (say "hi"))', "", "(say hi)", "(x)", "(if (wall? left) (turn right))",
-         "(mark)", "(marked?)", "(marked? left)", "(marked? up)", "(mark here)"]
+         "(mark)", "(marked?)", "(marked? left)", "(marked? up)", "(mark here)", "(go up)", "(open? down)", "(face up)", "(turn up)"]
 
 
 @pytest.mark.skipif(verify.chibi_path() is None, reason="chibi-scheme not found")
@@ -216,7 +219,7 @@ def test_chibi_agrees_with_python_on_what_holds():
 def test_verify_falls_back_to_python(monkeypatch):
     monkeypatch.setattr(verify, "chibi_path", lambda: None)
     assert verify.verify("(go north)") == (True, "ok", "python")
-    ok, msg, backend = verify.verify("(go up)")
+    ok, msg, backend = verify.verify("(go sideways)")
     assert not ok and backend == "python"
 
 
@@ -315,7 +318,7 @@ def test_a_spell_that_walks_into_the_hedge_breaks():
 def test_bad_spell_does_not_hold_and_quiet_verbs_during_a_spell():
     t = Table(pace=0, seed=1, algorithm="binary", size=4)
     t.join("Ash")
-    assert "does not hold" in t.text("Ash", t.line("Ash", "cast (go up)"))
+    assert "does not hold" in t.text("Ash", t.line("Ash", "cast (go sideways)"))
     assert t.player("Ash").spell is None
     t.line("Ash", "cast " + read_spell("left-hand.scm"))
     assert kinds(t.line("Ash", "north")) == ["error"]
@@ -463,12 +466,12 @@ def test_map_event_carries_only_the_seen_cells():
     t = Table(pace=0, seed=7, algorithm="sidewinder")
     t.join("Ash")
     ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
-    seen = set(tuple(map(int, k.split(","))) for k in ev.data["cells"])
+    seen = set((0,) + tuple(map(int, k.split(","))) for k in ev.data["cells"])
     assert seen == t.player("Ash").seen and len(seen) < t.hedge.rows * t.hedge.cols
     for key, ways in ev.data["cells"].items():
         r, c = map(int, key.split(","))
-        assert ways == t.hedge.ways((r, c))
-    assert ev.data["pos"] == list(t.hedge.entrance) and ev.data["gate"] is None
+        assert ways == t.hedge.ways((0, r, c))
+    assert ev.data["pos"] == list(t.hedge.entrance[1:]) and ev.data["gate"] is None
     assert ev.data["rows"] == 8 and ev.data["heading"] == "north"
 
 
@@ -530,7 +533,7 @@ def test_mark_in_the_game_and_on_the_map():
     assert "braided" in t.text("Ash", events)
     assert kinds(t.line("Ash", "mark")) == ["mark"]
     ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
-    assert ev.data["marks"] == [list(t.hedge.entrance)]
+    assert ev.data["marks"] == [list(t.hedge.entrance[1:])]
     t.line("Ash", "cast (if (marked?) (say \"chalk\") (say \"clean\"))")
     events, _ = t.run_spell("Ash")
     assert any(e.kind == "say" and e.data["words"] == "chalk" for e in events)
@@ -545,3 +548,63 @@ def test_a_circling_spell_wears_thin(monkeypatch):
     events, steps = t.run_spell("Ash", max_steps=100)
     assert steps <= 13 and any(e.kind == "spell" and e.data.get("reason") == "reach" for e in events)
     assert t.player("Ash").spell is None
+
+
+# ---- floors ----
+
+def test_a_hedge_of_floors_is_joined_by_stairs():
+    h = Hedge(8, 8, "sidewinder", 7, floors=3)
+    assert h.entrance[0] == 0 and h.gate[0] == 2
+    assert len(h.dist) == 3 * 64
+    ups = [pos for pos in h.stairs if h.stairs[pos][0] > pos[0]]
+    assert sorted(pos[0] for pos in ups) == [0, 1]
+    for top in ups:
+        below = h.stairs[top]
+        assert below[1:] == top[1:] and below[0] == top[0] + 1
+        assert "up" in h.ways(top) and "down" in h.ways(below)
+        assert h.move(top, "up") == below and h.move(below, "down") == top
+        assert "A stair goes up from here" in h.describe(top)
+        assert "floor" in h.name(top)
+    assert h.move(h.entrance, "up") is None
+    # Each floor is walked from its arrival to its farthest cell, so the stair is far.
+    assert h.dist[ups[0]] == max(n for pos, n in h.dist.items() if pos[0] == 0)
+    assert "floors" in h.plate(True) and "Stairs" in h.plate(False)
+    # One floor is the same hedge as before, with the same words.
+    assert Hedge(8, 8, "sidewinder", 7).describe((0, 7, 7)) == Hedge(8, 8, "sidewinder", 7, floors=1).describe((0, 7, 7))
+    assert "floor" not in Hedge(8, 8, "sidewinder", 7).name((0, 3, 3))
+
+
+@pytest.mark.parametrize("algorithm", ALGORITHMS)
+@pytest.mark.parametrize("seed", [1, 7, 42])
+def test_left_hand_never_climbs_but_climb_does(algorithm, seed):
+    h = Hedge(6, 6, algorithm, seed, floors=3)
+    left = Walker(h)
+    left.walk(read_spell("left-hand.scm"), cap=400)
+    assert left.pos[0] == 0 and not left.gate()
+    climb = Walker(h)
+    climb.walk(read_spell("climb.scm"), cap=2000)
+    assert climb.gate()
+
+
+def test_floors_in_the_game_and_on_the_map():
+    t = Table(pace=0, seed=7, algorithm="sidewinder", floors=2)
+    events = t.join("Ash")
+    assert "2 floors" in t.text("Ash", events)
+    assert t.player("Ash").torches == 2 * 3 - 1  # three torches a floor
+    room = [e for e in events if e.kind == "room"][0]
+    assert room.data["floor"] == 0 and room.data["floors"] == 2 and room.data["pos"] == [0, *t.hedge.entrance[1:]]
+    assert kinds(t.line("Ash", "up")) == ["bump"]  # no stair at the mouth
+    top = [pos for pos in t.hedge.stairs if pos[0] == 0][0]
+    p = t.player("Ash")
+    p.pos = top
+    t.game.see_around(p)
+    events = t.line("Ash", "up")
+    assert p.pos[0] == 1 and any(e.kind == "info" and "climb" in e.text for e in events)
+    room = [e for e in events if e.kind == "room"][0]
+    assert room.data["floor"] == 1 and "down" in room.data["exits"] and "floor 2" in room.text
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    assert ev.data["floor"] == 1 and ev.data["stairs"] == {f"{top[1]},{top[2]}": "down"}
+    assert all(len(k.split(",")) == 2 for k in ev.data["cells"]) and ev.data["entrance"] is None
+    assert "Floor 2 of 2." in ev.text
+    assert "You go down the stair." in t.text("Ash", t.line("Ash", "down"))
+    assert GRAMMAR.parse("u") == ("go", {"direction": "up"}) and GRAMMAR.parse("go Down") == ("go", {"direction": "down"})

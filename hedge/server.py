@@ -16,7 +16,7 @@ from .world import Hedge
 
 def make_hub(args):
     pace = getattr(args, "pace", None)
-    hedge = Hedge(args.size, args.size, args.algorithm, args.seed, braid=getattr(args, "braid", 0.0))
+    hedge = Hedge(args.size, args.size, args.algorithm, args.seed, braid=getattr(args, "braid", 0.0), floors=getattr(args, "floors", 1))
     return Hub(Game(hedge), pace=0.6 if pace is None else pace)
 
 
@@ -33,7 +33,7 @@ async def serve(args):
     if args.ws:
         servers.append(await serve_ws(hub, args.host, args.ws))
         print(f"browser http://localhost:{args.ws}/")
-    print(f"The Hedge ({h.algorithm}, {h.rows} by {h.cols}, seed {h.seed}{', braided ' + str(h.braid) if h.braid else ''}). "
+    print(f"The Hedge ({h.algorithm}, {h.rows} by {h.cols}, seed {h.seed}{', braided ' + str(h.braid) if h.braid else ''}{f', {h.floors} floors' if h.floors > 1 else ''}). "
           f"Entrance {h.entrance}, gate {h.gate}, {len(h.path) - 1} steps apart.")
     if not servers:
         print("nothing to serve: give --telnet or --ws a port, or --solo")
@@ -49,6 +49,7 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--algorithm", "-a", choices=("binary", "sidewinder", "aldous-broder"), default="sidewinder")
     parser.add_argument("--size", type=int, default=8, help="rows and columns")
+    parser.add_argument("--floors", type=int, default=1, metavar="N", help="floors joined by stairs, one stair up per floor (default 1)")
     parser.add_argument("--braid", type=float, default=0.0, metavar="P",
                         help="join this fraction of dead ends to a neighbour (0 to 1), making loops; the left-hand rule then fails")
     parser.add_argument("--solo", action="store_true", help="play alone on this terminal, no network")

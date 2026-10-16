@@ -30,7 +30,8 @@ ALGORITHMS = ("binary", "sidewinder", "aldous-broder")
 DIRS = ("north", "east", "south", "west")
 DIR_BIT = {"north": Cell.NORTH, "east": Cell.EAST, "south": Cell.SOUTH, "west": Cell.WEST}
 DIR_STEP = {"north": (-1, 0), "east": (0, 1), "south": (1, 0), "west": (0, -1)}
-OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east"}
+OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east", "up": "down", "down": "up"}
+VERTICAL = ("up", "down")  # ways between floors; not compass, not relative
 
 
 class SeededGrid(Grid):
@@ -79,6 +80,12 @@ def longest_path(grid):
     """The two cells farthest apart, and the path between them, as (row, col) pairs."""
     path = Dijkstra.longest_path(grid)
     return [(cell.row, cell.col) for cell in path]
+
+
+def farthest_from(grid, r, c):
+    """The cell farthest from (r, c), chosen as Dijkstra.longest_path chooses its ends."""
+    cell = Dijkstra.calculate_distances(grid, grid.at(r, c)).get_max_cell(grid)
+    return cell.row, cell.col
 
 
 def distances_from(grid, r, c):

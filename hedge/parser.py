@@ -42,7 +42,9 @@ class Grammar:
                 out = dict(fixed)
                 for k, v in args.items():
                     aliases = self.normalizers.get(k, {})
-                    out[k.lower()] = aliases.get(v.lower(), v) if len(v.split()) == 1 else v
+                    if k in self.normalizers and len(v.split()) == 1:
+                        v = aliases.get(v.lower(), v.lower())
+                    out[k.lower()] = v
                 return verb, out
         return None
 
@@ -77,7 +79,7 @@ class Grammar:
         return sorted({verb for _, verb, _ in self.rules})
 
 
-DIRECTIONS = {"n": "north", "s": "south", "e": "east", "w": "west"}
+DIRECTIONS = {"n": "north", "s": "south", "e": "east", "w": "west", "u": "up"}
 
 GRAMMAR = (
     Grammar()
@@ -88,6 +90,8 @@ GRAMMAR = (
     .when("south|s", "go", direction="south")
     .when("east|e", "go", direction="east")
     .when("west|w", "go", direction="west")
+    .when("up|u", "go", direction="up")
+    .when("down", "go", direction="down")
     .when("go DIRECTION", "go")
     .when("face DIRECTION", "face")
     .when("turn WHICH", "turn")

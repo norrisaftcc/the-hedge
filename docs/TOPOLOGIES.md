@@ -4,7 +4,7 @@ A hedge today is a rectangular grid of cells with four ways, grown as a tree (a 
 
 ## What the engine assumes
 
-`world.py` knows four compass directions, their opposites, and that `left` of `north` is `west`. `spell.py` knows the same four words plus `ahead back left right`. The first-person view assumes straight corridors that turn by right angles. Everything else (rooms, light, the hub, the transports) asks only `ways(pos)` and `move(pos, direction)`.
+`world.py` knows four compass directions, their opposites, that `left` of `north` is `west`, and two vertical ways, `up` and `down`, that a stair opens. `spell.py` knows the same words plus `ahead back left right`. The first-person view assumes straight corridors that turn by right angles. Everything else (rooms, light, the hub, the transports) asks only `ways(pos)` and `move(pos, direction)`.
 
 So one abstraction unlocks most of what follows: a **Topology** that owns the direction names, their opposites, what a turn does to a heading, how to step, and the words for each way. `world.py` and `spell.py` would read their direction sets from it. The grammar and the game would not change. The view would need to know the turn angle.
 
@@ -15,7 +15,7 @@ So one abstraction unlocks most of what follows: a **Topology** that owns the di
 | **Braided** (now) | dead ends joined; loops | the left-hand rule circles. Memory wins: a mark, a map, a search. | none new | none | `Braid.on` | done |
 | **Masked** | cells removed; a hedge shaped like a thing (a letter, a lake, the Fort's wall) | none by shape; the algorithm's tell survives | none | none | a mask on the grid before growing | small |
 | **Cylinder** | the east edge joins the west edge | Sidewinder's long walk becomes a ring: "the way east comes back to where it began" | none | none | wrap column indices | small |
-| **Floors** | several hedges joined by stairs | Binary Tree in three dimensions: always north, east or up | `up`, `down`; `(go up)` finally means something | a stair glyph; the overhead map gets a floor picker | a stack of grids with stair links, as the Crawler already does | medium |
+| **Floors** (now) | several hedges joined by stairs, one stair up per floor, far from where you arrive | a hand on the hedge never climbs: ask for `up` first | `up`, `down` | a stair glyph on the map; the floor in the hud | a stack of grids with stair links | done |
 | **Polar** | rings and spokes, growing outward from a centre | Binary Tree on rings: always inward or sunwise reaches the centre. The best new tell. | `in`, `out`, `sunwise`, `widdershins` replace the compass; "Inward, the way runs two paces" | curved walls; a straight wireframe is an honest approximation | a new grid class: rings of unequal cell counts | medium |
 | **Hex** | six ways; turns of sixty degrees | weak; Sidewinder's runs become diagonals | six direction names | corridors bend at 120 degrees: the wireframe needs a diagonal frame | a new grid class | large |
 | **Weave** | passages pass over and under each other | none new; a perfect weave still yields to the left hand. Pretty, and a good map lesson. | "a way under the hedge" | a tunnel mouth; the map needs a bridge glyph | a grid with under-cells | large |
@@ -33,8 +33,8 @@ So one abstraction unlocks most of what follows: a **Topology** that owns the di
 
 ## Recommended order
 
-1. **Braided**, done in this change.
-2. **Floors**: the Crawler already models stairs between maps, the Forge grows towers, and `(go up)` is the most asked-for word. The spell language gains two directions.
+1. **Braided**, done.
+2. **Floors**, done: a stack of hedges joined by stairs. A true three-dimensional Binary Tree (always north, east or up) would need a 3D grid in MazeBuilder and is still open.
 3. **Polar**: the best new tell for the least new engine. It forces the Topology abstraction, which everything after it needs.
 4. **A graph**: the destination for the Fort Country. By then the words do all the work and the pictures are optional.
 5. **Weave** and **hex** when there is time for the view. They are mostly drawing.

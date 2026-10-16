@@ -14,7 +14,7 @@ transports/  the ways in      telnet (+GMCP), stdin, ws (+ the web page), and ap
 
 ## Events
 
-The game returns `Event(kind, to, text, **data)`. `text` is what a player reads; `data` is the same thing as numbers. A `room` event carries the description **and** `exits`, `sight` (per open way: how far it runs, where it opens, what ends it), `lit`, `light`, `torches`, `heading`, `pos`, `others`. A client can print the text, or draw from the data, or both. They cannot disagree, because both come from the same cells in `world.py`.
+The game returns `Event(kind, to, text, **data)`. `text` is what a player reads; `data` is the same thing as numbers. A `room` event carries the description **and** `exits`, `sight` (per open way: how far it runs, where it opens, what ends it), `lit`, `light`, `torches`, `heading`, `pos` (floor, row, col), `floor`, `floors`, `others`. A `map` event is one floor: `cells` and `stairs` keyed `row,col`, with `floor` and `floors`. A client can print the text, or draw from the data, or both. They cannot disagree, because both come from the same cells in `world.py`.
 
 `to` is a name, `"all"`, or `("room", pos, except_name)`. The hub resolves it. A transport never sees another player's events.
 

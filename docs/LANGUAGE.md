@@ -6,10 +6,10 @@ A spell is a small program in a Scheme subset. It walks the hedge one step a tur
 
 | Form | Does | Value |
 |------|------|-------|
-| `(go D)` | One step. `D` is `north`, `south`, `east`, `west`, or `ahead`, `back`, `left`, `right` from where you face. A step costs a turn of light. A step into the hedge **breaks the spell**. | `#t` |
+| `(go D)` | One step. `D` is `north`, `south`, `east`, `west`, or `ahead`, `back`, `left`, `right` from where you face, or `up`, `down` where there is a stair. A step costs a turn of light. A step into the hedge **breaks the spell**. | `#t` |
 | `(face D)` | Face a compass direction. Free. | `#t` |
 | `(turn T)` | `left`, `right` or `around`. Free. | `#t` |
-| `(wall? D)` | Is the hedge there? | `#t` or `#f` |
+| `(wall? D)` | Is the hedge there? `(wall? up)` is true where there is no stair. | `#t` or `#f` |
 | `(open? D)` | Is there a way? | `#t` or `#f` |
 | `(gate?)` | Am I at the far gate? | `#t` or `#f` |
 | `(dead-end?)` | Is there only one way out of here? | `#t` or `#f` |
@@ -87,6 +87,16 @@ The hedges have tells. Read the plate at the mouth (`read`, then `study`).
           (if (fresh-right) (begin (turn right) (go ahead))
               (if (open? left) (begin (turn left) (go ahead))
                   (if (open? ahead) (go ahead) (turn right)))))))
+(until (gate?) (step))
+```
+
+**A hedge of floors** (`--floors 3`) is a stack of hedges joined by stairs, one stair up per floor, far from where you arrive, with the gate on the top floor. A hand on the hedge never climbs a stair, so the left-hand rule stays on the ground floor for ever. Ask for `up` first. A third dimension is a third pair of words; the algorithm does not care.
+
+```scheme
+(define (step)
+  (if (open? up) (go up)
+      (if (open? left) (begin (turn left) (go ahead))
+          (if (open? ahead) (go ahead) (turn right)))))
 (until (gate?) (step))
 ```
 

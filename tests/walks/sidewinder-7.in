@@ -4,7 +4,7 @@ study
 north
 map
 score
-cast (go up)
+cast (go sideways)
 cast
 (define (step)
   (if (open? left) (begin (turn left) (go ahead))
