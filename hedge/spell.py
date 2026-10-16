@@ -3,7 +3,7 @@
 A spell is a list of forms. Walking forms yield one action at a time, so the
 game can run a spell one turn per step and let the player watch.
 
-    (go D)                 take one step. D: north south east west ahead back left right
+    (go D)                 take one step. D: north south east west ahead back left right up down
     (face D)               turn to a compass direction
     (turn T)               T: left right around
     (wall? D) (open? D)    is the hedge there, or a way?
@@ -26,6 +26,8 @@ Scheme in check.scm, which chibi-scheme runs to verify a spell.
 
 COMPASS = ("north", "east", "south", "west")
 RELATIVE = ("ahead", "back", "left", "right")
+VERTICAL = ("up", "down")
+WAYS = COMPASS + RELATIVE + VERTICAL
 TURNS = ("left", "right", "around")
 MAX_SPIN = 10000  # evaluation steps allowed between two actions before the spell is judged to spin
 
@@ -146,17 +148,17 @@ def _check(f, defined, top=False):
             raise SpellError(f"{show(f)}: {msg}")
 
     if head == "go":
-        need(n == 1 and _is_sym(args[0], *COMPASS, *RELATIVE), "go needs one direction: north south east west ahead back left right")
+        need(n == 1 and _is_sym(args[0], *WAYS), "go needs one direction: north south east west ahead back left right up down")
     elif head == "face":
         need(n == 1 and _is_sym(args[0], *COMPASS), "face needs north, south, east or west")
     elif head == "turn":
         need(n == 1 and _is_sym(args[0], *TURNS), "turn needs left, right or around")
     elif head in ("wall?", "open?"):
-        need(n == 1 and _is_sym(args[0], *COMPASS, *RELATIVE), f"{head} needs one direction")
+        need(n == 1 and _is_sym(args[0], *WAYS), f"{head} needs one direction")
     elif head in ("gate?", "dead-end?", "stop", "mark"):
         need(n == 0, f"{head} takes nothing")
     elif head == "marked?":
-        need(n == 0 or (n == 1 and _is_sym(args[0], *COMPASS, *RELATIVE)), "marked? takes nothing, or one direction")
+        need(n == 0 or (n == 1 and _is_sym(args[0], *WAYS)), "marked? takes nothing, or one direction")
     elif head in ("until", "while"):
         need(n >= 2, f"{head} needs a test and a body")
         for a in args:

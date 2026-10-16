@@ -10,6 +10,7 @@
 
 (define compass '(north east south west))
 (define relative '(ahead back left right))
+(define vertical '(up down))
 (define turns '(left right around))
 
 (define (fail . parts)
@@ -24,7 +25,7 @@
     (get-output-string out)))
 
 (define (name-of head) (symbol->string head))
-(define (direction? x) (and (symbol? x) (or (memq x compass) (memq x relative)) #t))
+(define (direction? x) (and (symbol? x) (or (memq x compass) (memq x relative) (memq x vertical)) #t))
 (define (count? x) (and (exact-integer? x) (>= x 0)))
 
 (define (check-body forms defined)
@@ -44,7 +45,7 @@
        (define (need ok msg) (if (not ok) (fail (show f) ": " msg)))
        (case head
          ((go) (need (and (= n 1) (direction? (car args)))
-                     "go needs one direction: north south east west ahead back left right"))
+                     "go needs one direction: north south east west ahead back left right up down"))
          ((face) (need (and (= n 1) (symbol? (car args)) (memq (car args) compass))
                        "face needs north, south, east or west"))
          ((turn) (need (and (= n 1) (symbol? (car args)) (memq (car args) turns))
