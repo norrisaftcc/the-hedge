@@ -157,6 +157,7 @@
       ctx.stroke();
     }
     const mark = (pos, glyph, color) => { if (!pos) return; ctx.fillStyle = color; ctx.font = `${cell * 0.7}px Georgia`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(glyph, ox + pos[1] * cell + cell / 2, oy + pos[0] * cell + cell / 2); };
+    for (const m of map.marks || []) mark(m, "·", css("--accent"));   // chalk
     mark(map.entrance, "<", css("--muted"));
     mark(map.gate, ">", css("--accent"));
     // you: an arrowhead the way you face

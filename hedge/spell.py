@@ -8,12 +8,14 @@ game can run a spell one turn per step and let the player watch.
     (turn T)               T: left right around
     (wall? D) (open? D)    is the hedge there, or a way?
     (gate?) (dead-end?)    where are we?
+    (mark)                 chalk a mark on this cell
+    (marked?) (marked? D)  is this cell marked? the open cell one step that way?
     (until TEST BODY...)   repeat BODY until TEST is true
     (while TEST BODY...)   repeat BODY while TEST is true
     (repeat N BODY...)     BODY, N times
     (if TEST THEN [ELSE])  (when TEST BODY...) (unless TEST BODY...)
     (and ...) (or ...) (not X)  (begin BODY...)
-    (define (NAME) BODY...)    name a procedure; call it with (NAME)
+    (define (NAME) BODY...)    name a procedure; call it with (NAME). Its value is its last form's.
     (say "words")          speak
     (stop)                 end the spell
     #t #f                  true and false
@@ -151,8 +153,10 @@ def _check(f, defined, top=False):
         need(n == 1 and _is_sym(args[0], *TURNS), "turn needs left, right or around")
     elif head in ("wall?", "open?"):
         need(n == 1 and _is_sym(args[0], *COMPASS, *RELATIVE), f"{head} needs one direction")
-    elif head in ("gate?", "dead-end?", "stop"):
+    elif head in ("gate?", "dead-end?", "stop", "mark"):
         need(n == 0, f"{head} takes nothing")
+    elif head == "marked?":
+        need(n == 0 or (n == 1 and _is_sym(args[0], *COMPASS, *RELATIVE)), "marked? takes nothing, or one direction")
     elif head in ("until", "while"):
         need(n >= 2, f"{head} needs a test and a body")
         for a in args:
@@ -206,7 +210,7 @@ class Stop(Exception):
 def run(forms, world):
     """A generator. Each yielded value is an action: ("go", D), ("face", D),
     ("turn", T) or ("say", text). The world answers the tests:
-    world.wall(D), world.gate(), world.dead_end(). D may be relative; the
+    world.wall(D), world.gate(), world.dead_end(), world.marked(D or None). D may be relative; the
     world resolves it against the player's heading."""
     procs = {f[1][0]: f[2:] for f in forms if isinstance(f, list) and f and f[0] == "define"}
     spin = [0]
@@ -217,8 +221,11 @@ def run(forms, world):
             raise SpellError("the spell spins: a loop with no step in it")
 
     def body(seq):
+        """Evaluate forms in order; the value is the last one's, as in Scheme."""
+        v = True
         for f in seq:
-            yield from ev(f)
+            v = yield from ev(f)
+        return v
 
     def ev(f):
         """Evaluate f, yielding actions along the way. Returns f's value."""
@@ -244,6 +251,10 @@ def run(forms, world):
             return world.gate()
         if head == "dead-end?":
             return world.dead_end()
+        if head == "marked?":
+            return world.marked(args[0] if args else None)
+        if head == "mark":
+            yield ("mark", None); return True
         if head == "not":
             return not (yield from ev(args[0]))
         if head == "and":
@@ -270,8 +281,7 @@ def run(forms, world):
                 yield from body(args[1:])
             return True
         if head == "begin":
-            yield from body(args)
-            return True
+            return (yield from body(args))
         if head == "until" or head == "while":
             while True:
                 t = yield from ev(args[0])
@@ -285,8 +295,7 @@ def run(forms, world):
         if head == "define":
             return True
         if head in procs:
-            yield from body(procs[head])
-            return True
+            return (yield from body(procs[head]))  # so a procedure can be a test: (if (fresh-left) ...)
         raise SpellError(f"{head} is not a word of the language")
 
     try:

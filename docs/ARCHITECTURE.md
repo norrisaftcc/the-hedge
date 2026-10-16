@@ -18,7 +18,7 @@ The game returns `Event(kind, to, text, **data)`. `text` is what a player reads;
 
 `to` is a name, `"all"`, or `("room", pos, except_name)`. The hub resolves it. A transport never sees another player's events.
 
-Kinds: `info arrive depart room move bump light say face map plate who score help spells spell out error`. A `spell` event has `state`: `typing holds refused running ends breaks stopped none`.
+Kinds: `info arrive depart room move bump light say face map mark plate who score help spells spell out error`. A `spell` event has `state`: `typing holds refused running ends breaks stopped none`.
 
 ## Verbs
 
@@ -30,7 +30,7 @@ Adding a verb: one `when` line in the grammar, one `do_` method in the game. No 
 
 `Hub.connect(name, sink)` joins a player; `sink` is a callable that takes the player's events. `Hub.line(name, text)` parses and acts, and returns the session's mode: `"spell"` while a multi-line spell is being typed (a `cast` with no text, or with parentheses still open, until a blank line), else `"command"`. `Hub.tick(name)` runs one spell step and returns whether the spell is still running. The **pace is a hub setting**: `Hub(pace=0.6)` is what telnet and the browser wait between steps, so the room can watch. The stdin transport and `api.Table` have their own default of 0.3 s; transcripts and tests pass `pace=0`. `--pace` on the command line overrides all of it.
 
-While a spell runs, only `QUIET` verbs are allowed (`stop look map who say score help spells read study`).
+While a spell runs, only `QUIET` verbs are allowed (`stop look map who say score help spells read study`). A spell wears thin after `SPELL_REACH` actions (a thousand), so a circling spell in a braided hedge ends on every transport.
 
 ## Transports
 
