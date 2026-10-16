@@ -4,6 +4,7 @@
     python -m hedge --telnet 4000 --ws 0                             telnet only
     python -m hedge --solo --seed 7 < tests/walks/sidewinder-7.in    one player, no network
     python -m hedge --shape polar --size 6 -a binary                 rings round a well
+    python -m hedge --shape cave --seed 7                            twenty caves, three tunnels each
 """
 
 import argparse
@@ -16,7 +17,10 @@ from .world import Hedge
 
 
 def make_hedge(size, algorithm, seed, shape="square", spokes=None, braid=0.0, floors=1):
-    """A square hedge is size by size. A polar one is size rings of spokes, twice size unless said."""
+    """A square hedge is size by size. A polar one is size rings of spokes, twice size unless said.
+    A cave is always twenty rooms of three tunnels; size, algorithm and braid do not apply."""
+    if shape == "cave":
+        return Hedge(seed=seed, floors=floors, shape="cave")
     cols = size if shape == "square" else (spokes or 2 * size)
     return Hedge(size, cols, algorithm, seed, braid=braid, floors=floors, shape=shape)
 
@@ -57,8 +61,9 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--algorithm", "-a", choices=("binary", "sidewinder", "aldous-broder"), default="sidewinder")
     parser.add_argument("--size", type=int, default=8, help="rows and columns; on a polar hedge, rings")
-    parser.add_argument("--shape", choices=("square", "polar"), default="square",
-                        help="square (north east south west) or polar: rings round a well, ways in out sunwise widdershins")
+    parser.add_argument("--shape", choices=("square", "polar", "cave"), default="square",
+                        help="square (north east south west); polar: rings round a well, ways in out sunwise widdershins; "
+                             "cave: twenty caves of three tunnels, the old Wumpus map, no compass at all")
     parser.add_argument("--spokes", type=int, default=None, metavar="N", help="cells in each ring of a polar hedge (default twice --size)")
     parser.add_argument("--floors", type=int, default=1, metavar="N", help="floors joined by stairs, one stair up per floor (default 1)")
     parser.add_argument("--braid", type=float, default=0.0, metavar="P",

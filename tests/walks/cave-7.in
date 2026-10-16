@@ -1,0 +1,21 @@
+read
+study
+north
+turn left
+back
+look
+ahead
+left
+map
+score
+again
+cast (turn left)
+cast
+(go ahead)
+(until (gate?)
+  (go left) (go left) (go left)
+  (go right) (go right) (go right)
+  (go left) (go right) (go left) (go right))
+
+map
+score

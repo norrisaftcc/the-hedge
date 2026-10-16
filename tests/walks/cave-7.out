@@ -1,0 +1,108 @@
+you comes down the stair into the hedge.
+The Hedge (dodecahedron, twenty caves of three tunnels, seed 7). Find the far gate. Type help for the words.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the rock beside it.
+Tunnels lead left to 10, ahead to 2 and right to 16.
+> read
+Twenty caves, three tunnels each, and no dead ends. There is no north here: left and right are from the tunnel you came by. A hand on the wall goes round in five and comes back.
+> study
+Twenty caves, three tunnels each, laid out as the twelve-sided die, the old Wumpus map. A hand on the wall walks one face of the die: five caves, and back where you began. Hamilton's walk visits every cave once and comes home: from the stair go ahead, then left left left right right right left right left right, and again. It works from any tunnel, because every tunnel of the die is like every other. Where the gate is, a draft blows.
+> north
+There is no north in this hedge. Its ways are the tunnels, by number, and left, right and back from the tunnel you came by, and up and down where there is a stair.
+> turn left
+In a cave you do not face or turn. Left and right are from the tunnel you came by; back is that tunnel.
+> back
+Rock. No tunnel leads that way.
+> look
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the rock beside it.
+Tunnels lead left to 10, ahead to 2 and right to 16.
+> ahead
+Cave 2
+Tunnels lead left to 11, right to 4 and back to 17.
+> left
+Cave 11
+Tunnels lead left to 15, right to 13 and back to 2.
+> map
+Caves you have stood in, and their tunnels:
+   2: 17 4 11
+  11: 15 2 13  (you are here)
+  17: 16 2 10
+Heard of: 4 10 13 15 16.
+> score
+2 turns. 28 turns of light and 2 torches to come. Your back to cave 2.
+> again
+You go back to the mouth of the hedge with fresh torches.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the rock beside it.
+Tunnels lead left to 10, ahead to 2 and right to 16.
+> cast (turn left)
+The spell does not hold (chibi): (turn left): in a cave you do not face or turn; left and right are from the tunnel you came by
+> cast
+Type the spell. A blank line ends it.
+  . (go ahead)
+  . (until (gate?)
+  .   (go left) (go left) (go left)
+  .   (go right) (go right) (go right)
+  .   (go left) (go right) (go left) (go right))
+  . 
+The spell holds (chibi). It runs one step a turn; stop ends it.
+Cave 2
+Tunnels lead left to 11, right to 4 and back to 17.
+Cave 11
+Tunnels lead left to 15, right to 13 and back to 2.
+Cave 15
+Tunnels lead left to 10, right to 14 and back to 11.
+Cave 10
+Tunnels lead left to 17, right to 3 and back to 15.
+Cave 3
+Tunnels lead left to 6, right to 20 and back to 10.
+Cave 20
+Tunnels lead left to 5, right to 14 and back to 3.
+You smell a wumpus.
+Cave 14
+Tunnels lead left to 8, right to 15 and back to 20.
+Cave 8
+Tunnels lead left to 7, right to 13 and back to 14.
+A draft comes through the tunnel on the left, and with it a smell of daylight.
+Cave 13
+Tunnels lead left to 9, right to 11 and back to 8.
+Cave 9
+Tunnels lead left to 12, right to 4 and back to 13.
+Cave 4
+Tunnels lead left to 1, right to 2 and back to 9.
+Cave 1
+Tunnels lead left to 19, right to 16 and back to 4.
+Cave 19
+Tunnels lead left to 12, right to 18 and back to 1.
+Cave 12
+Tunnels lead left to 9, right to 7 and back to 19.
+A draft comes through the tunnel on the right, and with it a smell of daylight.
+The Far Gate
+A stair goes up into daylight. This is the way out.
+Tunnels lead left to 8, right to 5 and back to 12.
+You smell a wumpus.
+You climb the stair into daylight. 15 turns.
+you has found the far gate in 15 turns.
+> map
+Caves you have stood in, and their tunnels:
+   1: 4 16 19
+   2: 17 4 11
+   3: 6 10 20
+   4: 2 1 9
+   7: 5 8 12  (you are here)
+   8: 14 13 7
+   9: 13 4 12
+  10: 3 17 15
+  11: 15 2 13
+  12: 7 9 19
+  13: 11 9 8
+  14: 20 15 8
+  15: 10 11 14
+  17: 16 2 10
+  19: 18 12 1
+  20: 3 14 5
+Heard of: 5 6 16 18.
+> score
+15 turns. 15 turns of light and 2 torches to come. Your back to cave 12.
+you has left.

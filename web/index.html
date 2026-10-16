@@ -22,10 +22,11 @@
   #log .say { color: var(--accent); }
   #log .room { font-family: Georgia, serif; font-size: 16px; }
   #log .map { display: none; }
-  #exits button, #line { font: inherit; }
-  #exits { display: flex; gap: 8px; flex-wrap: wrap; }
-  #exits button { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 6px; }
-  #exits button:disabled { opacity: .3; }
+  #exits button, #exits-cave button, #line { font: inherit; }
+  #exits, #exits-cave { display: flex; gap: 8px; flex-wrap: wrap; }
+  #exits[hidden], #exits-cave[hidden] { display: none; }
+  #exits button, #exits-cave button { padding: 8px 14px; border: 1px solid var(--ink); background: transparent; color: var(--ink); border-radius: 6px; }
+  #exits button:disabled, #exits-cave button:disabled { opacity: .3; }
   form { display: flex; gap: 8px; }
   #line { flex: 1; padding: 8px; border: 1px solid var(--muted); background: transparent; color: var(--ink); font-family: ui-monospace, Menlo, Consolas, monospace; }
   textarea { width: 100%; box-sizing: border-box; font: 14px ui-monospace, Menlo, Consolas, monospace; background: transparent; color: var(--ink); border: 1px solid var(--muted); padding: 8px; min-height: 5em; }
@@ -49,6 +50,16 @@
     <button data-verb="look">look</button>
     <button data-verb="stop">stop</button>
   </div>
+  <div id="exits-cave" hidden>
+    <button data-verb="go" data-direction="left">left</button>
+    <button data-verb="go" data-direction="ahead">ahead</button>
+    <button data-verb="go" data-direction="right">right</button>
+    <button data-verb="go" data-direction="back">back</button>
+    <button data-verb="go" data-direction="up">up</button>
+    <button data-verb="go" data-direction="down">down</button>
+    <button data-verb="look">look</button>
+    <button data-verb="stop">stop</button>
+  </div>
   <form id="f"><input id="line" autocomplete="off" placeholder="your name"><button>send</button></form>
   <details><summary>A spell (several lines, then Cast)</summary>
     <textarea id="spell">(define (step)
@@ -61,7 +72,7 @@
 <script>
 (() => {
   const $ = id => document.getElementById(id);
-  const log = $("log"), hud = $("status"), input = $("line"), form = $("f"), exits = $("exits");
+  const log = $("log"), hud = $("status"), input = $("line"), form = $("f"), exits = $("exits"), caveExits = $("exits-cave");
 
   /* ---- theme: light, dark, or system; remembered in this browser only ---- */
   const THEMES = ["system", "light", "dark"];
@@ -96,6 +107,7 @@
     ctx.fillStyle = css("--paper"); ctx.fillRect(0, 0, W, H);
     ctx.strokeStyle = css("--ink"); ctx.lineWidth = 3; ctx.lineJoin = "round";
     if (!room) return;
+    if (room.shape === "cave") return drawCaveEye(ctx, W, H);
     if (!room.lit) {
       ctx.fillStyle = css("--ink"); ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = css("--paper"); ctx.font = "italic 20px Georgia"; ctx.textAlign = "center";
@@ -142,12 +154,41 @@
     ctx.fillText(`facing ${h} · ${run} pace${run === 1 ? "" : "s"} · ${end}`, 8, H - 10);
   }
 
+  /* ---- a cave: three tunnel mouths, left, ahead and right, with the number carved over each.
+     The one you came by is behind you. A draft (the gate is next door) shows as daylight in its mouth. ---- */
+  function drawCaveEye(ctx, W, H) {
+    const at = { left: W * 0.2, ahead: W * 0.5, right: W * 0.8 };
+    const tunnels = Object.fromEntries((room.tunnels || []).map(([which, to]) => [which, to]));
+    if (!room.lit) {
+      ctx.fillStyle = css("--ink"); ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = css("--paper"); ctx.font = "italic 20px Georgia"; ctx.textAlign = "center";
+      ctx.fillText("It is dark. Tunnels " + Object.keys(tunnels).join(", ") + ".", W / 2, H / 2);
+      return;
+    }
+    const w = W * 0.2, h = H * 0.55, floor = H * 0.82;
+    for (const which of ["left", "ahead", "right"]) {
+      if (!(which in tunnels)) continue;
+      const x = at[which], draft = (room.draft || []).includes(tunnels[which]);
+      ctx.fillStyle = draft ? css("--faint") : css("--ink");
+      ctx.beginPath(); ctx.moveTo(x - w / 2, floor); ctx.lineTo(x - w / 2, floor - h * 0.55);
+      ctx.arc(x, floor - h * 0.55, w / 2, Math.PI, 0); ctx.lineTo(x + w / 2, floor); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = draft ? css("--accent") : css("--paper"); ctx.font = `${Math.max(16, w / 3)}px Georgia`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(tunnels[which]), x, floor - h * 0.45);
+      ctx.fillStyle = css("--muted"); ctx.font = "13px Georgia"; ctx.fillText(which + (draft ? " · a draft" : ""), x, floor + 16);
+    }
+    ctx.beginPath(); ctx.moveTo(0, floor); ctx.lineTo(W, floor); ctx.stroke();   // the cave floor
+    ctx.fillStyle = css("--muted"); ctx.font = "13px ui-monospace, Menlo, monospace"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    const back = "back" in tunnels ? `back to ${tunnels.back}` : "the stair behind you";
+    ctx.fillText(`${room.name} · ${back}${room.smell ? " · you smell a wumpus" : ""}${room.wumpus ? " · a wumpus sleeps here" : ""}`, 8, H - 10);
+  }
+
   /* ---- the overhead map: only the squares you have seen, from the map event's cells ---- */
   function drawChart() {
     const ctx = chart.getContext("2d"), W = chart.width, H = chart.height;
     ctx.fillStyle = css("--paper"); ctx.fillRect(0, 0, W, H);
     if (!map) return;
     if (map.shape === "polar") return drawRings(ctx, W, H);
+    if (map.shape === "cave") return drawCaveChart(ctx, W, H);
     const cell = Math.floor(Math.min((W - 20) / map.cols, (H - 20) / map.rows));
     const ox = (W - cell * map.cols) / 2, oy = (H - cell * map.rows) / 2;
     ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2;
@@ -207,19 +248,62 @@
     ctx.beginPath(); ctx.moveTo(u * 0.35, 0); ctx.lineTo(-u * 0.25, -u * 0.25); ctx.lineTo(-u * 0.1, 0); ctx.lineTo(-u * 0.25, u * 0.25); ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
+  /* ---- the cave's chart: the caves you have stood in or heard of, placed as the twelve-sided die unfolds
+     (the Schlegel diagram the server sends), with the tunnels you know between them. ---- */
+  function drawCaveChart(ctx, W, H) {
+    const layout = map.layout || {}, cells = map.cells || {};
+    const s = Math.min(W, H) / 7, cx = W / 2, cy = H / 2, r = Math.max(9, s * 0.28);
+    const pt = roomNo => { const p = layout[String(roomNo)]; return p ? [cx + p[0] * s, cy - p[1] * s] : null; };
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2;
+    for (const [from, tos] of Object.entries(cells)) for (const to of tos) {   // tunnels: known from the rooms stood in
+      const a = pt(from), b = pt(to); if (!a || !b) continue;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    }
+    const here = String(map.pos[0]);
+    for (const roomNo of map.known || []) {
+      const p = pt(roomNo); if (!p) continue;
+      const stood = String(roomNo) in cells;
+      ctx.fillStyle = String(roomNo) === here ? css("--accent") : stood ? css("--faint") : css("--paper");
+      ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = String(roomNo) === here ? css("--paper") : css("--ink"); ctx.font = `${r}px Georgia`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(String(roomNo), p[0], p[1]);
+    }
+    const glyph = (pos, g, color) => { if (!pos) return; const p = pt(pos[0]); if (!p) return; ctx.fillStyle = color; ctx.font = `${r}px Georgia`; ctx.fillText(g, p[0] + r * 1.1, p[1] - r * 1.1); };
+    glyph(map.entrance, "<", css("--muted")); glyph(map.gate, ">", css("--accent"));
+    for (const m of map.marks || []) glyph(m, "·", css("--accent"));
+    // L, R and B on the tunnels out of the cave you stand in: left and right are from the tunnel you came by
+    if (room && room.tunnels) {
+      const a = pt(here);
+      for (const [which, to] of room.tunnels) {
+        const b = pt(to); if (!a || !b) continue;
+        ctx.fillStyle = css("--accent"); ctx.font = `bold ${r}px Georgia`;
+        ctx.fillText(which[0].toUpperCase(), a[0] + (b[0] - a[0]) * 0.5, a[1] + (b[1] - a[1]) * 0.5);
+      }
+    }
+    if (map.floors > 1) { ctx.fillStyle = css("--muted"); ctx.font = "13px Georgia"; ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillText(`floor ${map.floor + 1} of ${map.floors}`, W - 8, H - 8); }
+  }
+
   applyTheme(theme);  // drawEye and drawChart exist by now; the first paint is in the chosen theme
   ws.onopen = () => { hud.textContent = "Connected. What is your name?"; drawEye(); drawChart(); };
   ws.onclose = () => { hud.textContent = "The connection closed. Reload to come back."; };
   ws.onmessage = m => {
     const ev = JSON.parse(m.data);
     if (ev.kind === "prompt") return;
-    if (ev.kind === "info" && !named) { named = true; input.placeholder = ev.shape === "polar" ? "look, in, sunwise, say hello, cast (go in) …" : "look, north, say hello, cast (go north) …"; }
+    if (ev.kind === "info" && !named) { named = true; input.placeholder = ev.shape === "polar" ? "look, in, sunwise, say hello, cast (go in) …" : ev.shape === "cave" ? "look, left, 8, say hello, cast (go left) …" : "look, north, say hello, cast (go north) …"; }
     if (ev.kind === "room") {
       room = ev;
       if (ev.dirs) dirs = ev.dirs;
-      hud.textContent = `${ev.name} · light ${ev.light} · torches ${ev.torches} · facing ${ev.heading}${ev.floors > 1 ? ` · floor ${ev.floor + 1} of ${ev.floors}` : ""}`;
-      $("exits").querySelector('[data-direction="ahead"]').disabled = !ev.exits.includes(ev.heading);
-      for (const way of ["up", "down"]) $("exits").querySelector(`[data-direction="${way}"]`).disabled = !ev.exits.includes(way);
+      hud.textContent = `${ev.name} · light ${ev.light} · torches ${ev.torches} · ${(ev.facing || `facing ${ev.heading}`).toLowerCase()}${ev.floors > 1 ? ` · floor ${ev.floor + 1} of ${ev.floors}` : ""}`;
+      const cave = ev.shape === "cave";
+      exits.hidden = cave; caveExits.hidden = !cave;
+      if (cave) {
+        const open = new Set((ev.tunnels || []).map(t => t[0]));
+        for (const way of ["left", "ahead", "right", "back"]) caveExits.querySelector(`[data-direction="${way}"]`).disabled = !open.has(way);
+        for (const way of ["up", "down"]) caveExits.querySelector(`[data-direction="${way}"]`).disabled = !ev.exits.includes(way);
+      } else {
+        exits.querySelector('[data-direction="ahead"]').disabled = !ev.exits.includes(ev.heading);
+        for (const way of ["up", "down"]) exits.querySelector(`[data-direction="${way}"]`).disabled = !ev.exits.includes(way);
+      }
       drawEye();
       send({ verb: "map" });   // the chart follows every step; a quiet verb, allowed while a spell runs
     }
@@ -234,7 +318,7 @@
     show((named ? "> " : "") + v);
     send(v);
   };
-  exits.onclick = e => {
+  exits.onclick = caveExits.onclick = e => {
     const b = e.target.closest("button"); if (!b || !named) return;
     const msg = { verb: b.dataset.verb };
     if (b.dataset.direction) msg.direction = b.dataset.direction;
@@ -243,8 +327,10 @@
   };
   document.addEventListener("keydown", e => {
     if (document.activeElement === input || document.activeElement.tagName === "TEXTAREA" || !named) return;
+    const cave = room && room.shape === "cave";   // in a cave there is no turning: the arrows step
     const key = { ArrowUp: { verb: "go", direction: "ahead" }, ArrowDown: { verb: "go", direction: "back" },
-                  ArrowLeft: { verb: "turn", which: "left" }, ArrowRight: { verb: "turn", which: "right" } }[e.key];
+                  ArrowLeft: cave ? { verb: "go", direction: "left" } : { verb: "turn", which: "left" },
+                  ArrowRight: cave ? { verb: "go", direction: "right" } : { verb: "turn", which: "right" } }[e.key];
     if (key) { e.preventDefault(); send(key); }
   });
   $("cast").onclick = () => { if (!named) return; show("> cast …"); send({ verb: "cast", words: $("spell").value }); };

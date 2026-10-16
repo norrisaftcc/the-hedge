@@ -21,7 +21,7 @@ That was the abstraction the polar hedge forced, and it is in.
 | **Weave** | passages pass over and under each other | none new; a perfect weave still yields to the left hand. Pretty, and a good map lesson. | "a way under the hedge" | a tunnel mouth; the map needs a bridge glyph | a grid with under-cells | large |
 | **Labyrinth** | one path, no choices (unicursal) | the opposite lesson: a process with no decisions. `(until (gate?) (go ahead))` with turns handled | none | none | braid to zero branches, or a Chartres pattern | small |
 | **Shifting** | a wall regrows every N turns | memory lies; a spell must test, not remember | none | none | re-run a step of the algorithm on a timer | medium |
-| **A graph** | rooms with named exits, not a grid: a MUD | whatever the builder puts there | exits by name: "a door", "the stair", "the well" | no geometry to draw; show the room as a count of doors, or a hand-drawn picture per room | not MazeBuilder's job | the destination |
+| **A graph** (now: the cave) | rooms with named exits, not a grid: a MUD. The first is the dodecahedron, Hunt the Wumpus's twenty caves. | Hamilton's walk: a word of twenty lefts and rights visits every cave. A hand on the wall goes round in five. | tunnels by number (`8`); `left`, `right`, `back` from the tunnel you came by; no compass, no turning | three tunnel mouths; the die unfolded for a map | `cave.py`, not MazeBuilder's job | done; the Fort's rooms are a room table away |
 
 ## What each teaches
 
@@ -29,14 +29,14 @@ That was the abstraction the polar hedge forced, and it is in.
 - **Floors**: a third dimension is just a third pair of words. The algorithms do not care, which is the point.
 - **Polar**: the same algorithm on a different grid leaves a different tell. Binary Tree's "always north or east" becomes "always in or sunwise". A student who has learned the first can predict the second, and `spells/sunwise.scm` is `north-east.scm` with the words changed. Two things were decided for it. Every ring has the same number of cells (a true polar grid doubles them as the rings widen, but then a cell can have two outward neighbours, which four flags cannot say); the rings are drawn as rings, so the inner cells are narrow slices and the outer ones wide. And a **seam**: Binary Tree and Sidewinder treat the last spoke as an edge and never link across it, so one wall runs from the well to the rim and their mazes stay perfect (a ring whose every cell linked sunwise would be a loop). Aldous-Broder and braiding cross the seam. The seam is the polar corner, and the plate names it.
 - **Labyrinth**: a maze with no choices is a loop with no test. It is the degenerate spell, and a good first lesson.
-- **A graph**: when the grid goes, so does the picture, and the words carry everything. That is the MUD, and that is where the Fort's rooms live.
+- **A graph**: when the grid goes, so does the picture, and the words carry everything. That is the MUD, and that is where the Fort's rooms live. The cave is the first graph, and we keep its lineage in plain sight: Gregory Yob's Hunt the Wumpus (1973) put its caves on the dodecahedron, and Hamilton's Icosian game (1857) asked for a walk through all twenty. Three things were decided for it. A heading is not a compass word but *the room you came from*, so `left` and `right` are told from your own tunnel, as Hamilton told them (right is the next tunnel counterclockwise after yours, left the one before); there is no `turn` and no `face`, because there is nothing to turn by, and the checker refuses them in a cave. The senses stand in for sight lines: a draft where the gate is next door, a smell where the wumpus sleeps (it only sleeps: no fights here). And the map is the Schlegel diagram, the die unfolded flat, which the server sends as a layout so the page draws no geometry of its own. The seed renumbers the caves and places the mouth, the gate (its antipode, five tunnels away) and the wumpus; the bones are always the die.
 
 ## Recommended order
 
 1. **Braided**, done.
 2. **Floors**, done: a stack of hedges joined by stairs. A true three-dimensional Binary Tree (always north, east or up) would need a 3D grid in MazeBuilder and is still open.
 3. **Polar**, done: the best new tell for the least new engine. It forced the Topology abstraction, which everything after it needs.
-4. **A graph**: the destination for the Fort Country. By then the words do all the work and the pictures are optional. The topology is the hook: a graph's "topology" has no grid, so `ways` and `step` would read a room table, and `dirs` would be whatever exits the builder named.
+4. **A graph**, done as the cave. `topology.Graph` has no grid: `ways` and `step` read `cave.py`'s tunnel table. The Fort's rooms are the same class over a different table, with exits named by words ("the door", "the well") instead of numbers; that table is the next thing to write, and it is content, not engine.
 5. **Weave** and **hex** when there is time for the view. They are mostly drawing.
 
 ## A note on MazeBuilder
