@@ -78,8 +78,10 @@
   themeButton.onclick = () => { theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]; applyTheme(theme); };
   const eye = $("eye"), chart = $("chart");
   const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const DIRS = ["north", "east", "south", "west"];
-  const RIGHT_OF = h => DIRS[(DIRS.indexOf(h) + 1) % 4], LEFT_OF = h => DIRS[(DIRS.indexOf(h) + 3) % 4];
+  // The hedge's four ways, in right-turn order, come with every room event: north east south west,
+  // or on a polar hedge in widdershins out sunwise. The page never assumes a compass.
+  let dirs = ["north", "east", "south", "west"];
+  const RIGHT_OF = h => dirs[(dirs.indexOf(h) + 1) % 4], LEFT_OF = h => dirs[(dirs.indexOf(h) + 3) % 4];
   let named = false, room = null, map = null;
 
   const ws = new WebSocket((location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/");
@@ -145,6 +147,7 @@
     const ctx = chart.getContext("2d"), W = chart.width, H = chart.height;
     ctx.fillStyle = css("--paper"); ctx.fillRect(0, 0, W, H);
     if (!map) return;
+    if (map.shape === "polar") return drawRings(ctx, W, H);
     const cell = Math.floor(Math.min((W - 20) / map.cols, (H - 20) / map.rows));
     const ox = (W - cell * map.cols) / 2, oy = (H - cell * map.rows) / 2;
     ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2;
@@ -170,15 +173,50 @@
     ctx.beginPath(); ctx.moveTo(cell * 0.35, 0); ctx.lineTo(-cell * 0.25, -cell * 0.25); ctx.lineTo(-cell * 0.1, 0); ctx.lineTo(-cell * 0.25, cell * 0.25); ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
+  /* ---- a polar hedge: rings round a well. Each seen cell is a slice of a ring; its walls are arcs and spokes. ---- */
+  function drawRings(ctx, W, H) {
+    const rings = map.rows, spokes = map.cols, cx = W / 2, cy = H / 2;
+    const well = 1.5;                                   // the well's radius, in ring widths
+    const u = (Math.min(W, H) / 2 - 10) / (rings + well);
+    const radius = r => (well + r) * u, angle = c => c * 2 * Math.PI / spokes - Math.PI / 2;  // spoke 0 starts at the top; sunwise is clockwise
+    ctx.strokeStyle = css("--muted"); ctx.lineWidth = 1; ctx.setLineDash([3, 4]);
+    ctx.beginPath(); ctx.arc(cx, cy, radius(0), 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);   // the well
+    ctx.strokeStyle = css("--ink"); ctx.lineWidth = 2;
+    for (const [key, ways] of Object.entries(map.cells)) {
+      const [r, c] = key.split(",").map(Number), r0 = radius(r), r1 = radius(r + 1), a0 = angle(c), a1 = angle(c + 1);
+      ctx.fillStyle = css("--faint"); ctx.beginPath(); ctx.arc(cx, cy, r1, a0, a1); ctx.arc(cx, cy, r0, a1, a0, true); ctx.closePath(); ctx.fill();
+      ctx.beginPath();
+      if (!ways.includes("in")) ctx.arc(cx, cy, r0, a0, a1);
+      if (!ways.includes("out")) { ctx.moveTo(cx + r1 * Math.cos(a0), cy + r1 * Math.sin(a0)); ctx.arc(cx, cy, r1, a0, a1); }
+      if (!ways.includes("widdershins")) { ctx.moveTo(cx + r0 * Math.cos(a0), cy + r0 * Math.sin(a0)); ctx.lineTo(cx + r1 * Math.cos(a0), cy + r1 * Math.sin(a0)); }
+      if (!ways.includes("sunwise")) { ctx.moveTo(cx + r0 * Math.cos(a1), cy + r0 * Math.sin(a1)); ctx.lineTo(cx + r1 * Math.cos(a1), cy + r1 * Math.sin(a1)); }
+      ctx.stroke();
+    }
+    const centre = pos => { const rr = radius(pos[0] + 0.5), a = angle(pos[1] + 0.5); return [cx + rr * Math.cos(a), cy + rr * Math.sin(a)]; };
+    const size = Math.max(9, u * 0.7);
+    const mark = (pos, glyph, color) => { if (!pos) return; const [x, y] = centre(pos); ctx.fillStyle = color; ctx.font = `${size}px Georgia`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(glyph, x, y); };
+    for (const [key, way] of Object.entries(map.stairs || {})) mark(key.split(",").map(Number), way === "up" ? "^" : "v", css("--ink"));
+    for (const m of map.marks || []) mark(m, "·", css("--accent"));
+    mark(map.entrance, "<", css("--muted"));
+    mark(map.gate, ">", css("--accent"));
+    // you: an arrowhead the way you face. Outward is along the spoke; sunwise is a quarter turn clockwise from it.
+    const [x, y] = centre(map.pos), out = angle(map.pos[1] + 0.5);
+    const a = { out: out, in: out + Math.PI, sunwise: out + Math.PI / 2, widdershins: out - Math.PI / 2 }[map.heading];
+    if (map.floors > 1) { ctx.fillStyle = css("--muted"); ctx.font = "13px Georgia"; ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"; ctx.fillText(`floor ${map.floor + 1} of ${map.floors}`, W - 8, H - 8); }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.fillStyle = css("--accent");
+    ctx.beginPath(); ctx.moveTo(u * 0.35, 0); ctx.lineTo(-u * 0.25, -u * 0.25); ctx.lineTo(-u * 0.1, 0); ctx.lineTo(-u * 0.25, u * 0.25); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
   applyTheme(theme);  // drawEye and drawChart exist by now; the first paint is in the chosen theme
   ws.onopen = () => { hud.textContent = "Connected. What is your name?"; drawEye(); drawChart(); };
   ws.onclose = () => { hud.textContent = "The connection closed. Reload to come back."; };
   ws.onmessage = m => {
     const ev = JSON.parse(m.data);
     if (ev.kind === "prompt") return;
-    if (ev.kind === "info" && !named) { named = true; input.placeholder = "look, north, say hello, cast (go north) …"; }
+    if (ev.kind === "info" && !named) { named = true; input.placeholder = ev.shape === "polar" ? "look, in, sunwise, say hello, cast (go in) …" : "look, north, say hello, cast (go north) …"; }
     if (ev.kind === "room") {
       room = ev;
+      if (ev.dirs) dirs = ev.dirs;
       hud.textContent = `${ev.name} · light ${ev.light} · torches ${ev.torches} · facing ${ev.heading}${ev.floors > 1 ? ` · floor ${ev.floor + 1} of ${ev.floors}` : ""}`;
       $("exits").querySelector('[data-direction="ahead"]').disabled = !ev.exits.includes(ev.heading);
       for (const way of ["up", "down"]) $("exits").querySelector(`[data-direction="${way}"]`).disabled = !ev.exits.includes(way);

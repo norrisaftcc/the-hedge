@@ -4,6 +4,7 @@ A spell is a list of forms. Walking forms yield one action at a time, so the
 game can run a spell one turn per step and let the player watch.
 
     (go D)                 take one step. D: north south east west ahead back left right up down
+                           (on a polar hedge: in out sunwise widdershins instead of the compass)
     (face D)               turn to a compass direction
     (turn T)               T: left right around
     (wall? D) (open? D)    is the hedge there, or a way?
@@ -24,10 +25,9 @@ docs/LANGUAGE.md says the same, with examples. The same grammar is written in
 Scheme in check.scm, which chibi-scheme runs to verify a spell.
 """
 
-COMPASS = ("north", "east", "south", "west")
+COMPASS = ("north", "east", "south", "west")  # a square hedge's ways; a polar hedge passes its own to check()
 RELATIVE = ("ahead", "back", "left", "right")
 VERTICAL = ("up", "down")
-WAYS = COMPASS + RELATIVE + VERTICAL
 TURNS = ("left", "right", "around")
 MAX_SPIN = 10000  # evaluation steps allowed between two actions before the spell is judged to spin
 
@@ -114,8 +114,12 @@ def read(text):
 
 # ---- checking: the grammar, before anything runs ----
 
-def check(forms):
-    """Raise SpellError on the first form that is not in the language."""
+def check(forms, compass=COMPASS):
+    """Raise SpellError on the first form that is not in the language.
+
+    compass is the hedge's own four ways (north east south west, or on a polar
+    hedge in widdershins out sunwise). A direction word from another hedge is
+    not a word here."""
     defined = set()
     for f in forms:
         if isinstance(f, list) and f and f[0] == "define":
@@ -123,7 +127,7 @@ def check(forms):
                 raise SpellError("define needs (define (name) body...)")
             defined.add(f[1][0])
     for f in forms:
-        _check(f, defined, top=True)
+        _check(f, defined, compass, top=True)
     return True
 
 
@@ -131,7 +135,8 @@ def _is_sym(x, *names):
     return isinstance(x, Symbol) and x in names
 
 
-def _check(f, defined, top=False):
+def _check(f, defined, compass, top=False):
+    ways = compass + RELATIVE + VERTICAL
     if isinstance(f, (bool, int, str)) and not isinstance(f, Symbol):
         return
     if isinstance(f, Symbol):
@@ -148,45 +153,45 @@ def _check(f, defined, top=False):
             raise SpellError(f"{show(f)}: {msg}")
 
     if head == "go":
-        need(n == 1 and _is_sym(args[0], *WAYS), "go needs one direction: north south east west ahead back left right up down")
+        need(n == 1 and _is_sym(args[0], *ways), "go needs one direction: " + " ".join(ways))
     elif head == "face":
-        need(n == 1 and _is_sym(args[0], *COMPASS), "face needs north, south, east or west")
+        need(n == 1 and _is_sym(args[0], *compass), "face needs " + ", ".join(compass[:-1]) + " or " + compass[-1])
     elif head == "turn":
         need(n == 1 and _is_sym(args[0], *TURNS), "turn needs left, right or around")
     elif head in ("wall?", "open?"):
-        need(n == 1 and _is_sym(args[0], *WAYS), f"{head} needs one direction")
+        need(n == 1 and _is_sym(args[0], *ways), f"{head} needs one direction")
     elif head in ("gate?", "dead-end?", "stop", "mark"):
         need(n == 0, f"{head} takes nothing")
     elif head == "marked?":
-        need(n == 0 or (n == 1 and _is_sym(args[0], *WAYS)), "marked? takes nothing, or one direction")
+        need(n == 0 or (n == 1 and _is_sym(args[0], *ways)), "marked? takes nothing, or one direction")
     elif head in ("until", "while"):
         need(n >= 2, f"{head} needs a test and a body")
         for a in args:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head == "repeat":
         need(n >= 2 and isinstance(args[0], int) and not isinstance(args[0], bool) and args[0] >= 0, "repeat needs a count and a body")
         for a in args[1:]:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head == "if":
         need(n in (2, 3), "if needs a test, a then, and maybe an else")
         for a in args:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head in ("when", "unless"):
         need(n >= 2, f"{head} needs a test and a body")
         for a in args:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head in ("and", "or", "begin"):
         for a in args:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head == "not":
         need(n == 1, "not needs one thing")
-        _check(args[0], defined)
+        _check(args[0], defined, compass)
     elif head == "say":
         need(n == 1 and isinstance(args[0], str) and not isinstance(args[0], Symbol), 'say needs "words in quotes"')
     elif head == "define":
         need(top, "define only at the top of a spell")
         for a in args[1:]:
-            _check(a, defined)
+            _check(a, defined, compass)
     elif head in defined:
         need(n == 0, f"({head}) takes nothing")
     else:
@@ -306,10 +311,10 @@ def run(forms, world):
         return
 
 
-def parse(text):
+def parse(text, compass=COMPASS):
     """Read and check. Returns the forms or raises SpellError."""
     forms = read(text)
     if not forms:
         raise SpellError("an empty spell")
-    check(forms)
+    check(forms, compass)
     return forms

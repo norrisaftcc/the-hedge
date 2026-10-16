@@ -1,0 +1,18 @@
+read
+study
+look
+north
+in
+cast (go north)
+cast (until (gate?) (if (open? in) (go in) (if (open? sunwise) (go sunwise) (stop))))
+map
+score
+turn left
+look
+cast
+(define (step)
+  (if (open? left) (begin (turn left) (go ahead))
+      (if (open? ahead) (go ahead) (turn right))))
+(until (gate?) (step))
+
+score

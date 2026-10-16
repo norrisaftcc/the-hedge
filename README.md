@@ -20,14 +20,14 @@ Then, from any terminal: `telnet localhost 4000` or `nc localhost 4000`. Or open
 
 Alone, with no network: `python -m hedge --solo --seed 7`. It reads commands from the terminal or a file, so a transcript is a test.
 
-Algorithms: `binary`, `sidewinder`, `aldous-broder`. `--floors 3` stacks three hedges joined by stairs, one stair up per floor, far from where you arrive; the gate is on the top floor, and a hand on the hedge never climbs. `--braid 0.5` joins half the dead ends to a neighbour, which makes loops; `--braid 1.0` leaves none. In a braided hedge the left-hand rule goes round for ever, and the plate says so. Same seed, same hedge, every time and in every language, because the dice are our own (`hedge/rng.py`, six lines, the classroom's mulberry32).
+Algorithms: `binary`, `sidewinder`, `aldous-broder`. `--shape polar` grows the hedge as rings round a well: the ways are `in`, `out`, `sunwise` and `widdershins`, a ring comes back to where it began, and the same algorithms leave different tells (Binary Tree: in or sunwise reaches the well; Sidewinder: the long walk circles it). `--spokes 12` sets the cells in a ring (default twice `--size`). `--floors 3` stacks three hedges joined by stairs, one stair up per floor, far from where you arrive; the gate is on the top floor, and a hand on the hedge never climbs. `--braid 0.5` joins half the dead ends to a neighbour, which makes loops; `--braid 1.0` leaves none. In a braided hedge the left-hand rule goes round for ever, and the plate says so. Same seed, same hedge, every time and in every language, because the dice are our own (`hedge/rng.py`, six lines, the classroom's mulberry32).
 
 ## Play
 
 | Type | Does |
 |------|------|
 | `look`, `map`, `who`, `score` | the room; what you have seen; who is here; your turns and light |
-| `north` `south` `east` `west` `up` `down` (or `n s e w u`), `go left` | a step. A step costs a turn of light. Three torches of thirty, a floor. |
+| `north` `south` `east` `west` `up` `down` (or `n s e w u`), `go left` | a step. A step costs a turn of light. Three torches of thirty, a floor. On a polar hedge the ways are `in` `out` `sunwise` `widdershins` (`i o sw wd`). |
 | `face north`, `turn left` | face a way without stepping. Free. |
 | `read`, `study` | the plate at the mouth: the tell, briefly or in full |
 | `mark` | chalk a mark here; the map shows it, and a spell can test `(marked? left)` |
@@ -43,7 +43,7 @@ When the light runs out you can still walk, and the spells still work (they feel
 
 See [docs/LANGUAGE.md](docs/LANGUAGE.md). Twenty words, no numbers but a count, no variables. Example spells are in `spells/`.
 
-A spell is checked before it runs. If `chibi-scheme` is on the PATH (or named by `HEDGE_CHIBI`), the grammar in `hedge/check.scm` checks it, and the game says `The spell holds (chibi)`. If not, the Python reader makes the same checks and says `(python)`. Chibi is small and builds in a minute:
+A spell is checked before it runs, in the hedge's own words: a polar hedge refuses `(go north)`. If `chibi-scheme` is on the PATH (or named by `HEDGE_CHIBI`), the grammar in `hedge/check.scm` checks it, and the game says `The spell holds (chibi)`. If not, the Python reader makes the same checks and says `(python)`. Chibi is small and builds in a minute:
 
 ```
 git clone https://github.com/ashinn/chibi-scheme && cd chibi-scheme && make && sudo make install
@@ -56,6 +56,7 @@ Layers, bottom up. A new way in is a new transport; nothing below it changes. Th
 ```
 hedge/rng.py          the dice: mulberry32
 hedge/maze.py         grows a hedge with MazeBuilder's algorithms (vendor/MazeBuilder), rolling our dice
+hedge/topology.py     the shape: square or polar. The way words, their opposites, turns, and how a step moves
 hedge/world.py        the hedge as rooms: descriptions, sight lines, the plate, the map
 hedge/spell.py        the spell language: reader, grammar check, and a stepping evaluator
 hedge/check.scm       the same grammar in Scheme, for chibi
@@ -72,7 +73,7 @@ spells/               example spells
 tests/                pytest; tests/walks/ holds transcripts as test vectors
 ```
 
-**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. The same numbers ride in the `room` event's data, so a window drawn from them cannot disagree with the text. The browser page draws its first-person view and its overhead map (only the squares you have seen) from that data, and needed no change below the transport.
+**The room description is the source of truth.** Every sentence is computed from the cells: how far the way runs, where it opens, what ends it. The same numbers ride in the `room` event's data, so a window drawn from them cannot disagree with the text. The browser page draws its first-person view and its overhead map (only the squares you have seen) from that data, and needed no change below the transport. On a polar hedge the map is rings and spokes; the view is the same wireframe, which is honest to within the curve of a ring.
 
 **Theme:** the page follows the system's light or dark setting; its `theme` button overrides it (system, light, dark) and the choice is remembered in that browser.
 
@@ -92,5 +93,5 @@ The chibi tests skip when `chibi-scheme` is not found. A test vector in `tests/w
 
 - The first-person window: a client that draws the wireframe from the room description's numbers.
 - The algorithms in C++ beside the Python, byte-identical, for the classroom.
-- Polar hedges, then rooms as a graph: see [docs/TOPOLOGIES.md](docs/TOPOLOGIES.md).
+- Rooms as a graph, the Fort's rooms: see [docs/TOPOLOGIES.md](docs/TOPOLOGIES.md). Polar is done.
 - The Fort Country: whose hedge this is, and what the conjurer wanted.

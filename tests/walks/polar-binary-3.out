@@ -1,0 +1,468 @@
+you comes down the stair into the hedge.
+The Hedge (binary, 5 rings of 10 spokes, seed 3). Find the far gate. Type help for the words.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+Sunwise, the way runs three paces and turns right.
+> read
+The hedge is rings round a well. The ways are in, out, sunwise and widdershins. The hedge leans inward. Every square seems to open in, or sunwise, or both.
+> study
+The hedge is rings round a well, and a ring comes back to where it began. Its ways are in, out, sunwise and widdershins; there is no north here. Every square opens in or sunwise. Walk in and sunwise and you come to the well from anywhere, where one wall, the seam, runs from the well to the rim and stops you. From there, one way leads out to every square.
+> look
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+Sunwise, the way runs three paces and turns right.
+> north
+There is no north in this hedge. Its ways are in, widdershins, out, sunwise, and up and down where there is a stair.
+> in
+The hedge is in the way.
+> cast (go north)
+The spell does not hold (chibi): (go north): go needs one direction: in widdershins out sunwise ahead back left right up down
+> cast (until (gate?) (if (open? in) (go in) (if (open? sunwise) (go sunwise) (stop))))
+The spell holds (chibi). It runs one step a turn; stop ends it.
+Ring 5 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Sunwise, the way runs two paces and turns right.
+Ring 5 of the Hedge
+Widdershins, the way runs two paces to a dead end.
+Sunwise, the way runs one pace and turns right.
+Ring 5 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs three paces to a dead end.
+Ring 4 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs two paces with an opening on the left at one and turns right.
+Ring 4 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one to a dead end.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and turns right.
+Ring 4 of the Hedge
+Inward, the way runs one pace and turns left.
+Widdershins, the way runs three paces with openings on the right at one and two to a dead end.
+Ring 3 of the Hedge
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs one pace and forks.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces and turns left.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at two and three and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and turns left.
+Sunwise, the way runs three paces with an opening on the left at two and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Sunwise, the way runs two paces with an opening on the left at one and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and goes on into the dark.
+Outward, the way runs three paces with openings on the left at one and two to a dead end.
+Sunwise, the way runs one pace and forks.
+Ring 2 of the Hedge
+Inward, the way runs one pace and turns right.
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs three paces to a dead end.
+Ring 1 of the Hedge
+The well at the heart is just past the hedge, inward.
+Widdershins, the way runs three paces and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and goes on into the dark.
+The spell ends.
+> map
+  inward (the well)
++   +   +   +   +   +   +---+---+---+---+
+:                                     @ :
++   +   +   +---+---+---+---+---+---+   +
+:                                       :
++   +   +   +   +   +---+   +---+   +   +
+:                   |       |       |   :
++   +   +---+---+---+   +   +   +   +   +
+:       |               |   |       |   :
++---+---+---+   +   +---+   +   +   +   +
+: <             |   |       |   |   |   :
++---+---+---+---+---+   +---+   +---+---+
+  outward (the rim); the ':' ends join
+> score
+13 turns. 17 turns of light and 2 torches to come. Facing in.
+> turn left
+You turn left. You face sunwise.
+> look
+Ring 1 of the Hedge
+The well at the heart is just past the hedge, inward.
+Widdershins, the way runs three paces and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and goes on into the dark.
+> cast
+Type the spell. A blank line ends it.
+  . (define (step)
+  .   (if (open? left) (begin (turn left) (go ahead))
+  .       (if (open? ahead) (go ahead) (turn right))))
+  . (until (gate?) (step))
+  . 
+The spell holds (chibi). It runs one step a turn; stop ends it.
+You turn left. You face out.
+Ring 2 of the Hedge
+Inward, the way runs one pace and turns right.
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs three paces to a dead end.
+You turn left. You face widdershins.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and goes on into the dark.
+Outward, the way runs three paces with openings on the left at one and two to a dead end.
+Sunwise, the way runs one pace and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Sunwise, the way runs two paces with an opening on the left at one and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at two and three and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and turns left.
+Sunwise, the way runs three paces with an opening on the left at two and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and two and goes on into the dark.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs three paces with an opening on the left at two and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and turns right.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one and turns right.
+Sunwise, the way runs three paces with openings on the left at one and two and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces to a dead end.
+Sunwise, the way runs three paces with openings on the left at two and three and goes on into the dark.
+Ring 2 of the Hedge
+Outward, the way runs two paces to a dead end.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+You turn right. You face out.
+Ring 3 of the Hedge
+Inward, the way runs one pace and turns left.
+Outward, the way runs one pace to a dead end.
+Ring 4 of the Hedge
+A dead end.
+Inward, the way runs two paces and turns left.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 3 of the Hedge
+Inward, the way runs one pace and turns left.
+Outward, the way runs one pace to a dead end.
+Ring 2 of the Hedge
+Outward, the way runs two paces to a dead end.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces to a dead end.
+Sunwise, the way runs three paces with openings on the left at two and three and goes on into the dark.
+You turn left. You face out.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Outward, the way runs one pace to a dead end.
+Your torch gutters out. You light another.
+Ring 4 of the Hedge
+A dead end.
+Inward, the way runs two paces and forks.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Outward, the way runs one pace to a dead end.
+Ring 2 of the Hedge
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces to a dead end.
+Sunwise, the way runs three paces with openings on the left at two and three and goes on into the dark.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one and turns right.
+Sunwise, the way runs three paces with openings on the left at one and two and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and turns right.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+You turn left. You face out.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace to a dead end.
+You turn left. You face widdershins.
+Ring 3 of the Hedge
+A dead end.
+Sunwise, the way runs one pace and turns right.
+You turn right. You face out.
+You turn right. You face sunwise.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace to a dead end.
+You turn right. You face in.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and turns right.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs three paces with an opening on the left at two and goes on into the dark.
+You turn left. You face out.
+Ring 3 of the Hedge
+A dead end.
+Inward, the way runs one pace and forks.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs three paces with an opening on the left at two and goes on into the dark.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and two and goes on into the dark.
+Sunwise, the way runs three paces with openings on the left at one and three and goes on into the dark.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at two and three and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and turns left.
+Sunwise, the way runs three paces with an opening on the left at two and forks.
+You turn left. You face out.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces and turns left.
+You turn left. You face widdershins.
+Ring 3 of the Hedge
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs one pace and forks.
+You turn right. You face out.
+Ring 4 of the Hedge
+Inward, the way runs one pace and turns left.
+Widdershins, the way runs three paces with openings on the right at one and two to a dead end.
+You turn left. You face widdershins.
+Ring 4 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one to a dead end.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and turns right.
+Ring 4 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs two paces with an opening on the left at one and turns right.
+Ring 4 of the Hedge
+A dead end.
+Sunwise, the way runs three paces with openings on the left at one and two and turns right.
+You turn right. You face out.
+You turn right. You face sunwise.
+Ring 4 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs two paces with an opening on the left at one and turns right.
+You turn left. You face out.
+Ring 5 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs three paces to a dead end.
+You turn left. You face widdershins.
+Ring 5 of the Hedge
+Widdershins, the way runs two paces to a dead end.
+Sunwise, the way runs one pace and turns right.
+Ring 5 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Sunwise, the way runs two paces and turns right.
+The Mouth of the Hedge
+A stair goes up behind you. A plate is set in the hedge beside it.
+Sunwise, the way runs three paces and turns right.
+You turn right. You face out.
+You turn right. You face sunwise.
+Ring 5 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Sunwise, the way runs two paces and turns right.
+Ring 5 of the Hedge
+Widdershins, the way runs two paces to a dead end.
+Sunwise, the way runs one pace and turns right.
+Ring 5 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs three paces to a dead end.
+You turn right. You face in.
+Ring 4 of the Hedge
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs two paces with an opening on the left at one and turns right.
+You turn left. You face sunwise.
+Ring 4 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one to a dead end.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and turns right.
+You turn left. You face out.
+Your torch gutters out. You light another.
+Ring 5 of the Hedge
+A dead end.
+Inward, the way runs one pace and forks.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 4 of the Hedge
+Widdershins, the way runs two paces with an opening on the right at one to a dead end.
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and turns right.
+You turn left. You face sunwise.
+Ring 4 of the Hedge
+Inward, the way runs one pace and turns left.
+Widdershins, the way runs three paces with openings on the right at one and two to a dead end.
+You turn right. You face in.
+Ring 3 of the Hedge
+Outward, the way runs one pace and turns left.
+Sunwise, the way runs one pace and forks.
+You turn left. You face sunwise.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces and turns left.
+You turn left. You face out.
+Ring 4 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and forks.
+Outward, the way runs one pace and turns left.
+Ring 5 of the Hedge
+Inward, the way runs three paces with an opening on the right at two and forks.
+Widdershins, the way runs one pace to a dead end.
+You turn left. You face widdershins.
+Ring 5 of the Hedge
+A dead end.
+Sunwise, the way runs one pace and turns right.
+You turn right. You face out.
+You turn right. You face sunwise.
+Ring 5 of the Hedge
+Inward, the way runs three paces with an opening on the right at two and forks.
+Widdershins, the way runs one pace to a dead end.
+You turn right. You face in.
+Ring 4 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and forks.
+Outward, the way runs one pace and turns left.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs two paces and turns left.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at two and three and goes on into the dark.
+Outward, the way runs three paces with an opening on the left at one and turns left.
+Sunwise, the way runs three paces with an opening on the left at two and forks.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Sunwise, the way runs two paces with an opening on the left at one and forks.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and goes on into the dark.
+Outward, the way runs three paces with openings on the left at one and two to a dead end.
+Sunwise, the way runs one pace and forks.
+You turn left. You face out.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs two paces with an opening on the left at one to a dead end.
+You turn left. You face widdershins.
+Ring 3 of the Hedge
+A dead end.
+Sunwise, the way runs one pace and forks.
+You turn right. You face out.
+You turn right. You face sunwise.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs two paces with an opening on the left at one to a dead end.
+You turn left. You face out.
+Ring 4 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs one pace to a dead end.
+You turn left. You face widdershins.
+Ring 4 of the Hedge
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and forks.
+You turn right. You face out.
+Ring 5 of the Hedge
+A dead end.
+Inward, the way runs one pace and turns left.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 4 of the Hedge
+Outward, the way runs one pace to a dead end.
+Sunwise, the way runs one pace and forks.
+You turn left. You face sunwise.
+Ring 4 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs one pace to a dead end.
+You turn left. You face out.
+Ring 5 of the Hedge
+A dead end.
+Inward, the way runs three paces with openings on the right at one and two and forks.
+You turn right. You face sunwise.
+You turn right. You face in.
+Ring 4 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and forks.
+Widdershins, the way runs one pace and turns right.
+Outward, the way runs one pace to a dead end.
+Ring 3 of the Hedge
+Inward, the way runs one pace and forks.
+Widdershins, the way runs one pace to a dead end.
+Outward, the way runs two paces with an opening on the left at one to a dead end.
+Ring 2 of the Hedge
+Widdershins, the way runs three paces with an opening on the right at two and goes on into the dark.
+Outward, the way runs three paces with openings on the left at one and two to a dead end.
+Sunwise, the way runs one pace and forks.
+You turn left. You face sunwise.
+Ring 2 of the Hedge
+Inward, the way runs one pace and turns right.
+Widdershins, the way runs three paces with openings on the right at one and three and goes on into the dark.
+Outward, the way runs three paces to a dead end.
+You turn left. You face out.
+Ring 3 of the Hedge
+Inward, the way runs two paces with an opening on the right at one and turns right.
+Outward, the way runs two paces to a dead end.
+Ring 4 of the Hedge
+Inward, the way runs three paces with an opening on the right at two and turns right.
+Outward, the way runs one pace to a dead end.
+Ring 5 of the Hedge
+A dead end.
+Inward, the way runs three paces with an opening on the right at three and goes on into the dark.
+You turn right. You face sunwise.
+You turn right. You face in.
+Your last torch gutters out. It is dark.
+Ring 4 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: in and out.
+Ring 3 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: in and out.
+Ring 2 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: in, widdershins and out.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and out.
+You turn right. You face widdershins.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+Ring 1 of the Hedge
+It is dark. You feel along the hedge.
+Open ways: widdershins and sunwise.
+The Far Gate
+It is dark. You feel along the hedge.
+Open ways: sunwise.
+You climb the stair into daylight. 102 turns.
+you has found the far gate in 102 turns.
+> score
+102 turns. no light. Facing widdershins.
+you has left.

@@ -16,8 +16,9 @@ if not os.path.isdir(VENDOR):
 if VENDOR not in sys.path:
     sys.path.insert(0, VENDOR)
 
-from cell import Cell  # noqa: E402
+from cell import Cell  # noqa: E402,F401  (topology.py reads the direction flags from here)
 from grid import Grid  # noqa: E402
+from polar_grid import PolarGrid  # noqa: E402
 from algorithms.binary_tree import BinaryTreeMaze  # noqa: E402
 from algorithms.sidewinder import SidewinderMaze  # noqa: E402
 from algorithms.aldous_broder import AldousBroderMaze  # noqa: E402
@@ -26,16 +27,9 @@ from pathfinding.dijkstra import Dijkstra  # noqa: E402
 
 ALGORITHMS = ("binary", "sidewinder", "aldous-broder")
 
-# Compass directions, in the order the hedge names them.
-DIRS = ("north", "east", "south", "west")
-DIR_BIT = {"north": Cell.NORTH, "east": Cell.EAST, "south": Cell.SOUTH, "west": Cell.WEST}
-DIR_STEP = {"north": (-1, 0), "east": (0, 1), "south": (1, 0), "west": (0, -1)}
-OPPOSITE = {"north": "south", "south": "north", "east": "west", "west": "east", "up": "down", "down": "up"}
-VERTICAL = ("up", "down")  # ways between floors; not compass, not relative
 
-
-class SeededGrid(Grid):
-    """A MazeBuilder grid whose dice are ours."""
+class Seeded:
+    """A MazeBuilder grid whose dice are ours. Mixed into a grid class."""
 
     def __init__(self, rows, cols, seed):
         self.rng = Mulberry32(seed)
@@ -45,15 +39,25 @@ class SeededGrid(Grid):
         return self.rng.randint(min_val, max_val)
 
 
-def grow(rows, cols, algorithm, seed, braid=0.0):
+class SeededGrid(Seeded, Grid):
+    """A square grid: rows and columns."""
+
+
+class SeededPolarGrid(Seeded, PolarGrid):
+    """A polar grid: rings around a well, spokes that wrap round."""
+
+
+def grow(rows, cols, algorithm, seed, braid=0.0, grid_class=SeededGrid):
     """Build the maze. Same arguments, same maze, byte for byte.
 
     braid is the fraction of dead ends to join to a neighbour (0.0 to 1.0). Each
     one makes a loop, and with loops the left-hand rule can circle forever.
+    grid_class is SeededGrid (square) or SeededPolarGrid (rings and spokes); the
+    algorithms do not care, which is the point.
     """
     if algorithm not in ALGORITHMS:
         raise ValueError(f"unknown algorithm {algorithm!r}; choose from {', '.join(ALGORITHMS)}")
-    grid = SeededGrid(rows, cols, seed)
+    grid = grid_class(rows, cols, seed)
     if algorithm == "binary":
         BinaryTreeMaze.on(grid)
     elif algorithm == "sidewinder":
@@ -63,17 +67,6 @@ def grow(rows, cols, algorithm, seed, braid=0.0):
     if braid:
         Braid.on(grid, braid)
     return grid
-
-
-def open_ways(grid, r, c):
-    """The directions you can walk from (r, c), in compass order."""
-    cell = grid.at(r, c)
-    return [d for d in DIRS if cell.linked(DIR_BIT[d])]
-
-
-def step(r, c, direction):
-    dr, dc = DIR_STEP[direction]
-    return r + dr, c + dc
 
 
 def longest_path(grid):

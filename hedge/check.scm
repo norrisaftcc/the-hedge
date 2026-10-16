@@ -2,13 +2,23 @@
 ;;
 ;;     chibi-scheme hedge/check.scm < spell.scm
 ;;
+;;     chibi-scheme hedge/check.scm polar < spell.scm
+;;
 ;; It reads every form on stdin, checks each against the language in
-;; docs/LANGUAGE.md, and prints "ok" or "error: ...". Exit 0 or 1.
+;; docs/LANGUAGE.md, and prints "ok" or "error: ...". Exit 0 or 1. The
+;; argument is the hedge's shape, square (the default) or polar, which
+;; decides the four way words: a polar hedge has no north.
 ;; hedge/spell.py makes the same checks in Python; this is the second opinion.
 
 (import (scheme base) (scheme read) (scheme write) (scheme process-context))
 
-(define compass '(north east south west))
+(define shape
+  (let ((args (command-line)))
+    (if (and (pair? args) (pair? (cdr args))) (cadr args) "square")))
+(define compass
+  (cond ((string=? shape "square") '(north east south west))
+        ((string=? shape "polar") '(in widdershins out sunwise))
+        (else (display "error: unknown shape ") (display shape) (newline) (exit 1))))
 (define relative '(ahead back left right))
 (define vertical '(up down))
 (define turns '(left right around))
@@ -25,6 +35,15 @@
     (get-output-string out)))
 
 (define (name-of head) (symbol->string head))
+(define (words syms sep)
+  (let loop ((xs syms) (acc ""))
+    (if (null? xs) acc
+        (loop (cdr xs) (if (string=? acc "") (symbol->string (car xs)) (string-append acc sep (symbol->string (car xs))))))))
+(define ways (append compass relative vertical))
+(define (or-list syms)  ; "north, east, south or west"
+  (let loop ((xs syms) (acc ""))
+    (cond ((null? (cdr xs)) (string-append acc " or " (symbol->string (car xs))))
+          (else (loop (cdr xs) (if (string=? acc "") (symbol->string (car xs)) (string-append acc ", " (symbol->string (car xs)))))))))
 (define (direction? x) (and (symbol? x) (or (memq x compass) (memq x relative) (memq x vertical)) #t))
 (define (count? x) (and (exact-integer? x) (>= x 0)))
 
@@ -45,9 +64,9 @@
        (define (need ok msg) (if (not ok) (fail (show f) ": " msg)))
        (case head
          ((go) (need (and (= n 1) (direction? (car args)))
-                     "go needs one direction: north south east west ahead back left right up down"))
+                     (string-append "go needs one direction: " (words ways " "))))
          ((face) (need (and (= n 1) (symbol? (car args)) (memq (car args) compass))
-                       "face needs north, south, east or west"))
+                       (string-append "face needs " (or-list compass))))
          ((turn) (need (and (= n 1) (symbol? (car args)) (memq (car args) turns))
                        "turn needs left, right or around"))
          ((wall? open?) (need (and (= n 1) (direction? (car args)))

@@ -3,7 +3,8 @@
 The rule: a new way in (a MUD client, a browser, a test) is a new **transport**, and nothing below it changes. The layers, bottom up:
 
 ```
-world.py     the place        Hedge: cells, sight lines, descriptions, the plate, the map. Pure.
+topology.py  the shape        Square or Polar: the four way words in right-turn order, opposites, turns, how a step moves.
+world.py     the place        Hedge: cells, sight lines, descriptions, the plate, the map. Pure. Asks its topology.
 spell.py     the language     reader, grammar check, and an evaluator that yields one action at a time.
 game.py      the rules        Game.act(name, verb, **args) -> [Event]. Players, light, spells. No text parsing.
 parser.py    the grammar      verb and noun, adventurelib style: "go DIRECTION" -> ("go", {"direction": ...}).
@@ -14,11 +15,15 @@ transports/  the ways in      telnet (+GMCP), stdin, ws (+ the web page), and ap
 
 ## Events
 
-The game returns `Event(kind, to, text, **data)`. `text` is what a player reads; `data` is the same thing as numbers. A `room` event carries the description **and** `exits`, `sight` (per open way: how far it runs, where it opens, what ends it), `lit`, `light`, `torches`, `heading`, `pos` (floor, row, col), `floor`, `floors`, `others`. A `map` event is one floor: `cells` and `stairs` keyed `row,col`, with `floor` and `floors`. A client can print the text, or draw from the data, or both. They cannot disagree, because both come from the same cells in `world.py`.
+The game returns `Event(kind, to, text, **data)`. `text` is what a player reads; `data` is the same thing as numbers. A `room` event carries the description **and** `exits`, `sight` (per open way: how far it runs, where it opens, what ends it), `lit`, `light`, `torches`, `heading`, `pos` (floor, row, col), `floor`, `floors`, `others`, and the hedge's `shape` and `dirs` (its four ways, in right-turn order), so a client never assumes a compass. A `map` event is one floor: `cells` and `stairs` keyed `row,col`, with `floor`, `floors`, `shape` and `dirs`; on a polar hedge `rows` are rings and `cols` are spokes. A client can print the text, or draw from the data, or both. They cannot disagree, because both come from the same cells in `world.py`.
 
 `to` is a name, `"all"`, or `("room", pos, except_name)`. The hub resolves it. A transport never sees another player's events.
 
 Kinds: `info arrive depart room move bump light say face map mark plate who score help spells spell out error`. A `spell` event has `state`: `typing holds refused running ends breaks stopped none`.
+
+## The topology
+
+`topology.Square` and `topology.Polar` own what a hedge's four ways are called, which is opposite which, what `left` and `right` do to a heading, and how a step moves (a polar ring wraps). The world asks its topology for `ways`, `step` and `relative`; the game reads `hedge.dirs` for its messages; the spell checker takes the hedge's four words, so `(go north)` is refused on a polar hedge before it runs, by chibi (`check.scm polar`) and by Python alike. The grammar knows every way word of every shape; the game answers "There is no north in this hedge" for another shape's word. Adding a shape is one class here, a grid in MazeBuilder, and a table of tells in `world.py`.
 
 ## Verbs
 
@@ -41,7 +46,7 @@ While a spell runs, only `QUIET` verbs are allowed (`stop look map who say score
 | `transports/ws.py` | the name, then lines or `{"verb": …}` JSON | one JSON object per event, plus `{"kind":"prompt"}` | `hub.pace`, 0.6 s |
 | `api.Table` | Python calls: `line`, `act`, `tick`, `run_spell` | lists of `Event` | 0.3 s in `run_spell`; `pace=0` for tests |
 
-The WebSocket server also answers a plain `GET /` with `web/index.html`. The page prints the text and draws two pictures from the data. The **first-person view** is a wireframe built from `room.exits` and `room.sight[heading]`: how far the way ahead runs, which paces open left or right, and what ends it (a wall, the dark, a turn, a fork, the gate). The **overhead map** draws only the squares the player has seen, from the `map` event's `cells` (each seen cell's open ways); the page asks for `map` after every room, which is a quiet verb and so allowed while a spell runs. Arrow keys walk and turn through the structured path. Neither picture needed a change below the transport.
+The WebSocket server also answers a plain `GET /` with `web/index.html`. The page prints the text and draws two pictures from the data. The **first-person view** is a wireframe built from `room.exits` and `room.sight[heading]`: how far the way ahead runs, which paces open left or right, and what ends it (a wall, the dark, a turn, a fork, the gate). The **overhead map** draws only the squares the player has seen, from the `map` event's `cells` (each seen cell's open ways); the page asks for `map` after every room, which is a quiet verb and so allowed while a spell runs. When the map's `shape` is `polar` it draws rings round a well, each seen cell a slice with arcs and spokes for walls. Arrow keys walk and turn through the structured path. Neither picture needed a change below the transport.
 
 ## Tests
 
