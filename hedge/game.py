@@ -17,8 +17,8 @@ TURN_BY = {"left": "left", "right": "right", "around": "back"}
 
 HELP = """\
 look (l)            the room again        map (m)       what you have seen
-{ways} up down, or {short} u  go <way>    a step; ways: {ways} ahead back left right up down
-face <way>          turn without a step   turn left|right|around
+{go_line}
+{turn_line}
 read                the plate, briefly    study         the plate, all of it
 cast <spell>        run a spell, one step a turn; 'cast' alone takes lines until a blank one
 stop                end a running spell   spells        the spell words
@@ -28,7 +28,7 @@ score               your turns and light  again         back to the mouth, fresh
 help (h, ?)         this                  quit          leave"""
 
 SPELLS = """\
-(go D)  D: {ways} ahead back left right up down    (face D)  D: {ways}    (turn left|right|around)
+{go_line}
 (wall? D) (open? D) (gate?) (dead-end?) (marked?) (marked? D)   tests      (mark)  chalk a mark here
 (until TEST BODY...) (while TEST BODY...) (repeat N BODY...)
 (if TEST THEN ELSE) (when TEST BODY...) (unless TEST BODY...) (and ...) (or ...) (not X) (begin ...)
@@ -36,14 +36,27 @@ SPELLS = """\
 A spell runs one step a turn. It breaks if it walks into the hedge. 'stop' ends it; so do a thousand steps."""
 
 SHORT = {"square": "n s e w", "polar": "i o sw wd"}
+CAVE_LINE = "In a cave you do not face or turn. Left and right are from the tunnel you came by; back is that tunnel."
 
 
 def help_text(hedge):
-    return HELP.format(ways=" ".join(hedge.dirs), short=SHORT[hedge.shape])
+    if hedge.shape == "cave":
+        go_line = "left right back ahead, or a cave's number (8)   a step; up down where there is a stair"
+        turn_line = "(no face, no turn: " + CAVE_LINE.split(". ", 1)[1].rstrip(".").lower() + ")"
+    else:
+        ways = " ".join(hedge.dirs)
+        go_line = f"{ways} up down, or {SHORT[hedge.shape]} u  go <way>    a step; ways: {ways} ahead back left right up down"
+        turn_line = "face <way>          turn without a step   turn left|right|around"
+    return HELP.format(go_line=go_line, turn_line=turn_line)
 
 
 def spells_text(hedge):
-    return SPELLS.format(ways=" ".join(hedge.dirs))
+    if hedge.shape == "cave":
+        go_line = "(go D)  D: left right back ahead up down, or a cave's number: (go 8)    no (face) or (turn) in a cave"
+    else:
+        ways = " ".join(hedge.dirs)
+        go_line = f"(go D)  D: {ways} ahead back left right up down    (face D)  D: {ways}    (turn left|right|around)"
+    return SPELLS.format(go_line=go_line)
 
 
 class Player:
@@ -52,6 +65,7 @@ class Player:
         self.pos = pos
         self.heading = heading
         self.seen = {pos}
+        self.visited = {pos}  # cells stood in; seen is wider, as far as the light shows
         self.torches = torches - 1
         self.light = TORCH_TURNS
         self.turns = 0
@@ -72,10 +86,11 @@ class SpellWorld:
         self.game, self.p = game, player
 
     def resolve(self, d):
-        return self.game.hedge.relative(self.p.heading, d)
+        return self.game.hedge.relative(self.p.pos, self.p.heading, str(d))
 
     def wall(self, d):
-        return not self.game.hedge.is_open(self.p.pos, self.resolve(d))
+        way = self.resolve(d)
+        return way is None or not self.game.hedge.is_open(self.p.pos, way)
 
     def gate(self):
         return self.p.pos == self.game.hedge.gate
@@ -87,7 +102,8 @@ class SpellWorld:
         """Is there a chalk mark here (d None) or in the open cell one step that way?"""
         if d is None:
             return self.p.pos in self.p.marks
-        there = self.game.hedge.move(self.p.pos, self.resolve(d))
+        way = self.resolve(d)
+        there = None if way is None else self.game.hedge.move(self.p.pos, way)
         return there is not None and there in self.p.marks
 
 
@@ -101,13 +117,13 @@ class Game:
         if name in self.players:
             return [Event("error", name, "Someone of that name is already in the hedge.")]
         h = self.hedge
-        p = Player(name, h.entrance, TORCHES * h.floors, heading=h.dirs[0])
+        p = Player(name, h.entrance, TORCHES * h.floors, heading=h.topo.start_heading())
         self.players[name] = p
         self.see_around(p)
         return [
             Event("arrive", "all", f"{name} comes down the stair into the hedge.", who=name),
             Event("info", name, f"The Hedge ({h.algorithm}, {h.size_words()}, seed {h.seed}{', braided' if h.braid else ''}{f', {h.floors} floors' if h.floors > 1 else ''}). Find the far gate. Type help for the words.",
-                  algorithm=h.algorithm, rows=h.rows, cols=h.cols, seed=h.seed, braid=h.braid, floors=h.floors, shape=h.shape, dirs=list(h.dirs)),
+                  algorithm=h.algorithm, rows=h.rows, cols=h.cols, seed=h.seed, braid=h.braid, floors=h.floors, shape=h.shape, dirs=list(h.dirs), rooms=h.topo.rooms),
             self.room(p),
         ]
 
@@ -138,26 +154,30 @@ class Game:
     def do_go(self, p, direction=""):
         d = direction.lower()
         h = self.hedge
-        if d not in h.dirs and d not in RELATIVE and d not in VERTICAL:
-            if d in ABSOLUTE:  # another hedge's word
-                return [Event("error", p.name, f"There is no {d} in this hedge. Its ways are {', '.join(h.dirs)}, and up and down where there is a stair.")]
-            return [Event("error", p.name, f"Go where? {', '.join(h.dirs)}, ahead, back, left, right, up or down.")]
-        return self.move(p, h.relative(p.heading, d))
+        if not h.topo.is_way(d) and d not in RELATIVE and d not in VERTICAL:
+            if d in ABSOLUTE or d.isdigit():  # another hedge's word
+                return [Event("error", p.name, f"There is no {d} in this hedge. Its ways are {h.topo.ways_words()}, and up and down where there is a stair.")]
+            return [Event("error", p.name, f"Go where? {h.topo.ways_words()}; ahead, back, left, right; up or down.")]
+        return self.move(p, h.relative(p.pos, p.heading, d))
 
     def do_face(self, p, direction=""):
         d = direction.lower()
+        if not self.hedge.topo.turns:
+            return [Event("error", p.name, CAVE_LINE)]
         if d not in self.hedge.dirs:
             ways = list(self.hedge.dirs)
             return [Event("error", p.name, f"Face {', '.join(ways[:-1])} or {ways[-1]}.")]
         p.heading = d
-        return [Event("face", p.name, f"You face {d}.", heading=d)]
+        return [Event("face", p.name, f"You face {d}.", heading=d, facing=self.hedge.topo.facing(d))]
 
     def do_turn(self, p, which=""):
         t = which.lower()
+        if not self.hedge.topo.turns:
+            return [Event("error", p.name, CAVE_LINE)]
         if t not in TURN_BY:
             return [Event("error", p.name, "Turn left, right or around.")]
-        p.heading = self.hedge.relative(p.heading, TURN_BY[t])
-        return [Event("face", p.name, f"You turn {t}. You face {p.heading}.", heading=p.heading)]
+        p.heading = self.hedge.turn(p.pos, p.heading, TURN_BY[t])
+        return [Event("face", p.name, f"You turn {t}. You face {p.heading}.", heading=p.heading, facing=self.hedge.topo.facing(p.heading))]
 
     def do_mark(self, p):
         p.marks.add(p.pos)
@@ -168,13 +188,20 @@ class Game:
         h = self.hedge
         floor = p.pos[0]
         on_floor = lambda pos: pos[0] == floor
-        cells = {f"{r},{c}": h.ways((f, r, c)) for f, r, c in sorted(p.seen) if f == floor}
-        stairs = {f"{r},{c}": ("up" if h.stairs[(f, r, c)][0] > f else "down") for f, r, c in sorted(p.seen) if f == floor and (f, r, c) in h.stairs}
-        return [Event("map", p.name, h.map_text(p.seen, p.pos), cells=cells, pos=list(p.pos[1:]), floor=floor, floors=h.floors,
-                      heading=p.heading, rows=h.rows, cols=h.cols, shape=h.shape, dirs=list(h.dirs), stairs=stairs,
+        key = lambda pos: ",".join(str(x) for x in pos[1:])
+        # A cave's tunnels are known only from inside it: the cells drawn are the ones stood in.
+        drawn = p.visited if h.shape == "cave" else p.seen
+        cells = {key(pos): h.ways(pos) for pos in sorted(drawn) if on_floor(pos)}
+        stairs = {key(pos): ("up" if h.stairs[pos][0] > floor else "down") for pos in sorted(p.seen) if on_floor(pos) and pos in h.stairs}
+        extra = {}
+        if h.shape == "cave":
+            extra["layout"] = {str(pos[1]): list(h.grids[floor].layout[pos[1]]) for pos in sorted(p.seen) if on_floor(pos)}
+            extra["known"] = [pos[1] for pos in sorted(p.seen) if on_floor(pos)]
+        return [Event("map", p.name, h.map_text(p.seen, p.pos, p.visited), cells=cells, pos=list(p.pos[1:]), floor=floor, floors=h.floors,
+                      heading=p.heading, facing=h.topo.facing(p.heading), rows=h.rows, cols=h.cols, shape=h.shape, dirs=list(h.dirs), stairs=stairs,
                       entrance=list(h.entrance[1:]) if on_floor(h.entrance) else None,
                       marks=[list(m[1:]) for m in sorted(p.marks) if on_floor(m)],
-                      gate=list(h.gate[1:]) if h.gate in p.seen and on_floor(h.gate) else None)]
+                      gate=list(h.gate[1:]) if h.gate in p.seen and on_floor(h.gate) else None, **extra)]
 
     def do_read(self, p):
         return self.read(p, fully=False)
@@ -210,11 +237,11 @@ class Game:
 
     def do_score(self, p):
         light = f"{p.light} turns of light and {p.torches} torches to come" if p.lit else "no light"
-        return [Event("score", p.name, f"{p.turns} turns. {light}. Facing {p.heading}.",
-                      turns=p.turns, light=p.light, torches=p.torches, heading=p.heading)]
+        return [Event("score", p.name, f"{p.turns} turns. {light}. {self.hedge.topo.facing(p.heading)}.",
+                      turns=p.turns, light=p.light, torches=p.torches, heading=p.heading, facing=self.hedge.topo.facing(p.heading))]
 
     def do_again(self, p):
-        self.players[p.name] = q = Player(p.name, self.hedge.entrance, TORCHES * self.hedge.floors, heading=self.hedge.dirs[0])
+        self.players[p.name] = q = Player(p.name, self.hedge.entrance, TORCHES * self.hedge.floors, heading=self.hedge.topo.start_heading())
         self.see_around(q)
         return [Event("arrive", ("room", q.pos, q.name), f"{q.name} comes down the stair.", who=q.name),
                 Event("info", q.name, "You go back to the mouth of the hedge with fresh torches."),
@@ -227,7 +254,12 @@ class Game:
     def see_around(self, p):
         """Mark what the light shows from here."""
         p.seen.add(p.pos)
+        p.visited.add(p.pos)
         if not p.lit:
+            return
+        if self.hedge.shape == "cave":  # you read the numbers carved over the tunnels
+            for d in self.hedge.ways(p.pos):
+                p.seen.add(self.hedge.move(p.pos, d))
             return
         for d in self.hedge.ways(p.pos):
             if d in VERTICAL:
@@ -241,7 +273,7 @@ class Game:
     def room(self, p):
         """The room event: the text as the player reads it, and the numbers behind it."""
         h = self.hedge
-        text = h.describe(p.pos, lit=p.lit)
+        text = h.describe(p.pos, lit=p.lit, heading=p.heading)
         others = [q.name for q in self.players.values() if q is not p and q.pos == p.pos and not q.out]
         if others:
             text += "\n" + (f"{others[0]} is here." if len(others) == 1 else ", ".join(others) + " are here.")
@@ -252,9 +284,13 @@ class Game:
                     continue
                 run, openings, end = h.sight(p.pos, d)
                 sight[d] = {"run": run, "openings": [[pace, side] for pace, side in openings], "end": end}
+        extra = {}
+        if h.shape == "cave":
+            tunnels, draft, smell = h.senses(p.pos, p.heading)
+            extra = {"tunnels": [[which, room] for which, room in tunnels], "draft": draft, "smell": smell, "wumpus": p.pos == h.wumpus}
         return Event("room", p.name, text, name=h.name(p.pos), ring=h.ring(p.pos), pos=list(p.pos), floor=p.pos[0], floors=h.floors,
                      shape=h.shape, dirs=list(h.dirs), exits=h.ways(p.pos), sight=sight, lit=p.lit, light=p.light, torches=p.torches,
-                     heading=p.heading, others=others, entrance=p.pos == h.entrance, gate=p.pos == h.gate)
+                     heading=p.heading, facing=h.topo.facing(p.heading), others=others, entrance=p.pos == h.entrance, gate=p.pos == h.gate, **extra)
 
     def read(self, p, fully):
         if p.pos != self.hedge.entrance:
@@ -265,18 +301,19 @@ class Game:
     def move(self, p, d):
         if p.out:
             return [Event("error", p.name, "You are out of the hedge. Type again to go back in.")]
-        nxt = self.hedge.move(p.pos, d)
+        h = self.hedge
+        nxt = None if d is None else h.move(p.pos, d)
         if nxt is None:
             if d in VERTICAL:
                 return [Event("bump", p.name, "There is no stair here.", direction=d)]
-            p.heading = d
-            return [Event("bump", p.name, "The hedge is in the way.", direction=d)]
+            if d in h.dirs:
+                p.heading = d  # you face the hedge you walked into
+            return [Event("bump", p.name, h.topo.bump(d), direction=d)]
         old = p.pos
-        going = f"{p.name} goes {d} the stair." if d in VERTICAL else f"{p.name} goes {d}."
+        going = f"{p.name} goes {d} the stair." if d in VERTICAL else f"{p.name} {h.topo.going(d)}."
         events = [Event("move", ("room", old, p.name), going, who=p.name, direction=d, leaving=True)]
         p.pos = nxt
-        if d not in VERTICAL:
-            p.heading = d
+        p.heading = h.topo.heading_after(h.grids[old[0]], old[1:], d, p.heading)
         p.turns += 1
         if p.lit:
             p.light -= 1
@@ -288,7 +325,7 @@ class Game:
                 else:
                     events.append(Event("light", p.name, "Your last torch gutters out. It is dark.", light=0, torches=0))
         self.see_around(p)
-        coming = f"{p.name} comes {'up' if d == 'up' else 'down'} the stair." if d in VERTICAL else f"{p.name} comes {self.hedge.topo.came[d]}."
+        coming = f"{p.name} comes {'up' if d == 'up' else 'down'} the stair." if d in VERTICAL else f"{p.name} comes {h.topo.came(h.grids[old[0]], old[1:], d)}."
         events.append(Event("move", ("room", nxt, p.name), coming, who=p.name, direction=d, leaving=False))
         if d in VERTICAL:
             events.append(Event("info", p.name, "You climb the stair." if d == "up" else "You go down the stair."))
@@ -310,7 +347,7 @@ class Game:
         if not ok:
             return [Event("spell", p.name, f"The spell does not hold ({backend}): {msg}", state="refused", backend=backend, reason=msg)]
         try:
-            forms = spell.parse(text, self.hedge.dirs)
+            forms = spell.parse(text, self.hedge.topo)
         except SpellError as e:
             return [Event("spell", p.name, f"The spell does not hold: {e}", state="refused", backend="python", reason=str(e))]
         p.spell = spell.run(forms, SpellWorld(self, p))
@@ -337,12 +374,12 @@ class Game:
             p.spell = None
             return [Event("spell", name, "The spell wears thin and ends. You have gone round and round.", state="ends", reason="reach")], False
         if kind == "go":
-            d = self.hedge.relative(p.heading, arg)
-            if self.hedge.move(p.pos, d) is None:
+            d = self.hedge.relative(p.pos, p.heading, str(arg))
+            if d is None or self.hedge.move(p.pos, d) is None:
                 p.spell = None
-                if d not in VERTICAL:
+                if d in self.hedge.dirs:
                     p.heading = d
-                return [Event("spell", name, f"The spell walks into the hedge, {d}, and breaks.", state="breaks", direction=d)], False
+                return [Event("spell", name, self.hedge.topo.bump(d or str(arg), spell=True), state="breaks", direction=d)], False
             return self.move(p, d), p.spell is not None
         if kind == "face":
             return self.do_face(p, arg), True

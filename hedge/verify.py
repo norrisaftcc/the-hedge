@@ -22,7 +22,7 @@ def chibi_path():
 def verify(text, shape="square", timeout=5):
     """Returns (ok, message, backend). backend is "chibi" or "python".
 
-    shape is the hedge's: square or polar. It picks the four way words."""
+    shape is the hedge's: square, polar or cave. It picks the way words."""
     exe = chibi_path()
     if exe:
         try:
@@ -37,7 +37,7 @@ def verify(text, shape="square", timeout=5):
         except (OSError, subprocess.TimeoutExpired) as e:
             return False, f"chibi-scheme failed: {e}", "chibi"
     try:
-        spell.parse(text, TOPOLOGIES[shape].dirs)
+        spell.parse(text, TOPOLOGIES[shape])
         return True, "ok", "python"
     except spell.SpellError as e:
         return False, str(e), "python"

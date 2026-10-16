@@ -19,7 +19,7 @@ from hedge.api import Table  # noqa: E402
 from hedge.maze import ALGORITHMS, grow  # noqa: E402
 from hedge.parser import GRAMMAR, Grammar  # noqa: E402
 from hedge.rng import Mulberry32, seed_from_text  # noqa: E402
-from hedge.topology import POLAR, SQUARE  # noqa: E402
+from hedge.topology import CAVE, POLAR, SQUARE  # noqa: E402
 from hedge.world import Hedge  # noqa: E402
 
 SPELLS = os.path.join(ROOT, "spells")
@@ -101,13 +101,14 @@ class Walker:
     """A spell's world over a hedge, with no game around it."""
 
     def __init__(self, h):
-        self.h, self.pos, self.heading = h, h.entrance, h.dirs[0]
+        self.h, self.pos, self.heading = h, h.entrance, h.topo.start_heading()
 
     def resolve(self, d):
-        return self.h.relative(self.heading, d)
+        return self.h.relative(self.pos, self.heading, str(d))
 
     def wall(self, d):
-        return not self.h.is_open(self.pos, self.resolve(d))
+        way = self.resolve(d)
+        return way is None or not self.h.is_open(self.pos, way)
 
     def gate(self):
         return self.pos == self.h.gate
@@ -118,25 +119,25 @@ class Walker:
     def marked(self, d=None):
         if d is None:
             return self.pos in self.marks
-        there = self.h.move(self.pos, self.resolve(d))
+        way = self.resolve(d)
+        there = None if way is None else self.h.move(self.pos, way)
         return there is not None and there in self.marks
 
     def walk(self, text, cap=None):
         """Walk the spell. Returns the steps taken; with a cap, stops there and returns the cap."""
         self.marks = getattr(self, "marks", set())
         steps = 0
-        for kind, arg in spell.run(spell.parse(text, self.h.dirs), self):
+        for kind, arg in spell.run(spell.parse(text, self.h.topo), self):
             if kind == "go":
                 d = self.resolve(arg)
-                nxt = self.h.move(self.pos, d)
+                nxt = None if d is None else self.h.move(self.pos, d)
                 assert nxt is not None, f"walked into the hedge at {self.pos} going {d}"
+                self.heading = self.h.topo.heading_after(self.h.grids[self.pos[0]], self.pos[1:], d, self.heading)
                 self.pos, steps = nxt, steps + 1
-                if d in self.h.dirs:
-                    self.heading = d
-                if cap and steps >= cap:
+                if self.gate() or (cap and steps >= cap):  # the game ends a spell at the gate, mid-body or not
                     return steps
             elif kind == "turn":
-                self.heading = self.resolve({"left": "left", "right": "right", "around": "back"}[arg])
+                self.heading = self.h.turn(self.pos, self.heading, {"left": "left", "right": "right", "around": "back"}[arg])
             elif kind == "face":
                 self.heading = arg
             elif kind == "mark":
@@ -345,10 +346,10 @@ def test_walk_transcript(name):
     from hedge.solo import solo
 
     *rest, seed = name.split("-")
-    shape = "polar" if rest[0] == "polar" else "square"
+    shape = rest[0] if rest[0] in ("polar", "cave") else "square"
 
     class Args:
-        algorithm = "-".join(rest[1:] if shape == "polar" else rest)
+        algorithm = "-".join(rest[1:] if shape != "square" else rest) or "sidewinder"
         size = 5 if shape == "polar" else 8
     Args.seed, Args.shape = int(seed), shape
 
@@ -622,8 +623,8 @@ def test_the_topology_owns_the_ways():
     assert SQUARE.right("north") == "east" and SQUARE.left("north") == "west" and SQUARE.opposite("east") == "west"
     # Facing the well, sunwise (clockwise) is on your left.
     assert POLAR.left("in") == "sunwise" and POLAR.right("in") == "widdershins" and POLAR.opposite("in") == "out"
-    assert POLAR.right("out") == "sunwise" and POLAR.relative("sunwise", "back") == "widdershins"
-    assert POLAR.relative("in", "up") == "up" and SQUARE.opposite("up") == "down"
+    assert POLAR.right("out") == "sunwise" and POLAR.relative(None, None, "sunwise", "back") == "widdershins"
+    assert POLAR.relative(None, None, "in", "up") == "up" and SQUARE.opposite("up") == "down"
     assert POLAR.size_words(5, 10) == "5 rings of 10 spokes"
 
 
@@ -683,7 +684,7 @@ def test_a_polar_hedge_has_no_north():
         spell.parse("(face north)", POLAR.dirs)
     with pytest.raises(spell.SpellError):
         spell.parse("(go in)")   # the square hedge's language
-    assert spell.parse("(go in) (face sunwise) (marked? widdershins)", POLAR.dirs)
+    assert spell.parse("(go in) (face sunwise) (marked? widdershins)", POLAR)
     assert verify.verify("(go north)", "polar")[0] is False and verify.verify("(go in)", "polar")[0] is True
     assert verify.verify("(go in)")[0] is False
 
@@ -725,3 +726,140 @@ def test_a_polar_hedge_in_the_game_and_on_the_map():
     sq = Table(pace=0, seed=3, algorithm="binary")
     sq.join("Ash")
     assert "There is no in in this hedge" in sq.text("Ash", sq.line("Ash", "in"))
+
+
+# ---- the cave: rooms as a graph, the Wumpus map ----
+
+def test_the_cave_is_the_dodecahedron():
+    h = Hedge(shape="cave", seed=7)
+    cave = h.grid
+    assert len(h.dist) == 20 and all(len(h.ways(pos)) == 3 for pos in h.dist)
+    assert sum(len(t) for t in cave.tunnels.values()) == 60
+    for room, t in cave.tunnels.items():
+        assert all(room in cave.tunnels[other] for other in t)   # every tunnel runs both ways
+    assert h.dist[h.gate] == 5 == max(h.dist.values())           # the gate is the antipode of the mouth
+    assert len(h.path) == 6 and h.path[0] == h.entrance and h.path[-1] == h.gate
+    assert h.wumpus not in (h.entrance, h.gate) and h.wumpus in h.dist
+    assert not h.is_dead_end(h.entrance) and h.sight(h.entrance, h.ways(h.entrance)[0]) == (0, [], "wall")
+    assert Hedge(shape="cave", seed=7).grid.tunnels == cave.tunnels != Hedge(shape="cave", seed=8).grid.tunnels
+    assert h.algorithm == "dodecahedron" and h.size_words() == "twenty caves of three tunnels"
+
+
+def test_left_and_right_are_from_the_tunnel_you_came_by():
+    h = Hedge(shape="cave", seed=7)
+    e = h.entrance
+    t = h.grid.tunnels[e[1]]
+    # From the stair: right, ahead, left are the three tunnels in turn; back is rock.
+    assert [h.relative(e, None, w) for w in ("right", "ahead", "left", "back")] == [str(t[0]), str(t[1]), str(t[2]), None]
+    nxt = h.move(e, str(t[1]))
+    assert nxt == (0, t[1]) and h.topo.heading_after(h.grid, e[1:], str(t[1]), None) == e[1]
+    tt = h.grid.tunnels[t[1]]
+    i = tt.index(e[1])
+    assert h.relative(nxt, e[1], "back") == str(e[1])
+    assert h.relative(nxt, e[1], "right") == str(tt[(i + 1) % 3]) and h.relative(nxt, e[1], "left") == str(tt[(i - 1) % 3])
+    assert h.relative(nxt, e[1], "ahead") is None and h.turn(nxt, e[1], "left") is None
+    assert h.relative(nxt, e[1], "7") == "7" and h.relative(nxt, e[1], "up") == "up"
+    assert CAVE.is_way("8") and not CAVE.is_way("21") and not CAVE.is_way("north") and not SQUARE.is_way("8")
+    assert "Your back to cave 3" == CAVE.facing(3) and CAVE.facing(None) == "Your back to the stair"
+
+
+@pytest.mark.parametrize("seed", [1, 7, 42, 2026])
+def test_hamiltons_walk_finds_the_gate_and_a_hand_on_the_rock_never_does(seed):
+    h = Hedge(shape="cave", seed=seed)
+    w = Walker(h)
+    steps = w.walk(read_spell("icosian.scm"), cap=25)
+    assert w.gate() and steps <= 20
+    hand = Walker(h)
+    assert hand.walk(read_spell("hand-on-the-rock.scm"), cap=50) == 50 and not hand.gate()
+    # Always left is one face of the die: five caves and home.
+    face = Walker(h)
+    rooms = []
+    for _ in range(5):
+        face.walk("(go left)")
+        rooms.append(face.pos)
+    assert rooms[-1] == h.entrance and len(set(rooms)) == 5
+
+
+def test_a_cave_has_no_compass_and_no_turning():
+    for bad, words in [("(go north)", "or a cave's number"), ("(turn left)", "do not face or turn"), ("(face 3)", "do not face or turn"),
+                       ("(go 21)", "go needs one direction"), ("(go 0)", "go needs one direction")]:
+        with pytest.raises(spell.SpellError, match=words.replace("(", "\\(").replace(")", "\\)")):
+            spell.parse(bad, CAVE)
+    assert spell.parse("(go 8) (go left) (marked? 4) (wall? ahead) (open? back)", CAVE)
+    with pytest.raises(spell.SpellError):
+        spell.parse("(go 8)")   # a square hedge's language has no numbers
+    assert verify.verify("(go 8)", "cave")[0] and not verify.verify("(turn left)", "cave")[0] and not verify.verify("(go 8)")[0]
+
+
+@pytest.mark.skipif(verify.chibi_path() is None, reason="chibi-scheme not found")
+def test_chibi_agrees_with_python_in_a_cave():
+    for text in CASES + ["(go 8)", "(go 21)", "(go 0)", "(face 3)", "(turn around)", "(marked? 4)", "(wall? ahead)"] + [read_spell(f) for f in os.listdir(SPELLS)]:
+        ok, msg, backend = verify.verify(text, "cave")
+        assert backend == "chibi"
+        try:
+            spell.parse(text, CAVE)
+            python_ok = True
+        except spell.SpellError:
+            python_ok = False
+        assert ok == python_ok, f"{text!r}: chibi says {msg}, python says {python_ok}"
+
+
+def test_the_grammar_takes_a_bare_number_and_a_bare_turn_word():
+    assert GRAMMAR.parse("8") == ("go", {"direction": "8"}) and GRAMMAR.parse("go 8") == ("go", {"direction": "8"})
+    assert GRAMMAR.parse("left") == ("go", {"direction": "left"}) and GRAMMAR.parse("back") == ("go", {"direction": "back"})
+    assert GRAMMAR.parse("eight") is None
+    g = Grammar().when("NUMBER", "go", direction="NUMBER").when("take NUMBER THING", "take", count="NUMBER")
+    assert g.parse("3") == ("go", {"direction": "3"}) and g.parse("x") is None
+    assert g.parse("take 2 lamps") == ("take", {"count": "2", "thing": "lamps"})
+
+
+def test_the_cave_in_the_game_and_on_the_map():
+    t = Table(pace=0, seed=7, shape="cave")
+    events = t.join("Ash")
+    assert "twenty caves of three tunnels" in t.text("Ash", events)
+    room = [e for e in events if e.kind == "room"][0]
+    assert room.data["shape"] == "cave" and room.data["dirs"] == [] and room.data["heading"] is None
+    assert room.data["facing"] == "Your back to the stair" and [w for w, _ in room.data["tunnels"]] == ["left", "ahead", "right"]
+    assert "Tunnels lead left to" in room.text and "plate is set in the rock" in room.text
+    p = t.player("Ash")
+    assert "There is no north in this hedge" in t.text("Ash", t.line("Ash", "north"))
+    assert "In a cave you do not face or turn" in t.text("Ash", t.line("Ash", "turn left"))
+    assert "In a cave you do not face or turn" in t.text("Ash", t.line("Ash", "face 8"))
+    assert kinds(t.line("Ash", "back")) == ["bump"] and "Rock" in t.text("Ash", t.take("Ash") or t.seen["Ash"][-1:])
+    assert "does not hold" in t.text("Ash", t.line("Ash", "cast (turn left)"))
+    ahead = dict((w, r) for w, r in room.data["tunnels"])["ahead"]
+    events = t.line("Ash", str(ahead))
+    assert p.pos == (0, ahead) and p.heading == t.hedge.entrance[1]
+    room = [e for e in events if e.kind == "room"][0]
+    assert room.data["facing"] == f"Your back to cave {t.hedge.entrance[1]}" and [w for w, _ in room.data["tunnels"]] == ["left", "right", "back"]
+    assert kinds(t.line("Ash", "99")) == ["error"]
+    assert "You are not" not in t.text("Ash", t.line("Ash", "left")) and p.turns == 2
+    ev = [e for e in t.line("Ash", "map") if e.kind == "map"][0]
+    assert ev.data["shape"] == "cave" and set(ev.data["cells"]) == {str(pos[1]) for pos in p.visited}
+    assert set(map(int, ev.data["layout"])) == {pos[1] for pos in p.seen} == set(ev.data["known"])
+    assert "Caves you have stood in" in ev.text and "Heard of:" in ev.text
+    # Hamilton's walk, from the mouth, finds the gate; the room before it feels the draft.
+    t.line("Ash", "again")
+    t.line("Ash", "cast " + read_spell("icosian.scm"))
+    events, steps = t.run_spell("Ash")
+    assert t.player("Ash").out and steps <= 21
+    rooms = [e for e in events if e.kind == "room"]
+    assert rooms[-2].data["draft"] == [t.hedge.gate[1]] and "A draft comes through the tunnel" in rooms[-2].text
+    assert rooms[-1].data["gate"] is True
+    # Two players: the watcher sees the tunnel taken and the arrival.
+    t2 = Table(pace=0, seed=7, shape="cave")
+    t2.join("Ash"); t2.join("Brook")
+    first = t2.hedge.ways(t2.hedge.entrance)[0]
+    t2.line("Ash", first)
+    assert f"Ash takes the tunnel to {first}." in t2.text("Brook", t2.take("Brook"))
+    t2.line("Brook", first)
+    assert f"Brook comes in from cave {t2.hedge.entrance[1]}." in t2.text("Ash", t2.take("Ash"))
+
+
+def test_a_cave_of_floors():
+    h = Hedge(shape="cave", seed=3, floors=2)
+    assert h.entrance[0] == 0 and h.gate[0] == 1 and len(h.dist) == 40
+    top = [pos for pos in h.stairs if pos[0] == 0][0]
+    assert h.dist[top] == 5 and "up" in h.ways(top) and h.move(top, "up") == (1, top[1])
+    assert "A stair goes up from here, into the cave above." in h.describe(top)
+    assert h.name(top).startswith("Cave ") and "floor 1" in h.name(top)

@@ -6,8 +6,9 @@
 ;;
 ;; It reads every form on stdin, checks each against the language in
 ;; docs/LANGUAGE.md, and prints "ok" or "error: ...". Exit 0 or 1. The
-;; argument is the hedge's shape, square (the default) or polar, which
-;; decides the four way words: a polar hedge has no north.
+;; argument is the hedge's shape, square (the default), polar or cave, which
+;; decides the way words: a polar hedge has no north, and a cave has no
+;; compass at all, only its tunnels' numbers and left, right and back.
 ;; hedge/spell.py makes the same checks in Python; this is the second opinion.
 
 (import (scheme base) (scheme read) (scheme write) (scheme process-context))
@@ -18,7 +19,10 @@
 (define compass
   (cond ((string=? shape "square") '(north east south west))
         ((string=? shape "polar") '(in widdershins out sunwise))
+        ((string=? shape "cave") '())
         (else (display "error: unknown shape ") (display shape) (newline) (exit 1))))
+(define rooms (if (string=? shape "cave") 20 0))        ; in a cave the numbers 1..20 name the tunnels
+(define turns? (not (string=? shape "cave")))           ; and nobody faces or turns
 (define relative '(ahead back left right))
 (define vertical '(up down))
 (define turns '(left right around))
@@ -44,7 +48,11 @@
   (let loop ((xs syms) (acc ""))
     (cond ((null? (cdr xs)) (string-append acc " or " (symbol->string (car xs))))
           (else (loop (cdr xs) (if (string=? acc "") (symbol->string (car xs)) (string-append acc ", " (symbol->string (car xs)))))))))
-(define (direction? x) (and (symbol? x) (or (memq x compass) (memq x relative) (memq x vertical)) #t))
+(define (direction? x)
+  (or (and (symbol? x) (or (memq x compass) (memq x relative) (memq x vertical)) #t)
+      (and (> rooms 0) (exact-integer? x) (<= 1 x rooms))))
+(define (no-turning f)
+  (fail (show f) ": in a cave you do not face or turn; left and right are from the tunnel you came by"))
 (define (count? x) (and (exact-integer? x) (>= x 0)))
 
 (define (check-body forms defined)
@@ -64,10 +72,12 @@
        (define (need ok msg) (if (not ok) (fail (show f) ": " msg)))
        (case head
          ((go) (need (and (= n 1) (direction? (car args)))
-                     (string-append "go needs one direction: " (words ways " "))))
-         ((face) (need (and (= n 1) (symbol? (car args)) (memq (car args) compass))
+                     (string-append "go needs one direction: " (words ways " ") (if (> rooms 0) " or a cave's number" ""))))
+         ((face) (if (not turns?) (no-turning f))
+                 (need (and (= n 1) (symbol? (car args)) (memq (car args) compass))
                        (string-append "face needs " (or-list compass))))
-         ((turn) (need (and (= n 1) (symbol? (car args)) (memq (car args) turns))
+         ((turn) (if (not turns?) (no-turning f))
+                 (need (and (= n 1) (symbol? (car args)) (memq (car args) turns))
                        "turn needs left, right or around"))
          ((wall? open?) (need (and (= n 1) (direction? (car args)))
                               (string-append (name-of head) " needs one direction")))
