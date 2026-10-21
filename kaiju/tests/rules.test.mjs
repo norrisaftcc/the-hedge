@@ -684,3 +684,25 @@ test("a defense phase with 20 units takes well under 50 ms", () => {
   assert.equal(out.state.units.length, 20);
   assert.ok(ms < 50, `defense phase took ${ms.toFixed(1)} ms`);
 });
+
+test("forecast: return fire names the rival when it can reach, and not when it cannot", () => {
+  const s = create(setup(COAST_LITE, { rival: "thalassor" }));
+  s.units = [];
+  const rivalNear = (st) => forecast(st, "bite", st.rival.at).returnFire.filter((x) => x.unit === "rival");
+  const near = H.ray(s.kaiju.at, 0, 2)[1];
+  s.map.hexes[near].structure = null;
+  s.map.hexes[near].terrain = "open";
+  s.rival.at = near;
+  const [r] = rivalNear(s);
+  assert.ok(r, "the rival two hexes off is in the return fire");
+  assert.equal(r.type, "thalassor");
+  assert.match(r.name, /^Thalassor: /);
+  assert.ok(r.hitChance > 0 && r.damage[0] >= 1);
+  const far = Object.keys(s.map.hexes).find((h) => H.distance(h, s.kaiju.at) > s.rival.apMax + 3);
+  assert.ok(far, "the fixture map has a hex out of the rival's reach");
+  s.rival.at = far;
+  assert.equal(rivalNear(s).length, 0);
+  s.rival.at = near;
+  s.rival.parts.body.hp = 0;
+  assert.equal(rivalNear(s).length, 0);
+});
