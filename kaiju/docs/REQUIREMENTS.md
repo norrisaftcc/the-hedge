@@ -2,6 +2,17 @@
 
 Working title: **Kaiju**. Status: spike. This file comes before the design. It says what the spike must do, not how.
 
+## 0. Thesis
+
+As a child, the author of this project read a magazine review of *Crush, Crumble and Chomp!*. It described the play in detail and showed no screenshots. This is the game imagined from that review. The review may never be found, and the aim is not to rebuild the 1981 program. The aim is to keep what the words promised.
+
+What follows from that:
+
+- **The words come first.** The review was the whole game once. So every event is told, in a voice worth reading, and the log is a main panel, not a footnote. A player who only read the log should still see the game.
+- **The pictures are the imagined ones.** No screenshots meant no character graphics to copy. The art draws what a reader would have pictured, not what a 1981 screen could show.
+- **Keep the promises a review would make.** Distinct monsters with distinct powers. A city to crush. Hunger. Defenders that grow desperate, a mad scientist among them. Objectives that change what counts. "They will get you in the end."
+- **The game should be able to write its own review.** A play-through, told back at the end in the manner of a period magazine, closes the circle.
+
 ## 1. Purpose
 
 The player commands one giant monster through short tactical missions. The power fantasy is control: a creature the size of weather, steered with care. The spike proves the core loop on a phone browser:
@@ -49,7 +60,7 @@ The player commands one giant monster through short tactical missions. The power
 
 ## 5. Functional requirements
 
-Priority: **M** must (spike), **S** should (spike if time allows), **C** could (later).
+Priority: **M** must (spike), **S** should (spike if time allows), **N** next (the PR after the spike), **C** could (later).
 
 ### 5.1 Setup
 
@@ -126,6 +137,8 @@ Priority: **M** must (spike), **S** should (spike if time allows), **C** could (
 | MIS-4 | M | Each mission has a turn limit. When it runs out the mission ends; the score counts but the goal is failed. |
 | MIS-5 | M | Defeat: the kaiju's body falls to zero. The kaiju may also choose to withdraw off a map edge marked as its retreat. |
 | MIS-6 | M | Score: destruction points, units destroyed, objective bonus, turns left, parts intact. The end screen shows a breakdown and a newspaper headline. |
+| MIS-8 | N | **Rampage**, the 1981 mode. A city, no goal but the score, endless reinforcements that grow, and no victory: it ends when the kaiju falls or withdraws. Before play the player picks an objective that weights the score, as the original's five did: Balanced, Killer Monster (people), Combat Machine (units only), Destruction (structures, tall ones most), Survival (turns lasted). The end names the death: a thousand cuts, the sudden death (a power plant), or the lingering death (the mad scientist). |
+| MIS-9 | N | **The review.** The end screen offers a short review of this play-through in the manner of a 1981 computer magazine: a headline, three or four paragraphs drawn from the game's events (what the monster did, what stopped it, a quoted line from the log), and a rating. It can be copied as text. |
 | MIS-7 | M | Results are graded, as in *OGRE*: total victory (goal met, body above half), victory (goal met), draw (time ran out or withdrew with the goal unmet), defeat (body at zero). |
 
 ### 5.7 Interface
@@ -234,6 +247,10 @@ Format: *As a … I want … so that …* Then acceptance criteria. IDs map to r
 
 **F1. Score it.** As a player, I want a score with a breakdown and a headline, so that I know how well I did and want to try again.
 - Destruction, units, objective, turns left, parts intact. A headline fitted to the result. Buttons: replay same seed, new seed, change kaiju. (MIS-6)
+
+**F2. Read my rampage.** As a player, I want the game to write a magazine review of the game I just played, so that I can read about my monster the way I first read about the original. (MIS-9)
+
+**F3. Play it the old way.** As a player, I want a rampage with no goal but the score, so that I can play the game the review described: they get you in the end, and the question is what it cost them. (MIS-8)
 
 ### Epic G: Building it
 
