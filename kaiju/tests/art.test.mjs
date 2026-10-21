@@ -125,3 +125,10 @@ test("backdrops for every terrain and structure", () => {
     for (const s of Object.keys(STRUCTURES)) wellFormed(T.backdrop(t, { structure: s }), `backdrop ${t} + ${s}`);
   }
 });
+
+test("a backdrop names only a known structure in its label", () => {
+  assert.match(T.backdrop("road", { structure: "mid" }), /aria-label="road with mid backdrop"/);
+  const odd = T.backdrop("road", { structure: '"><script>x</script>' });
+  assert.doesNotMatch(odd, /script/);
+  assert.match(odd, /aria-label="road backdrop"/);
+});
