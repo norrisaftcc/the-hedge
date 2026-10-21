@@ -480,7 +480,7 @@ export function backdrop(terrain, {structure} = {}) // <svg viewBox="0 0 400 240
 Wizardry's frame: each tile has a double rule border and a title in small capitals set into the top border.
 
 ```
-desktop / landscape (≥ 900 px)          phone portrait (< 900 px)
+desktop (≥ 900 px), landscape (≥ 640)   phone portrait (< 900 px)
 ┌──────────── TOP BAR ────────────┐     ┌──── TOP BAR ────┐
 │ turn 3/14 · AP 4/6 · goal …     │     │ T3/14 AP4/6 ⚙   │
 ├───────────────────┬─────────────┤     ├─────────────────┤
@@ -499,12 +499,12 @@ desktop / landscape (≥ 900 px)          phone portrait (< 900 px)
 - **Map**: one SVG from `board.js`. Hex size 24 in SVG units; the SVG scales to the tile's width. Terrain from `hexTile`, structures from `structure`, units from `units.token`, kaiju from `kaiju.token` with a facing notch. Highlights: reachable hexes (move), legal targets (attack), the affected pattern (preview), the rear arc (three faint edges behind the kaiju), the retreat hexes. Tap a hex: inspect it; with a mode active, choose it.
 - **Status**: `portrait` and `silhouette` side by side; bars for AP, energy, hunger (or battery for the robot); armor and lingering; a part list with hp. Under it, *Inspect*: the last tapped hex's `describeHex` text.
 - **Actions**: one button per `actions(state)` entry: name, AP cost, energy cost, disabled with its `why` as a title and a visible line. Modes: *Move* (default when nothing else is chosen: reachable hexes lit; tap a hex shows path and cost; tap again or *Confirm* to go), *Face* (six arrows around the kaiju), an attack (targets lit; tap a target opens the *Forecast* sheet with *Confirm* and *Cancel*), *Stomp*, *Eat* (adjacent targets lit), *Roar*, *Withdraw*, *End turn*. Every button ≥ 44 px; every action has a key, shown on the button (1–9 for attacks and actions, `F` face, `R` roar, `Enter` confirm, `Esc` cancel, `E` end turn).
-- **Log**: newest last, each event's `text`; `radio` lines in capitals and monospace; the kaiju's lines in the accent colour. On a phone it is a drawer showing the last two lines until opened.
-- **Forecast sheet** [CMB-1]: target list with hit chance, damage range, and hp after; AP and energy cost; "return fire next phase" summary.
+- **Log**: newest last, each event's `text`; `radio` lines in capitals and monospace; the kaiju's lines in the accent colour. The words come first (REQUIREMENTS section 0): on a phone the log sits directly under the map and shows the last four lines until opened; in two columns it takes the rest of the right column and never shows fewer than four lines. The status tile's portrait, silhouette and bars never scroll away; at laptop heights only its part list scrolls, under them [E1].
+- **Forecast sheet** [CMB-1]: target list with hit chance, damage range, and hp after (for a zero-damage panic attack: the pressure and the chance each unit breaks); AP and energy cost; "return fire next phase" summary. On a phone it rises from the bottom with its buttons always in view; in two columns it takes the Status tile's place while it is open. On a phone the portrait and silhouette also sit in the top bar, so they stay in view.
 
 ### 11.3 The cutaway [CMB-3..5, UI-9]
 
-An overlay over the map tile. `backdrop(defender's terrain, {structure})` fills it. The attacker's `figure` on the left facing right, the defender's on the right facing left (units with `count` from hp). Name plates and hp bars at the bottom, Fire Emblem fashion. Sequence: 300 ms in; attacker lunges (150 ms); a flash; the number rises over the defender ("MISS" on a miss); the defender's bar falls from `before` to `after`; 600 ms hold; out. About 1.6 s. Tap anywhere skips. With `prefers-reduced-motion`: one still frame with the result, 1.2 s, or tap. Settings: *Cutaways: all / kaiju vs kaiju only / off*. In the defense phase, consecutive attacks on the kaiju by the same unit type are one cutaway with the summed damage [CMB-5]. Kaiju attacks on structures alone do not get a cutaway; the log is enough.
+An overlay over the map tile. `backdrop(defender's terrain, {structure})` fills it. The attacker's `figure` on the left facing right, the defender's on the right facing left (units with `count` from hp). Name plates and hp bars at the bottom, Fire Emblem fashion. Sequence: 300 ms in; attacker lunges (150 ms); a flash; the number rises over the defender ("MISS" on a miss); the defender's bar falls from `before` to `after`; 600 ms hold; out. About 1.6 s. Tap anywhere skips this scene and the rest of the scenes from the same command or defense phase. With `prefers-reduced-motion`: one still frame with the result, 1.2 s, or tap. Settings: *Cutaways: all / kaiju vs kaiju only / off*. In the defense phase, consecutive attacks on the kaiju by the same unit type are one cutaway with the summed damage [CMB-5]. Kaiju attacks on structures alone do not get a cutaway; the log is enough.
 
 ### 11.4 Settings and memory [UI-8]
 
