@@ -603,6 +603,11 @@ function gather(events) {
     if (e.k === "destroyed" && e.points > 0) tally(e.what === "structure" ? f.structures : f.units, e.type);
     else if (e.k === "crush" && e.actor === "kaiju") f.crushed += 1;
     else if (e.k === "eat" && e.actor === "kaiju") f.eaten += 1;
+    else if (e.k === "move" && e.teleport && e.actor === "kaiju") {
+      // A teleport attack raises a move, not an attack, but it is still a use.
+      const a = own(KAIJU, e.who, null)?.attacks.find((x) => x.id === e.attack);
+      if (a) tally(f.uses, a.name);
+    }
     else if (e.k === "attack" && e.attacker.side === "kaiju") {
       // An area attack raises one event per victim; only the first of them is a use.
       if (e.first) tally(f.uses, e.attack.name);

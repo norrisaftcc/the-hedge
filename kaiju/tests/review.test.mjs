@@ -104,6 +104,21 @@ test("review: the attack used most counts uses, not the victims an area attack r
   }
 });
 
+test("review: a teleport attack counts as a use", () => {
+  const s = quiet("squamous");
+  const ev = (k, d) => ({ k, actor: "kaiju", turn: 1, text: "", ...d });
+  const grab = { k: "attack", turn: 1, text: "", first: true, hit: false, damage: 0, attack: { id: "grab", name: "Tentacle grab" }, attacker: { side: "kaiju", id: "squamous" }, defender: { side: "unit", id: "u1", type: "tank" } };
+  const events = [
+    ev("move", { who: "squamous", teleport: true, attack: "angle", from: s.kaiju.at, to: s.kaiju.at, path: [s.kaiju.at] }),
+    grab,
+    ev("move", { who: "squamous", teleport: true, attack: "angle", from: s.kaiju.at, to: s.kaiju.at, path: [s.kaiju.at] }),
+    grab,
+    ev("move", { who: "squamous", teleport: true, attack: "angle", from: s.kaiju.at, to: s.kaiju.at, path: [s.kaiju.at] }),
+  ];
+  const r = review(s, events);
+  assert.match(r.paragraphs[1], /wrong angle[^.]*three times/i);
+});
+
 test("review: with no blow and no radio line, the quote is the last line of the log", () => {
   const s = quiet();
   s.kaiju.at = at(5, 13);
