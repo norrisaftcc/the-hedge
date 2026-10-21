@@ -96,7 +96,7 @@ Data files export plain objects. Rules read them; nothing else defines numbers.
 
 ### 4.1 Terrain and structures: `src/data/terrain.js`
 
-`TERRAIN[id] = {name, glyph, cost, ground, air, deep, water, blocksLos}`. `cost` is the kaiju's AP to enter; ground units pay the same unless `ground: false` (they cannot enter). Only mountains block line of sight [MAP-3]: the kaiju is taller than the city.
+`TERRAIN[id] = {id, name, glyph, cost, ground, infantryOnly, air, deep, water, blocksLos}`. `cost` is the kaiju's AP to enter. `ground` is a ground unit's AP to enter, or `false` where ground units cannot go; `infantryOnly: true` marks terrain only infantry may enter. Air units pay 1 anywhere. The table's "ground units" column gives both. Only mountains block line of sight [MAP-3]: the kaiju is taller than the city.
 
 | id | glyph | name | cost | ground units | water | blocksLos |
 |----|-------|------|------|--------------|-------|-----------|
@@ -109,7 +109,7 @@ Data files export plain objects. Rules read them; nothing else defines numbers.
 | mountain | `^` | Mountain | 3 | infantry only (cost 3) | no | yes |
 | rubble | `:` | Rubble | 1 | yes (cost 2) | no | no |
 
-`STRUCTURES[id] = {name, glyph, height, hp, points, populated, solid, power, objective}`. A structure sits on a hex over its terrain. [MAP-4]
+`STRUCTURES[id] = {id, name, glyph, height, hp, points, populated, solid, power, objective, blast}`. `blast` is `[min, max]` damage for a power structure, `null` for every other. A structure sits on a hex over its terrain. [MAP-4]
 
 | id | glyph | name | height | hp | points | populated | solid | power | blast |
 |----|-------|------|--------|----|--------|-----------|-------|-------|-------|
@@ -298,8 +298,8 @@ Player commands:
 | `{t: "move", to}` | walk the cheapest path to `to` (from `reach`); facing becomes the last step's direction | path cost |
 | `{t: "face", dir}` | turn in place | 0 |
 | `{t: "attack", attack, target}` | use an attack on a target hex (or pattern, or teleport destination) | attack.ap |
-| `{t: "stomp", target}` | adjacent hex: 3–4 damage, no roll, to the structure and every ground unit there | 1 |
-| `{t: "eat", target}` | adjacent hex: an edible unit, or a populated structure | 1 |
+| `{t: "stomp", target}` | adjacent hex: 3–4 damage, no roll to hit, to the structure and every ground unit there; unit armor and cover apply as in 6.2. Stomping a power structure flat sets off its blast (6.1) | 1 |
+| `{t: "eat", target}` | adjacent hex: an edible unit, or a populated structure; for a `reactorBelly` kaiju, also a power structure (6.4) | 1 |
 | `{t: "roar"}` | once a turn: panic test, pressure `roarPressure`, for every unit within `roarRadius` | 1 |
 | `{t: "withdraw"}` | on a retreat hex: leave the map; the mission ends | 0 |
 | `{t: "end"}` | end the kaiju phase; run the defense phase; start the next turn | — |
@@ -316,10 +316,11 @@ The kaiju enters a hex for its terrain cost plus the structure's height. It may 
 
 For each target in the pattern:
 
+- **Line of sight.** `lineOfSight(a, b)` holds when no hex strictly between `a` and `b` on `hex.line` has `blocksLos` (only mountains do). Single-target attacks beyond distance 1 and cones need it; a line stops after the first mountain hex; attacks at distance 1 never need it.
 - **Accuracy** = attack accuracy − head penalty (intact 0, hurt 10, bad 20, crippled 30) − 10 if the target is an `eldritch` kaiju − 10 if the target is a unit in a structure − 5 per hex beyond 1 for `ranged` attacks; clamp to 5..95. Hit when d100 ≤ accuracy. Structures are always hit.
 - **Damage** = randint(min, max) + 1 if the target is a kaiju struck in its rear arc + `waterBonus` if it applies − arms penalty for `melee` attacks (intact 0, hurt 0, bad 1, crippled 2) − target armor − 1 if a unit in a structure. At least 1 on a hit, unless the attack's max is 0.
 - **Hit location** on a kaiju: roll on its `hitTable`. Damage beyond a part's hp, or to a crippled part, goes to the body.
-- **Units fire** by the same rules: accuracy from the unit table (− 10 against `eldritch`), damage from its attack range, the kaiju's armor, the rear-arc bonus, hit location.
+- **Units fire** by the same rules: accuracy from the unit table (− 10 against `eldritch`), damage from its attack range, the kaiju's armor, the rear-arc bonus, hit location. A unit may fire only when the distance is from its `minRange` to its `range`, inclusive, and it has line of sight or is `indirect` (artillery, missiles). Unit fire has no range penalty.
 
 ### 6.3 Parts [KAI-3]
 
@@ -327,7 +328,7 @@ Legs: AP −0/−1/−2/−3 (intact/hurt/bad/crippled). Arms: melee damage as a
 
 ### 6.4 Eating, hunger and berserk [KAI-6, KAI-9]
 
-Eat an adjacent edible unit: it is destroyed and scored; hunger falls by its `edible` value. Eat a populated structure: it is destroyed and scored; hunger −3. Eating gives +3 energy to an `eat` kaiju. A `noHunger` kaiju cannot eat. A power structure may be eaten only by a `reactorBelly` kaiju; anything else that bites one gets the blast.
+Eat an adjacent edible unit: it is destroyed and scored; hunger falls by its `edible` value. Eat a populated structure: it is destroyed and scored; hunger −3. Eating gives +3 energy to an `eat` kaiju. A `noHunger` kaiju cannot eat. A power structure is food only to a `reactorBelly` kaiju (+6 energy, no blast); to any other kaiju it is not food, and stomping or walking into it sets off the blast.
 
 At each phase start hunger rises by 1 (on even turns only with `hungerEvery: 2`). Hunger ≥ 70% of max: −1 AP. Hunger at max: **berserk**. The rules play that phase with `ai.planBerserk` (go for the nearest food, eat it, stomp anything in the way), then hunger falls to max − 4, and the defense phase follows. The events say so.
 
@@ -370,7 +371,7 @@ export function partState(part)                           // "intact" | "hurt" |
 export function replay(setup, commands)                   // final state; for tests [PLT-6]
 ```
 
-`returnFire` lists the units that could fire on the kaiju next defense phase from where it stands now.
+`returnFire` lists what could strike the kaiju next defense phase from where it stands now [CMB-1]: each unit that could move and fire on it, and the other kaiju, if there is one, with its best attack in reach. Each entry is `{unit, type, name, hitChance, damage}`; `unit` is `"rival"` (or `"kaiju"`, seen from the rival) for a kaiju.
 
 ## 7. Events
 
