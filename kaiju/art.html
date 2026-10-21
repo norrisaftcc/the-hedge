@@ -85,7 +85,7 @@
       for (const s of STATES) out += fig(K.silhouette(id, { parts: all(s) }), s);
       out += fig(K.silhouette(id, { parts: mixed }), "mixed");
       out += `</div><div class="row">`;
-      out += fig(K.figure(id), "figure") + fig(K.figure(id, { parts: all("bad") }), "bad");
+      out += fig(K.figure(id), "figure") + fig(K.figure(id, { parts: all("hurt") }), "hurt") + fig(K.figure(id, { parts: all("bad") }), "bad");
       out += fig(K.figure(id, { flip: true, parts: all("crippled") }), "crippled, flipped");
       out += fig(tokenSvg(K.token(id) + K.facingNotch()), "token");
       out += fig(tokenSvg(K.token(id) + `<g transform="rotate(120)">${K.facingNotch()}</g>`, "tok-small"), "28 px, facing 120");
@@ -136,12 +136,12 @@
       const s = structs[g];
       out += `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)})">${T.hexTile(s ? (g === "Y" ? "park" : "open") : glyph[g])}${s ? T.structure(s[0], s[1], { damaged: c === 6 }) : ""}</g>`;
     }));
-    const kx = w * 3.5 + w / 2, ky = size * 1.5 * 1 + size;
     out += `<g transform="translate(${(w * 4 + w / 2 + w / 2).toFixed(1)},${(size * 1.5 * 5 + size).toFixed(1)})">${K.token("radiosaur")}<g transform="rotate(-60)">${K.facingNotch()}</g></g>`;
     out += `<g transform="translate(${(w * 7 + w / 2).toFixed(1)},${(size * 1.5 * 2 + size).toFixed(1)})">${U.token("tank")}</g>`;
     out += `<g transform="translate(${(w * 3 + w / 2).toFixed(1)},${(size * 1.5 * 0 + size).toFixed(1)})">${U.token("helicopter")}</g>`;
     out += `<g transform="translate(${(w * 6 + w).toFixed(1)},${(size * 1.5 * 3 + size).toFixed(1)})">${U.token("infantry")}</g>`;
-    return `<svg class="board" viewBox="0 0 ${(w * 12.5).toFixed(0)} ${(size * 1.5 * 6 + size / 2).toFixed(0)}">${out}</svg>`;
+    const pad = 3; // room for the outer hexes' strokes
+    return `<svg class="board" viewBox="${-pad} ${-pad} ${(w * 12.5 + 2 * pad).toFixed(0)} ${(size * 1.5 * 6 + size / 2 + 2 * pad).toFixed(0)}">${out}</svg>`;
   });
 
   html += `<h2>Backdrops</h2>` + safe(() => {
