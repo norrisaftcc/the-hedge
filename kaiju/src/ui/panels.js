@@ -189,7 +189,7 @@ export function forecastSheet(fc, { name, note, panic = 0 }) {
   const table = fc.targets.length
     ? `<table class="fc-table"><thead><tr><th>Target</th><th>Hit</th><th>Damage</th><th>HP after</th></tr></thead><tbody>${rows}</tbody></table>`
     : `<p class="fc-none">Nothing in the pattern to strike.</p>`;
-  let back = "No unit can fire on you next phase from here.";
+  let back = "Nothing can strike you next phase from here.";
   if (fc.returnFire.length) {
     const groups = new Map();
     for (const r of fc.returnFire) {
