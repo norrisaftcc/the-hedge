@@ -146,7 +146,8 @@ function roarCommand(state) {
   return near.length >= 3 ? { t: "roar" } : null;
 }
 
-// A robot low on battery heads for the hexes beside a power structure instead of the goal.
+// A robot low on battery heads for the hexes beside a power structure instead of the goal,
+// and stays there until the next phase start charges it.
 function chargeHexes(state) {
   const k = state.kaiju;
   if (KAIJU[k.id].energy.rule !== "battery" || k.energy > LOW_BATTERY) return null;
@@ -154,7 +155,7 @@ function chargeHexes(state) {
     const st = state.map.hexes[h].structure;
     return st && STRUCTURES[st.type].power;
   });
-  if (!power.length || power.some((h) => H.distance(h, k.at) <= 1)) return null;
+  if (!power.length) return null;
   return power.flatMap((h) => H.neighbors(h)).filter((h) => state.map.hexes[h] && !state.map.hexes[h].structure);
 }
 
