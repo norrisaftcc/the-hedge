@@ -172,7 +172,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 
 | ID | Requirement |
 |----|-------------|
-| NFR-1 | First load under 300 KB over the wire, all files together. |
+| NFR-1 | First load under 300 KB over the wire: `index.html`, `style.css` and every module the page imports, each compressed with gzip, summed. `tests/weight.test.mjs` measures it. The budget assumes a server that compresses (GitHub Pages, a CDN); a bare `python3 -m http.server` does not, which matters only off localhost. |
 | NFR-2 | A defense phase with 20 units resolves its rules in under 50 ms on a mid-range phone. |
 | NFR-3 | Text contrast meets WCAG AA in both themes. |
 | NFR-4 | Rules data (kaiju, units, mutations, terrain, missions) is data, not code, so a designer can change numbers without touching the rules. |
