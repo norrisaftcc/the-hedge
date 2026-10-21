@@ -336,7 +336,7 @@ test("forecast: cover, ranged fall-off, eldritch, return fire", () => {
   assert.deepEqual(f.returnFire.map((r) => r.type).sort(), ["gun", "infantry"]);
   const gun = f.returnFire.find((r) => r.type === "gun");
   assert.equal(gun.hitChance, 60);
-  assert.deepEqual(gun.damage, [1, 2]);
+  assert.deepEqual(gun.damage, [1, 3], "the gun stands in Thalassor's rear arc");
   const q = game({ kaiju: "squamous" });
   putUnit(q, "tank", E);
   assert.equal(forecast(q, "grab", E).returnFire[0].hitChance, 55);
@@ -705,4 +705,49 @@ test("forecast: return fire names the rival when it can reach, and not when it c
   s.rival.at = near;
   s.rival.parts.body.hp = 0;
   assert.equal(rivalNear(s).length, 0);
+});
+
+test("create refuses names it inherits rather than owns", () => {
+  assert.throws(() => create(setup(blank(), { kaiju: "constructor" })), /Unknown kaiju/);
+  assert.throws(() => create(setup(blank(), { mutations: ["constructor"] })), /Unknown mutation/);
+  assert.throws(() => create(setup(CITY_LITE, { target: "constructor" })), /needs a target/);
+  assert.throws(() => create(setup(COAST_LITE, { rival: "toString" })), /Unknown kaiju/);
+});
+
+test("air units fly over a wall but never stop on it", () => {
+  const s = game({}, (m) => { m.map.features[3] = "WWWWWWWWWWWW"; });
+  const heli = putUnit(s, "helicopter", at(2, 5));
+  const tank = putUnit(s, "tank", at(8, 5));
+  const flies = unitReach(s, heli.id);
+  assert.ok(flies[at(2, 1)], "the helicopter reaches the far side of the wall");
+  for (let c = 0; c < 12; c++) assert.equal(flies[at(c, 3)], undefined, "it may not stop on the wall");
+  for (const key of Object.keys(unitReach(s, tank.id))) assert.ok(H.keyToOffset(key).row > 3, "the tank stays on its side");
+});
+
+test("a blast that kills mid-walk ends the move event where the walk ended", () => {
+  const E2 = H.neighbor(E, 0);
+  const s = game({ kaiju: "thalassor" }, (m) => {
+    paintKey(m, "features", E, "T");
+    paintKey(m, "terrain", H.neighbor(HOME, 1), "^");
+    paintKey(m, "terrain", H.neighbor(HOME, 5), "^");
+  });
+  assert.deepEqual(reach(s)[E2].path, [E, E2], "the cheapest way runs through the pylon");
+  for (const p of Object.keys(s.kaiju.parts)) s.kaiju.parts[p].hp = 1;
+  const out = ok(s, { t: "move", to: E2 });
+  const move = kinds(out.events, "move")[0];
+  assert.equal(move.to, E);
+  assert.deepEqual(move.path, [E]);
+  assert.equal(out.state.kaiju.at, E);
+  assert.equal(out.state.result.outcome, "fallen");
+});
+
+test("return fire leaves out a rival that cannot reach", () => {
+  const s = create(setup(COAST_LITE, { rival: "squamous" }));
+  s.units = [];
+  const spot = Object.keys(s.map.hexes).find((h) => H.distance(h, s.kaiju.at) === 4 && H.neighbors(h).every((n) => s.map.hexes[n]));
+  s.rival.at = spot;
+  s.rival.energy = 0;
+  for (const n of H.neighbors(spot)) s.map.hexes[n].structure = { type: "wall", hp: 8, maxHp: 8 };
+  assert.equal(forecast(s, "bite", spot).returnFire.filter((x) => x.unit === "rival").length, 0,
+    "walled in, with a grab of range 2, four hexes off");
 });
