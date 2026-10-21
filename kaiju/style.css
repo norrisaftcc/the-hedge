@@ -177,7 +177,7 @@ kbd {
 
 @media (min-width: 900px) {
   .setup-pair { grid-template-columns: minmax(300px, 1fr) 2fr; align-items: start; }
-  .missions { grid-template-columns: repeat(3, 1fr); }
+  .missions { grid-template-columns: repeat(2, 1fr); }
   .deploy-bar { margin: 16px 0 0; border: 4px double var(--rule); }
 }
 
@@ -363,9 +363,67 @@ kbd {
 .score td { text-align: right; font-family: var(--mono); border-bottom: 1px solid var(--faint); }
 .score tfoot th, .score tfoot td { font-weight: 700; font-size: 19px; border-top: 4px double var(--rule); border-bottom: 0; padding-top: 6px; }
 .end-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.stamp.grade-rampage { color: var(--accent); font-size: clamp(22px, 5vw, 30px); }
+.score-stars { margin: 8px 0 0; text-align: right; }
+
+/* The review: a page from a 1981 computer magazine, after the newspaper. */
+.review-wrap { grid-column: 1 / -1; width: 100%; max-width: 960px; margin: 10px auto 0; }
+.review-label {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 10px; font-size: 15px; letter-spacing: 0.16em;
+  font-variant-caps: all-small-caps; color: var(--muted);
+}
+.review-label::before, .review-label::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
+.review {
+  --mag: "Avenir Next", Futura, "Century Gothic", "Trebuchet MS", "Helvetica Neue", Arial, sans-serif;
+  padding: 0 16px 16px; background: var(--panel); border: 1px solid var(--rule); box-shadow: 4px 4px 0 var(--rule);
+}
+.rv-mast { margin: 0 -16px; padding: 10px 16px 6px; color: var(--panel); background: var(--ink); }
+.rv-name {
+  font: 800 clamp(22px, 6.4vw, 40px)/1 var(--mag); letter-spacing: 0.04em; text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.rv-issue {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 12px; margin-top: 6px; padding-top: 4px;
+  font: 11.5px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; border-top: 2px solid var(--accent);
+}
+.rv-title { margin: 14px 0 4px; font: 800 clamp(26px, 6.6vw, 44px)/1.05 var(--mag); letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.rv-dek { margin: 0; font-size: 17px; font-style: italic; line-height: 1.35; }
+.rv-byline {
+  margin: 8px 0 12px; padding-bottom: 8px; font: 700 12.5px var(--mag); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); border-bottom: 3px solid var(--ink);
+}
+.rv-body { font-size: 16px; line-height: 1.5; }
+.rv-body > p { margin: 0 0 0.8em; overflow-wrap: break-word; }
+.rv-first::first-letter { float: left; margin: 4px 6px 0 0; font: 800 3.1em/0.8 var(--mag); color: var(--accent); }
+.rv-quote {
+  margin: 0.4em 0 1em; padding: 10px 4px; border-block: 3px solid var(--ink); break-inside: avoid;
+  font: 700 19px/1.3 var(--serif); font-style: italic; text-align: center;
+}
+.rv-quote p { margin: 0; }
+.rv-quote p::before { content: "\201C"; color: var(--accent); }
+.rv-quote p::after { content: "\201D"; color: var(--accent); }
+.rv-rating {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 6px; padding: 10px 12px;
+  background: var(--paper); border: 2px solid var(--ink);
+}
+.rv-stars { font-size: 28px; line-height: 1; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap; }
+.rv-off { color: var(--muted); }
+.rv-verdict { flex: 1 1 12em; font: 700 15px/1.3 var(--mag); }
+.rv-copy { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; }
+.rv-copied { font-style: italic; color: var(--muted); }
+.rv-text {
+  display: block; width: 100%; margin-top: 10px; padding: 8px 10px; font: 13px/1.45 var(--mono); color: var(--ink);
+  background: var(--paper); border: 2px solid var(--rule); border-radius: 2px; resize: vertical;
+}
 
 @media (min-width: 640px) {
   .paper-cols { grid-template-columns: auto 1fr; }
+  .review { padding: 0 24px 20px; }
+  .rv-mast { margin: 0 -24px; padding: 12px 24px 6px; }
+  .rv-body { column-count: 2; column-gap: 28px; column-rule: 1px solid var(--faint); }
+  .rv-body > p { text-align: justify; hyphens: auto; -webkit-hyphens: auto; orphans: 3; widows: 3; }
+  .rv-rating { margin-top: 14px; }
+  .rv-quote { column-span: all; margin: 0.2em 0 1em; font-size: 22px; }
 }
 
 /* ---------- phone ---------- */

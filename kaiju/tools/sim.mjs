@@ -1,16 +1,19 @@
 // A headless greedy bot and a balance table. The bot plays the player's kaiju through rules.step:
 // eat when hungry, roar into a crowd, use the best expected-value attack in reach, else walk
-// toward the objective or the rival, else end the turn.
+// toward the objective or the rival (in a rampage, toward whatever the objective values), else
+// end the turn.
 // Run from the repo root: node kaiju/tools/sim.mjs [seeds] [kaiju] [mission]
 // e.g. node kaiju/tools/sim.mjs 20, or node kaiju/tools/sim.mjs 1-20 radiosaur swathe:lab
+// Rampage: node kaiju/tools/sim.mjs 1-20 all rampage plays every objective to the end (never
+// withdrawing; a guard stops a run after turn 60) and prints the median total and turns lasted.
 
 import { pathToFileURL } from "node:url";
 import * as H from "../src/hex.js";
-import { create, step, reach, attackTargets, forecast, stompTargets, eatTargets, alive } from "../src/rules.js";
+import { create, step, reach, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
 import { KAIJU, RULES } from "../src/data/kaiju.js";
 import { UNITS } from "../src/data/units.js";
 import { TERRAIN, STRUCTURES } from "../src/data/terrain.js";
-import { resolveMission, TARGETS } from "../src/data/missions.js";
+import { resolveMission, TARGETS, OBJECTIVES } from "../src/data/missions.js";
 
 const OBJECTIVE_VALUE = 700;
 const RIVAL_PER_HP = 40;
@@ -18,6 +21,20 @@ const WORTH_IT = 8;
 const RICH = 35;
 const LOW_BATTERY = 2;
 const PANIC_WORTH = 0.4;
+const TURN_GUARD = 60;
+const EVEN = { structures: { all: 1 }, units: { all: 1 } };
+
+// In a rampage, what the objective values; an objective that values nothing destroyed
+// (Survival) plays as Balanced, since the army it kills cannot shoot back.
+function weightsOf(state) {
+  if (state.objective.kind !== "none") return EVEN;
+  const w = state.objective.weights;
+  const none = w.structures.all === 0 && !w.structures.populated && w.units.all === 0 && Object.keys(w.units).length === 1;
+  return none ? EVEN : w;
+}
+
+const structureValue = (state, type) => STRUCTURES[type].points * structureWeight(weightsOf(state), type);
+const unitValue = (state, type) => UNITS[type].points * unitWeight(weightsOf(state), type);
 
 // Cost to walk from each hex to the goal, ignoring units: entering a hex costs its terrain
 // plus its structure's height; solid structures bar the way.
@@ -52,11 +69,25 @@ function goalCosts(state, goals) {
 
 function goalHexes(state) {
   if (state.objective.kind === "rival" && alive(state.rival)) return H.neighbors(state.rival.at);
+  if (state.objective.kind === "none") return rampageGoals(state);
   if (state.objective.at) {
     const st = state.map.hexes[state.objective.at].structure;
     return st && STRUCTURES[st.type].solid ? H.neighbors(state.objective.at) : [state.objective.at];
   }
   return [];
+}
+
+// A rampage has no objective hex: the bot heads for whatever the objective values, staying
+// off power structures unless it feeds on them.
+function rampageGoals(state) {
+  const belly = state.kaiju.passives.includes("reactorBelly");
+  const out = [];
+  for (const [h, hex] of Object.entries(state.map.hexes)) {
+    const st = hex.structure;
+    if (st && (belly || !STRUCTURES[st.type].power) && structureValue(state, st.type) > 0) out.push(h);
+  }
+  for (const u of state.units) if (unitValue(state, u.type) > 0) out.push(...H.neighbors(u.at));
+  return out;
 }
 
 // The chance that 2d6 + pressure beats a morale.
@@ -80,13 +111,13 @@ function worth(state, f) {
     } else if (t.kind === "structure") {
       const isGoal = t.key === state.objective.at;
       goal = goal || isGoal;
-      value += (p * mean * (isGoal ? OBJECTIVE_VALUE : STRUCTURES[t.type].points)) / t.max;
+      value += (p * mean * (isGoal ? OBJECTIVE_VALUE : structureValue(state, t.type))) / t.max;
     } else if (t.kind === "unit" && t.damage[1] === 0) {
       const u = state.units.find((x) => x.id === t.id);
-      if (u && u.panicked === 0) value += PANIC_WORTH * UNITS[t.type].points * breakChance(UNITS[t.type].morale, f.panic || 0);
+      if (u && u.panicked === 0) value += PANIC_WORTH * unitValue(state, t.type) * breakChance(UNITS[t.type].morale, f.panic || 0);
     } else if (t.kind === "unit") {
       const kill = t.damage[0] >= t.hp ? 1 : mean / t.hp;
-      value += p * UNITS[t.type].points * kill;
+      value += p * unitValue(state, t.type) * kill;
     }
   }
   return { value, goal };
@@ -216,11 +247,12 @@ export function plan(state) {
   return [{ t: "end" }];
 }
 
-// Play a whole mission. Returns the final state and every command sent.
-export function playBot(setup, { maxSteps = 2000 } = {}) {
+// Play a whole mission. Returns the final state and every command sent. A rampage has no turn
+// limit, so maxTurn stops it.
+export function playBot(setup, { maxSteps = 5000, maxTurn = TURN_GUARD } = {}) {
   let state = create(setup);
   const commands = [];
-  for (let i = 0; i < maxSteps && !state.result; i++) {
+  for (let i = 0; i < maxSteps && !state.result && state.turn <= maxTurn; i++) {
     for (const cmd of plan(state)) {
       const out = step(state, cmd);
       // A refused order should not happen; if it does, the bot ends its turn rather than stall.
@@ -250,6 +282,49 @@ export function setupFor(kaiju, cell, seed) {
   };
 }
 
+export function rampageSetup(kaiju, objective, seed) {
+  return { kaiju, mutations: [], mission: resolveMission("rampage", { seed }), objective, seed };
+}
+
+const median = (xs) => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+};
+
+// One kaiju, one objective, every seed: the median total and turns lasted, and the deaths.
+// A run the guard stops is scored as it stands.
+export function runRampage(kaiju, objective, seeds) {
+  const totals = [];
+  const turns = [];
+  const deaths = { cuts: 0, sudden: 0, lingering: 0, guard: 0 };
+  for (const seed of seeds) {
+    const { state } = playBot(rampageSetup(kaiju, objective, seed));
+    const r = state.result;
+    const turn = Math.min(state.turn, TURN_GUARD);
+    totals.push(r ? r.score.total : rampageScore(state.objective.weights, state.tally.destroyed, turn).total);
+    turns.push(turn);
+    deaths[r ? r.death : "guard"] += 1;
+  }
+  return { total: median(totals), turns: median(turns), totals, deaths };
+}
+
+function rampageTable(seeds, kaijus) {
+  const pad = (s, n) => String(s).padEnd(n);
+  console.log(`rampage, seeds ${seeds[0]}..${seeds[seeds.length - 1]}; median total and turns lasted`);
+  console.log(`${pad("objective", 12)} ${kaijus.map((k) => pad(k, 12)).join(" ")} ${pad("all", 10)} stars at median (s2/s3/s4/s5)`);
+  for (const id of Object.keys(OBJECTIVES)) {
+    const all = [];
+    const cells = kaijus.map((k) => {
+      const r = runRampage(k, id, seeds);
+      all.push(...r.totals);
+      return pad(`${r.total} / ${r.turns}`, 12);
+    });
+    const m = median(all);
+    console.log(`${pad(id, 12)} ${cells.join(" ")} ${pad(m, 10)} ${starsFor(OBJECTIVES[id].stars, m)} (${OBJECTIVES[id].stars.join("/")})`);
+  }
+}
+
 export function runCell(kaiju, cell, seeds) {
   const grades = { "total victory": 0, victory: 0, draw: 0, defeat: 0 };
   let wins = 0;
@@ -277,7 +352,11 @@ function parseSeeds(arg) {
 function main() {
   const [seedArg, kaijuArg, cellArg] = process.argv.slice(2);
   const seeds = parseSeeds(seedArg);
-  const kaijus = kaijuArg ? [kaijuArg] : Object.keys(KAIJU);
+  const kaijus = kaijuArg && kaijuArg !== "all" ? [kaijuArg] : Object.keys(KAIJU);
+  if (cellArg === "rampage") {
+    rampageTable(seeds, kaijus);
+    return;
+  }
   const cells = cellArg ? CELLS.filter((c) => (c.target ? `${c.mission}:${c.target}` : c.mission) === cellArg) : CELLS;
   const pad = (s, n) => String(s).padEnd(n);
   console.log(`seeds ${seeds[0]}..${seeds[seeds.length - 1]}`);

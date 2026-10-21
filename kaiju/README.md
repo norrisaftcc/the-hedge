@@ -6,6 +6,8 @@ A turn-based tactical game for one giant monster. Choose one of four, spend thre
 
 It is *Crush, Crumble and Chomp!* (Epyx, 1981) as imagined from a magazine review that had no screenshots, with OGRE's damage by system, Car Wars's facing and build budget, and Advance Wars's forecast and combat scene. The streets of the city are grown by MazeBuilder's Sidewinder, so the city has the same tell as the hedge.
 
+**Rampage** is the fourth mission and the old way to play: the Swathe's city with lighter forces, no goal and no clock, and waves of the army from the north, east and west that grow every third turn. Before play you choose what counts: Balanced, Killer Monster, Combat Machine, Destruction or Survival. It ends only when the monster falls or walks off the south edge, and the end names the death: a thousand cuts, the sudden death or the lingering death. Every game, Rampage or not, ends with **the review**: a column from *Cassette & Disk Monthly*, an invented 1981 magazine, written from the game's own events, with a quoted line from the log and a star rating. *Copy as text* puts it on the clipboard.
+
 ## Run it
 
 Static files, no build, nothing to install. From the repository root:

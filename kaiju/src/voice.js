@@ -1,4 +1,5 @@
-// The words: one line for every rules event, and the newspaper headline at the end.
+// The words: one line for every rules event, the newspaper headline at the end, and the
+// magazine review of the whole game.
 // LINES holds the templates, one table per event kind (most split by variant). A variant may have
 // a sharper table for one attack or one unit type, keyed "variant.id"; it is used when present,
 // and a building (a populated structure) falls back to the plain structure lines.
@@ -11,6 +12,7 @@
 import { KAIJU } from "./data/kaiju.js";
 import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { UNITS } from "./data/units.js";
+import { MUTATIONS, BUDGET } from "./data/mutations.js";
 import { DIR_NAMES, distance } from "./hex.js";
 
 // How the log names each unit type.
@@ -187,6 +189,18 @@ export const LINES = {
     pulled: ["{Name} drags the {unit} in.", "The {unit} is pulled closer by something it would rather not describe."],
   },
   withdraw: ["{Name} leaves the map.", "{Name} walks away. Nobody follows.", "{Name} goes back where it came from. For now."],
+  lingering: [
+    "The paralysis spreads. {Name} is slower again. Lingering {lingering}.",
+    "{Name} moves as if through glue. Lingering {lingering}.",
+    "Something in {Name} is setting like plaster. Lingering {lingering}.",
+  ],
+  hurt: {
+    lingering: [
+      "The paralysis reaches {Name}'s {part}. {damage} damage.",
+      "{Name} cannot move what it cannot feel. {damage} on the {part}.",
+      "The mad scientist's ray is still at work. {Name}'s {part} {takes} {damage}.",
+    ],
+  },
   radio: {
     arrive: ["{CALLSIGN} TO CONTROL. ON STATION.", "{CALLSIGN} ARRIVING. VISUAL ON THE TARGET.", "{CALLSIGN} CHECKING IN. AWAITING TARGET."],
     break: [
@@ -201,12 +215,38 @@ export const LINES = {
       "{CALLSIGN} TO CONTROL. FIRING FOR EFFECT.",
       "{CALLSIGN}. TARGET IN SIGHT. IT IS VERY LARGE.",
     ],
+    wave: [
+      "{CALLSIGN} TO ALL STATIONS. MORE UNITS FROM THE {EDGE}.",
+      "{CALLSIGN}. FRESH UNITS INBOUND, {EDGE} SIDE.",
+      "{CALLSIGN} TO ALL STATIONS. KEEP IT BUSY. HELP IS COMING FROM THE {EDGE}.",
+      "{CALLSIGN}. EVERYTHING WE HAVE IS ON THE WAY.",
+    ],
+    "wave-wide": [
+      "{CALLSIGN}. EVERYTHING WE HAVE IS ON THE WAY.",
+      "{CALLSIGN} TO ALL STATIONS. FRESH UNITS INBOUND. KEEP IT BUSY.",
+    ],
   },
   over: {
     goal: ["The objective is met. {grade}. Score {total}.", "It is done. {grade}. Score {total}.", "The job is finished. {grade}. Score {total}."],
     time: ["Time is up. {grade}. Score {total}.", "The clock has run out. {grade}. Score {total}.", "Dawn. Nothing is settled. {grade}. Score {total}."],
     withdrawn: ["The monster has withdrawn. {grade}. Score {total}.", "The monster is gone. {grade}. Score {total}."],
     fallen: ["The monster has fallen. {grade}. Score {total}.", "The monster is down. {grade}. Score {total}.", "Silence where the monster was. {grade}. Score {total}."],
+    "rampage-cuts": [
+      "A thousand cuts. The monster is down after {turns}. {Objective} score {total}, {stars}.",
+      "No one shot did it. All of them did. Down after {turns}. {Objective} score {total}, {stars}.",
+    ],
+    "rampage-sudden": [
+      "The sudden death. The power went up and took the monster with it, after {turns}. {Objective} score {total}, {stars}.",
+      "The sudden death. The monster stood too near the power, and the power won. {Objective} score {total}, {stars}.",
+    ],
+    "rampage-lingering": [
+      "The lingering death. The monster stiffens and falls, after {turns}. {Objective} score {total}, {stars}.",
+      "The lingering death. The ray did its slow work. Down after {turns}. {Objective} score {total}, {stars}.",
+    ],
+    "rampage-withdrawn": [
+      "The monster has gone back to sea after {turns}. {Objective} score {total}, {stars}.",
+      "The monster is gone, after {turns}. The army counts its losses. {Objective} score {total}, {stars}.",
+    ],
   },
 };
 
@@ -266,11 +306,39 @@ export const HEADLINES = {
     swathe: ["{NAME} DIES IN THE STREETS; MAYOR 'OPEN MONDAY'", "{NOUN} DOWN IN {PLACE}; PROFESSOR 'WE WOULD LIKE THE BODY'"],
     coast: ["{TARGET} KEEPS THE BEACH; COASTGUARD 'ONE DOWN, ONE TO GO'", "{NOUN} FALLS AT {PLACE}; FISHERMEN 'THE OTHER ONE ATE WELL'"],
   },
+  "rampage-cuts": {
+    any: [
+      "{NOUN} DIES OF A THOUSAND CUTS; GENERAL 'WE KEPT AT IT'",
+      "{PLACE} WEARS DOWN {NAME} IN {TURNS} TURNS; ARMY 'EVERY SHELL COUNTED'",
+      "ARMY FELLS {NOUN} AT LAST; MAYOR 'IT FELT LIKE A YEAR'",
+    ],
+  },
+  "rampage-sudden": {
+    any: [
+      "{NOUN} DIES IN POWER BLAST; ENGINEER 'IT WALKED RIGHT IN'",
+      "LIGHTS OUT FOR {NAME}; POWER COMPANY 'SERVICE RESUMES MONDAY'",
+      "{NOUN} GOES UP WITH THE GRID; GENERAL 'NOT OUR DOING, BUT WE WILL TAKE IT'",
+    ],
+  },
+  "rampage-lingering": {
+    any: [
+      "MYSTERY PARALYSIS FELLS {NOUN}; DOCTOR 'PROGRESSIVE AND FATAL'",
+      "{NAME} STIFFENS AND FALLS; PROFESSOR 'I DID TELL THEM'",
+      "SLOW RAY FINISHES {NOUN}; ARMY 'THE SCIENTIST WAS NOT OURS'",
+    ],
+  },
+  "rampage-withdrawn": {
+    any: [
+      "{NOUN} BACK TO SEA AFTER {TURNS} TURNS; MAYOR 'COUNT THE COST'",
+      "{PLACE} LEFT IN RUINS; HARBOURMASTER 'IT WILL BE BACK'",
+      "{NAME} WALKS OFF, ARMY STILL STANDING; GENERAL 'WE CALL THAT A WIN'",
+    ],
+  },
 };
 
 // What the papers call each kaiju, and the town each mission happens to.
 const PRESS = { radiosaur: "LIZARD", thalassor: "STATUE", squamous: "THING", dairengo: "ROBOT" };
-const PLACES = { fortress: "KESSEL", swathe: "PORT HALLORAN", coast: "GULL POINT" };
+const PLACES = { fortress: "KESSEL", swathe: "PORT HALLORAN", coast: "GULL POINT", rampage: "PORT HALLORAN" };
 
 const ENERGY_WHY = { eat: "the meal", water: "the sea", panic: "fear", drain: "the drain", charge: "the grid", reactor: "the reactor" };
 
@@ -379,8 +447,15 @@ const VARS = {
     vars: { ...unitVars(d.type), walked: hexes(d.path ? d.path.length : 0), Name: kaijuName(d.who) },
   }),
   withdraw: (d) => ({ vars: { Name: kaijuName(d.who) } }),
-  radio: (d) => ({ variant: d.about || "fire", vars: { CALLSIGN: d.callsign } }),
-  over: (d) => ({ variant: d.result.outcome, vars: { grade: cap(d.result.grade), total: d.result.score.total } }),
+  radio: (d) => ({ variant: d.about === "wave" && d.edge === null ? "wave-wide" : d.about || "fire", vars: { CALLSIGN: d.callsign, EDGE: String(d.edge || "north").toUpperCase() } }),
+  lingering: (d) => ({ vars: { Name: kaijuName(d.who), lingering: d.lingering } }),
+  hurt: (d) => ({ variant: d.why, vars: { Name: kaijuName(d.who), damage: d.damage, ...partVars(d.who, d.part) } }),
+  over: (d) => {
+    const r = d.result;
+    const vars = { grade: cap(r.grade), total: r.score.total, turns: count(d.turn, "turn"), Objective: d.objective || "", stars: count(r.stars, "star") };
+    if (r.grade !== "rampage") return { variant: r.outcome, vars };
+    return { variants: [`rampage-${r.death || "withdrawn"}`, r.outcome], vars };
+  },
 };
 
 function smallHash(text) {
@@ -423,7 +498,9 @@ export function headline(result, state) {
     NOUN: PRESS[id] || "CREATURE",
     PLACE: (state && PLACES[state.mission]) || (state && placeFromTerrain(state)) || "TOWN",
   };
+  vars.TURNS = state ? state.turn : 0;
   let key = result.grade === "draw" ? `draw-${result.outcome === "withdrawn" ? "withdrawn" : "time"}` : result.grade;
+  if (result.grade === "rampage") key = `rampage-${result.death || "withdrawn"}`;
   if (rivalGoal && result.outcome === "goal" && state.rival && state.rival.withdrawn) key += "-driven";
   const table = HEADLINES[key] || HEADLINES.defeat;
   const lines = (state && table[state.mission]) || table.any;
@@ -435,4 +512,378 @@ function placeFromTerrain(state) {
   if (!hex) return null;
   if (TERRAIN[hex.terrain] && TERRAIN[hex.terrain].water) return "THE HARBOUR";
   return hex.structure ? "THE CITY" : null;
+}
+
+// ---------- the review ----------
+// A 1981 games column about the game just played, drawn from the final state and every event.
+// Variety comes from the events themselves, never the dice: the same game reads the same way.
+
+export const MAGAZINE = "Cassette & Disk Monthly";
+const MODEL = "Crush, Crumble and Chomp!";
+
+const NUMBERS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+const TIMES = ["never", "once", "twice"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const WRITERS = ["Hollis Varne", "Edith Marrable", "Owen Tasker", "R. J. Quillon", "Margery Stoat", "Ned Pellow"];
+
+const STRUCTURE_WORDS = {
+  low: ["low building", "low buildings"],
+  mid: ["office block", "office blocks"],
+  tower: ["tower", "towers"],
+  pylon: ["pylon", "pylons"],
+  plant: ["power plant", "power plants"],
+  lab: ["research lab", "research labs"],
+  leyline: ["ring of standing stones", "rings of standing stones"],
+  bunker: ["command bunker", "command bunkers"],
+  wall: ["stretch of fortress wall", "stretches of fortress wall"],
+};
+
+// Each mission's place, said four ways: in a sentence, in a title, where the monster goes on
+// leaving, and what the dek says it does there.
+const SETTINGS = {
+  fortress: { place: "the Kessel range", title: "Kessel", away: "back down the valley", does: "climbs the Kessel valley" },
+  swathe: { place: "Port Halloran", title: "Port Halloran", away: "back into the harbour", does: "comes ashore at Port Halloran" },
+  coast: { place: "Gull Point", title: "Gull Point", away: "back into the sea", does: "comes ashore at Gull Point" },
+  rampage: { place: "Port Halloran", title: "Port Halloran", away: "back into the harbour", does: "takes Port Halloran apart", idle: "comes ashore at Port Halloran" },
+};
+const SOMEWHERE = { place: "the map", title: "Town", away: "off the map", does: "goes to work" };
+
+const TITLES = {
+  cuts: ["A Thousand Cuts", "{Name} Against the Army", "The Army Always Wins"],
+  sudden: ["Lights Out for {Name}", "Mind the Power Plant", "{Name} and the Grid"],
+  lingering: ["The Slow Ray", "{Name} and the Mad Scientist", "A Lingering End"],
+  withdrawn: ["{Name} Goes Home", "Hit and Run in {Place}", "{Name} Walks Away"],
+  goal: ["{Name} Gets Its Way", "One Monster, One Job", "{Name} Takes {Place}"],
+  time: ["Not Quite Enough", "The Clock Wins", "{Name} Runs Out of Night"],
+  unfinished: ["{Name}, So Far"],
+};
+
+const RATINGS = {
+  1: "The army will hardly need to file a report.",
+  2: "The city will mend sooner than it fears.",
+  3: "A solid night's work for a monster.",
+  4: "A fine night's work. Show it to your friends.",
+  5: "A rampage the papers will run for a week.",
+};
+
+const GRADE_STARS = { "total victory": 5, victory: 4, draw: 3 };
+
+const numberWord = (n) => (n >= 0 && n < NUMBERS.length ? NUMBERS[n] : thousands(n));
+const thousands = (n) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const timesWord = (n) => (n < TIMES.length ? TIMES[n] : `${numberWord(n)} times`);
+const pluralOf = (noun) => (/[^aeiou]y$/.test(noun) ? `${noun.slice(0, -1)}ies` : `${noun}s`);
+const words = (n, [one, many], the = false) => (n === 1 ? (the ? `the ${one}` : article(one)) : `${numberWord(n)} ${many}`);
+// The one-of-a-kind structures a mission is built around take "the".
+const unique = (type) => !!STRUCTURES[type] && STRUCTURES[type].objective;
+
+function count(n, noun) {
+  return `${numberWord(n)} ${n === 1 ? noun : pluralOf(noun)}`;
+}
+
+function listing(items) {
+  if (items.length <= 1) return items[0] || "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+const structureWords = (type) => STRUCTURE_WORDS[type] || [structureNoun(type), pluralOf(structureNoun(type))];
+const unitWords = (type) => [unitNoun(type), pluralOf(unitNoun(type))];
+const attackWord = (name) => lower(name).replace(/^the /, "");
+const tally = (map, key, n = 1) => map.set(key, (map.get(key) || 0) + n);
+// A table entry for a key read off the state, never an inherited name like "constructor".
+const own = (table, key, fallback) => (Object.hasOwn(table, key) ? table[key] : fallback);
+
+// Everything the column needs to know, read off the events in order.
+function gather(events) {
+  const f = {
+    structures: new Map(), units: new Map(), crushed: 0, eaten: 0, best: null, uses: new Map(),
+    harm: new Map(), harmers: new Map(), harmTotal: 0, rays: 0, broke: 0, berserk: 0, blast: null, radio: null, last: null, dealt: 0, reinforced: 0,
+  };
+  for (const e of events) {
+    if (e.k !== "refuse" && e.text) f.last = e;
+    if (e.k === "destroyed" && e.points > 0) tally(e.what === "structure" ? f.structures : f.units, e.type);
+    else if (e.k === "crush" && e.actor === "kaiju") f.crushed += 1;
+    else if (e.k === "eat" && e.actor === "kaiju") f.eaten += 1;
+    else if (e.k === "move" && e.teleport && e.actor === "kaiju") {
+      // A teleport attack raises a move, not an attack, but it is still a use.
+      const a = own(KAIJU, e.who, null)?.attacks.find((x) => x.id === e.attack);
+      if (a) tally(f.uses, a.name);
+    }
+    else if (e.k === "attack" && e.attacker.side === "kaiju") {
+      // An area attack raises one event per victim; only the first of them is a use.
+      if (e.first) tally(f.uses, e.attack.name);
+      if (e.hit && e.damage > 0) {
+        f.dealt += e.damage;
+        if (!f.best || e.damage > f.best.damage) f.best = e;
+      }
+    } else if (e.k === "attack" && e.defender.side === "kaiju" && e.hit && e.damage > 0) {
+      const who = e.attacker.side === "unit" ? e.attacker.type : "rival";
+      tally(f.harm, who, e.damage);
+      if (!f.harmers.has(who)) f.harmers.set(who, new Set());
+      f.harmers.get(who).add(e.attacker.id);
+      f.harmTotal += e.damage;
+      if (e.attacker.type === "scientist") f.rays += 1;
+    } else if (e.k === "blast" && e.actor === "kaiju") {
+      f.blast = e;
+      f.harmTotal += e.damage || 0;
+    } else if (e.k === "hurt" && e.actor === "kaiju") f.harmTotal += e.damage;
+    else if (e.k === "panic" && e.broke) f.broke += 1;
+    else if (e.k === "berserk" && e.actor === "kaiju") f.berserk += 1;
+    else if (e.k === "radio") f.radio = e;
+    else if (e.k === "reinforce") f.reinforced += 1;
+  }
+  return f;
+}
+
+// The largest entry of a tally; ties to the first counted.
+function top(map) {
+  let out = null;
+  for (const [key, n] of map) if (!out || n > out.n) out = { key, n };
+  return out;
+}
+
+// How the game ended, as one word: a death, or an outcome, or "unfinished".
+function endingOf(state) {
+  const r = state.result;
+  if (!r) return "unfinished";
+  if (r.outcome === "fallen") return r.death || "cuts";
+  return r.outcome;
+}
+
+function starsOf(state) {
+  const r = state.result;
+  if (!r) return 3;
+  if (r.grade === "rampage") return r.stars;
+  if (Object.hasOwn(GRADE_STARS, r.grade)) return GRADE_STARS[r.grade];
+  return r.score.total > 500 ? 2 : 1;
+}
+
+function targetWord(state) {
+  return state.objective && state.objective.type ? structureWords(state.objective.type)[0] : "objective";
+}
+
+function setupParagraph(state, v) {
+  const k = state.kaiju;
+  const def = KAIJU[k.id];
+  const body = def.parts.body.name.toLowerCase();
+  const spent = k.mutations.reduce((n, m) => n + MUTATIONS[m].cost, 0);
+  const spare = BUDGET - spent;
+  let muts = `with no mutations at all, so all ${count(BUDGET, "point")} went into its ${body}`;
+  if (k.mutations.length) {
+    muts = `with ${listing(k.mutations.map((m) => lower(MUTATIONS[m].name)))}`;
+    if (spare > 0) muts += `, and ${count(spare, "point")} left over for its ${body}`;
+  }
+  const who = `${def.name}, ${def.epithet}`;
+  const out = [
+    v([
+      `Anyone who played ${MODEL} will know the shape of this: one monster, one city, and an army that grows desperate.`,
+      `The model is plainly ${MODEL}, and it shows in the best way: a monster, a city, and a great many people in its way.`,
+      `This is a monster game in the line of ${MODEL}, played a turn at a time on a map of hexes, with the log doing most of the talking.`,
+    ], 1),
+    v([`I took ${who}, ${muts}.`, `My monster was ${who}, ${muts}.`, `I chose ${who}, ${muts}.`], 2),
+  ];
+  const o = state.objective;
+  if (state.mission === "rampage") {
+    out.push("The mission was Rampage: Port Halloran, no target, no clock, and an army that keeps coming.");
+    out.push(`I played it under the ${o.name} rules. ${o.text}`);
+  } else if (state.mission === "swathe") {
+    out.push(`The mission was The Swathe: ashore at Port Halloran and across the city to the ${targetWord(state)}.`);
+  } else if (state.mission === "fortress") {
+    out.push("The mission was The Mountain Fortress: up a valley in the Kessel range to a command bunker behind a wall.");
+  } else if (state.mission === "coast" && state.rival) {
+    const r = KAIJU[state.rival.id];
+    out.push(`The mission was The Coast: Gull Point, one beach, and ${r.name}, ${r.epithet}, coming the other way.`);
+  } else if (state.goal) {
+    out.push(`The brief: ${lower(state.goal)}`);
+  }
+  const city = state.mission === "swathe" || state.mission === "rampage";
+  out.push(city ? `The city grew from seed ${state.seed}, for anyone who wants the same streets.` : `The seed was ${state.seed}, for anyone who wants the same dice.`);
+  return out.join(" ");
+}
+
+function blowTarget(e) {
+  const d = e.defender;
+  if (d.side === "unit") return article(unitNoun(d.type));
+  if (d.side === "structure") return words(1, structureWords(d.type), unique(d.type));
+  return `${kaijuName(d.type)}'s ${partVars(d.type, e.part).part}`;
+}
+
+function didParagraph(state, f, v) {
+  const sCount = [...f.structures.values()].reduce((a, b) => a + b, 0);
+  const uCount = [...f.units.values()].reduce((a, b) => a + b, 0);
+  const out = [];
+  if (!sCount && !uCount) {
+    out.push(v(["It did very little. Not one building fell to it, and not one unit.", "Little came of it. The city lost nothing to speak of, and the army lost nobody."], 3));
+  }
+  if (sCount) {
+    const byCount = [...f.structures].sort((a, b) => b[1] - a[1] || STRUCTURES[b[0]].points - STRUCTURES[a[0]].points);
+    const list = listing(byCount.map(([type, n]) => words(n, structureWords(type), unique(type))));
+    const lost = `The city lost ${count(sCount, "structure")} to it: ${list}.`;
+    if (byCount.length === 1) out.push(`${cap(list)} came down.`);
+    else out.push(sCount > 12 ? lost : v([`${cap(numberWord(sCount))} structures came down: ${list}.`, lost], 4));
+    const tallest = byCount.map(([type]) => type).filter((t) => STRUCTURES[t].populated).sort((a, b) => STRUCTURES[b].height - STRUCTURES[a].height)[0];
+    if (sCount > 1 && tallest && STRUCTURES[tallest].height >= 2) {
+      const h = STRUCTURES[tallest].height;
+      out.push(v([`The tallest was ${article(structureWords(tallest)[0])}, ${count(h, "storey")} of it.`, `The biggest thing it felled was ${article(structureWords(tallest)[0])}.`], 5));
+    }
+  }
+  if (uCount) {
+    const list = listing([...f.units].sort((a, b) => b[1] - a[1] || UNITS[b[0]].points - UNITS[a[0]].points).map(([type, n]) => words(n, unitWords(type))));
+    out.push(f.units.size === 1 ? `The army lost ${list} to it.` : v([`It destroyed ${count(uCount, "unit")}: ${list}.`, `The army lost ${list}.`], 6));
+  }
+  const o = state.objective;
+  if (o && o.kind === "none") {
+    const none = (w) => w.all === 0 && Object.values(w).every((x) => !x);
+    const rules = `the ${o.name} rules`;
+    if (none(o.weights.structures) && none(o.weights.units) && (sCount || uCount)) out.push(`None of it counted under ${rules}, which pay only for time.`);
+    else if (none(o.weights.structures) && sCount) out.push(`Under ${rules} the buildings counted for nothing.`);
+    else if (none(o.weights.units) && uCount) out.push(`Under ${rules} the army counted for nothing.`);
+  }
+  if (f.crushed && f.eaten) {
+    out.push(v([`Of its kills, ${numberWord(f.crushed)} went under its feet and ${numberWord(f.eaten)} into its mouth.`, `It walked over ${numberWord(f.crushed)} of its kills and ate ${numberWord(f.eaten)}.`], 7));
+  } else if (f.crushed) {
+    out.push(v([`Of its kills, ${numberWord(f.crushed)} went under its feet.`, `It walked over ${numberWord(f.crushed)} of its kills without breaking stride.`], 7));
+  } else if (f.eaten) {
+    out.push(`Of its kills, ${numberWord(f.eaten)} went into its mouth.`);
+  }
+  if (f.best) {
+    const a = attackWord(f.best.attack.name);
+    const t = blowTarget(f.best);
+    out.push(v([
+      `Its best blow was ${article(a)} on ${t}, for ${numberWord(f.best.damage)} damage, on turn ${f.best.turn}.`,
+      `The hardest it hit anything was ${numberWord(f.best.damage)}, ${article(a)} on ${t} on turn ${f.best.turn}.`,
+    ], 8));
+  }
+  const most = top(f.uses);
+  if (most && most.n >= 2) {
+    const a = attackWord(most.key);
+    out.push(v([`It used its ${a} ${timesWord(most.n)}, more than anything else.`, `Its ${a} did most of the work, used ${timesWord(most.n)}.`], 9));
+  }
+  if (f.broke === 1) out.push("One unit broke and ran.");
+  else if (f.broke) out.push(v([`Units broke and ran ${timesWord(f.broke)}.`, `The army lost its nerve ${timesWord(f.broke)}.`], 10));
+  if (f.berserk) out.push(`${cap(timesWord(f.berserk))} hunger took the controls, and it went looking for food.`);
+  return out.join(" ");
+}
+
+function stoppedParagraph(state, f, v) {
+  const t = state.turn;
+  const where = own(SETTINGS, state.mission, SOMEWHERE);
+  const rival = state.rival ? kaijuName(state.rival.id) : "the rival";
+  const out = [];
+  const ending = endingOf(state);
+  if (ending === "cuts") {
+    out.push(v([
+      "It died the death of a thousand cuts. No one shot did it; all of them did.",
+      "In the end it was a thousand cuts, as it was always going to be.",
+      "The army got it in the end, by a thousand cuts.",
+    ], 11));
+  } else if (ending === "sudden") {
+    const what = f.blast ? structureWords(f.blast.type)[0] : "power plant";
+    out.push(v([
+      `It died the sudden death: ${article(what)} went up under it on turn ${f.blast ? f.blast.turn : t}.`,
+      `It died the sudden death. It got too close to ${article(what)}, and the ${what} went up.`,
+    ], 11));
+  } else if (ending === "lingering") {
+    out.push(v([
+      `It died the lingering death. The mad scientist's ray found it ${timesWord(f.rays)}, and the paralysis did the rest.`,
+      "It died the lingering death. A touch of the mad scientist's ray, and turn by turn it slowed until it stopped.",
+    ], 11));
+  } else if (ending === "withdrawn") {
+    out.push(v([
+      `On turn ${t} it walked ${where.away}, alive, which in this game is a kind of wisdom.`,
+      `It left on turn ${t}, ${where.away}, before the army could finish the job.`,
+    ], 11));
+  } else if (ending === "goal") {
+    if (state.objective.kind === "rival") {
+      out.push(state.rival && state.rival.withdrawn ? `${rival} gave up the beach on turn ${t}, and that was the mission.` : `${rival} went down on turn ${t}, and that was the mission.`);
+    } else {
+      out.push(`The ${targetWord(state)} fell on turn ${t}, and that was the mission.`);
+    }
+    out.push(state.result.grade === "total victory" ? "It finished in good shape." : "It did not finish in good shape.");
+  } else if (ending === "time") {
+    const standing = state.objective.kind === "rival" ? `${rival} still on its feet` : `the ${targetWord(state)} still standing`;
+    out.push(`The clock ran out on turn ${t} with ${standing}.`);
+  } else {
+    out.push(`I stopped on turn ${t} with the monster still on its feet.`);
+  }
+  const worst = top(f.harm);
+  if (worst) {
+    const many = f.harmers.get(worst.key).size > 1;
+    const who = worst.key === "rival" ? rival : many ? `the ${unitWords(worst.key)[1]}` : `a single ${unitWords(worst.key)[0]}`;
+    out.push(v([
+      `${cap(who)} hurt it most: ${numberWord(worst.n)} of the ${numberWord(f.harmTotal)} points of damage it took.`,
+      `Of the ${numberWord(f.harmTotal)} points of damage it took, ${who} dealt ${numberWord(worst.n)}.`,
+    ], 12));
+  } else if (!f.harmTotal) {
+    out.push("Nothing the army fired at it did any harm.");
+  }
+  if (f.reinforced > 3) out.push(v([`The army fed in ${numberWord(f.reinforced)} more units as the night went on.`, `Reinforcements kept coming: ${count(f.reinforced, "unit")} in all.`], 15));
+  else if (f.reinforced) out.push(`The army sent ${numberWord(f.reinforced)} more ${f.reinforced === 1 ? "unit" : "units"}.`);
+  if (state.mission === "rampage" || ending === "cuts" || ending === "sudden" || ending === "lingering" || ending === "withdrawn") {
+    const lasted = state.turnLimit ? `It lasted ${numberWord(t)} of the ${numberWord(state.turnLimit)} turns.` : `It lasted ${count(t, "turn")}.`;
+    let verdict = "";
+    if (!state.turnLimit) verdict = t < 8 ? " A short night." : t < 16 ? " A fair stretch." : ` A long night for ${where.place}.`;
+    out.push(lasted + verdict);
+  }
+  return out.join(" ");
+}
+
+function verdictParagraph(state, f, quote, ratingText, v) {
+  const out = [];
+  if (quote && f.best) {
+    out.push(v([
+      `The log keeps a dry newsreel voice throughout, and it had the line of the night: "${quote}"`,
+      `The game's own log put it best: "${quote}"`,
+      `I will let the log have the last word on that blow: "${quote}"`,
+    ], 13));
+  } else if (quote && f.radio) {
+    out.push(v([`The last word on the radio was the army's: "${quote}"`, `The radio had the last word: "${quote}"`], 13));
+  } else if (quote) {
+    out.push(`The log closed on this: "${quote}"`);
+  }
+  const r = state.result;
+  if (r && r.grade === "rampage") out.push(`Under the ${state.objective.name} rules that came to ${thousands(r.score.total)} points.`);
+  else if (r) out.push(`It scored ${thousands(r.score.total)}, ${article(r.grade)}.`);
+  out.push(`Rating: ${ratingText}`);
+  return out.join(" ");
+}
+
+// The review of a finished game: a pure function of the final state and every event, in order.
+export function review(state, events = []) {
+  const f = gather(events);
+  const k = state.kaiju;
+  const name = kaijuName(k.id);
+  const where = own(SETTINGS, state.mission, SOMEWHERE);
+  const ending = endingOf(state);
+  const n = smallHash(`${state.seed}:${state.turn}:${events.length}:${f.dealt}:${f.crushed}:${f.eaten}:${f.harmTotal}`);
+  const v = (lines, salt) => lines[(n + salt * 7) % lines.length];
+
+  const stars = starsOf(state);
+  const ratingText = `${"★".repeat(stars)}${"☆".repeat(5 - stars)} ${RATINGS[stars]}`;
+  const quote = f.best ? f.best.text : f.radio ? f.radio.text : f.last ? f.last.text : "";
+  const title = fill(v(own(TITLES, ending, TITLES.unfinished), 0), { Name: name, Place: where.title });
+
+  const ends = {
+    cuts: `falls to a thousand cuts on turn ${state.turn}`,
+    sudden: `dies the sudden death on turn ${state.turn}`,
+    lingering: `dies the lingering death on turn ${state.turn}`,
+    withdrawn: `walks away on turn ${state.turn}`,
+    goal: `gets what it came for on turn ${state.turn}`,
+    time: `runs out of time on turn ${state.turn}`,
+    unfinished: `is still going on turn ${state.turn}`,
+  };
+  const idle = !f.structures.size && where.idle;
+  const does = state.mission === "coast" && state.rival ? `meets ${kaijuName(state.rival.id)} at Gull Point` : idle || where.does;
+  const rules = state.objective && state.objective.kind === "none" ? ` under the ${state.objective.name} rules` : "";
+  const dek = `${name}, ${KAIJU[k.id].epithet}, ${does}${rules}, and ${own(ends, ending, ends.unfinished)}.`;
+  const byline = `By ${v(WRITERS, 14)}`;
+  const issue = `Issue ${20 + (state.seed % 40)}, ${MONTHS[(state.seed + state.turn) % 12]} ${1981 + (state.seed % 2)}`;
+
+  const paragraphs = [
+    setupParagraph(state, v),
+    didParagraph(state, f, v),
+    stoppedParagraph(state, f, v),
+    verdictParagraph(state, f, quote, ratingText, v),
+  ];
+  const text = [`${MAGAZINE.toUpperCase()}. ${issue}.`, "", title, dek, byline, "", paragraphs.join("\n\n")].join("\n");
+  return { magazine: MAGAZINE, issue, title, dek, byline, paragraphs, quote, stars, ratingText, text };
 }

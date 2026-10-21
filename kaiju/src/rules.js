@@ -136,6 +136,7 @@ function makeKaiju(id, actor, start, mutations = []) {
     roarPressure: RULES.roarPressure,
     hungerEvery: 1,
     lingering: 0,
+    lastHurt: null,
     used: { roar: false, finish: false },
     berserk: false,
     withdrawn: false,
@@ -160,7 +161,8 @@ function makeKaiju(id, actor, start, mutations = []) {
   return k;
 }
 
-function computeAp(k) {
+// AP before the floor of 1. Lingering may push it below.
+function rawAp(k) {
   const def = KAIJU[k.id];
   let ap = def.ap;
   for (const m of k.mutations) ap += MUTATIONS[m].apply.ap || 0;
@@ -169,10 +171,32 @@ function computeAp(k) {
   if (k.hunger !== null && k.hunger >= RULES.hungryAt * k.hungerMax) ap -= RULES.hungryAp;
   ap -= k.lingering;
   if (def.energy.rule === "battery" && k.energy <= 0) ap -= RULES.batteryEmptyAp;
-  return Math.max(1, ap);
+  return ap;
 }
 
-// setup: {kaiju, mutations, mission, target, rival, seed}. mission is resolved: map filled.
+function computeAp(k) {
+  return Math.max(1, rawAp(k));
+}
+
+// A rampage's objective by name: its weights and its star thresholds, from the mission's table.
+function rampageObjective(mission, name) {
+  const table = mission.objectives || {};
+  if (typeof name !== "string" || !Object.hasOwn(table, name)) throw new Error(`Mission ${mission.id} needs an objective`);
+  const o = table[name];
+  return {
+    kind: "none",
+    at: null,
+    type: null,
+    id: o.id,
+    name: o.name,
+    text: o.text,
+    weights: { structures: { ...o.structures }, units: { ...o.units }, perTurn: o.perTurn },
+    stars: [...o.stars],
+  };
+}
+
+// setup: {kaiju, mutations, mission, target, rival, seed, objective}. mission is resolved: map
+// filled. objective names one of a rampage's objectives (mission.objectives).
 export function create(setup) {
   const mission = setup.mission;
   if (!mission || !mission.map || !mission.map.terrain) throw new Error("create needs a resolved mission with a map");
@@ -191,6 +215,7 @@ export function create(setup) {
     const st = map.hexes[key].structure;
     objective = { kind: "destroy", at: key, type: st ? st.type : null };
   }
+  if (mission.objective.kind === "none") objective = rampageObjective(mission, setup.objective);
   const s = {
     v: 1,
     seed,
@@ -211,6 +236,8 @@ export function create(setup) {
     nextUnit: 1,
     pending: (mission.reinforcements || []).map((r) => ({ turn: r.turn, type: r.type, at: toKey(r.at) })),
     tally: { structures: 0, units: 0, destroyed: { structures: [], units: [] } },
+    waves: mission.waves ? structuredClone(mission.waves) : null,
+    lingeringGrows: !!mission.lingeringGrows,
     result: null,
   };
   if (mission.objective.kind === "rival" || mission.rivalStart) {
@@ -291,9 +318,23 @@ function phaseStart(s, actor, ev) {
   }
   if (k.passives.includes("regen")) heal(s, actor, ev);
   if (k.passives.includes("stoneBody") && terrain.water) heal(s, actor, ev);
+  if (s.lingeringGrows && k.lingering >= 1) lingeringGrows(s, actor, ev);
   k.apMax = computeAp(k);
   k.ap = k.apMax;
   k.used.roar = false;
+}
+
+// The lingering death: the paralysis deepens each phase start, and what AP cannot pay for
+// falls on the body.
+function lingeringGrows(s, actor, ev) {
+  const k = s[actor];
+  k.lingering += 1;
+  ev("lingering", { actor, who: k.id, lingering: k.lingering });
+  const excess = Math.min(k.lingering, 1 - rawAp(k));
+  if (excess <= 0) return;
+  const res = damageKaiju(s, actor, "body", excess, ev, "lingering");
+  ev("hurt", { actor, who: k.id, why: "lingering", damage: excess, part: "body", before: res.before, after: res.after });
+  res.report();
 }
 
 // ---------- paths ----------
@@ -566,8 +607,10 @@ function hitLocation(s, k) {
 }
 
 // Damage to a kaiju part. Beyond the part's hp, or on a crippled part, it goes to the body.
-function damageKaiju(s, actor, part, dmg, ev) {
+// why: "attack", "blast" or "lingering", kept as lastHurt to name the death.
+function damageKaiju(s, actor, part, dmg, ev, why = "attack") {
   const k = s[actor];
+  k.lastHurt = why;
   let hitPart = part;
   if (part !== "body" && k.parts[part].hp <= 0) hitPart = "body";
   const p = k.parts[hitPart];
@@ -630,7 +673,7 @@ function blast(s, actor, key, type, ev) {
   }
   const [lo, hi] = STRUCTURES[type].blast;
   const dmg = randint(s, lo, hi);
-  const res = damageKaiju(s, actor, hitLocation(s, k), dmg, ev);
+  const res = damageKaiju(s, actor, hitLocation(s, k), dmg, ev, "blast");
   ev("blast", { actor, who: k.id, at: key, type, damage: dmg, part: res.part, before: res.before, after: res.after, spill: res.spill });
   res.report();
 }
@@ -813,6 +856,17 @@ function strikeKaiju(s, actor, a, targetActor, ev) {
   res.report();
 }
 
+// An area attack strikes each victim with its own attack event; the first of them is marked
+// "first", so one use of an attack can be told from the many victims it reached.
+function marksUse(ev) {
+  let first = true;
+  return (k, data) => {
+    if (k !== "attack" || !first) return ev(k, data);
+    first = false;
+    return ev(k, { ...data, first: true });
+  };
+}
+
 function doAttack(s, actor, cmd, ev) {
   const k = s[actor];
   const a = attackOf(s, actor, cmd.attack);
@@ -821,6 +875,7 @@ function doAttack(s, actor, cmd, ev) {
   if (blocked) return blocked;
   if (!attackTargets(s, a.id, actor).includes(cmd.target)) return "No target there.";
   const hexes = affected(s, a.id, cmd.target, actor);
+  ev = marksUse(ev);
   k.ap -= a.ap;
   k.energy -= a.energy;
   if (a.effects.oncePerMission) k.used[a.id] = true;
@@ -870,6 +925,7 @@ function doStomp(s, actor, cmd, ev) {
   if (k.ap < RULES.stompAp) return "Not enough AP.";
   if (!adjacent(s, actor, cmd.target) || !stompTargets(s, actor).includes(cmd.target)) return "Nothing to stomp there.";
   k.ap -= RULES.stompAp;
+  ev = marksUse(ev);
   const u = unitAt(s, cmd.target);
   if (u && !UNITS[u.type].air) strikeUnit(s, actor, STOMP, u, ev);
   if (s.map.hexes[cmd.target].structure) strikeStructure(s, actor, STOMP, cmd.target, ev);
@@ -1043,6 +1099,45 @@ function nearestFree(s, type, key) {
   return null;
 }
 
+// The size of turn t's wave, and the unit types it may bring.
+export function waveSize(waves, t) {
+  return Math.min(waves.size.max, waves.size.base + Math.floor((t - 1) / waves.size.growEvery));
+}
+
+function waveTypes(waves, t) {
+  return waves.mix.filter((m) => m.from <= t).flatMap((m) => m.types);
+}
+
+function edgeHex(s, edge) {
+  const { cols, rows } = s.map;
+  if (edge === "north") return H.offsetToKey(randint(s, 0, cols - 1), 0);
+  return H.offsetToKey(edge === "east" ? cols - 1 : 0, randint(s, 0, rows - 1));
+}
+
+// A rampage's wave: units of the unlocked types, each on a rolled edge, while fewer than the cap stand.
+function rollWave(s, ev) {
+  const w = s.waves;
+  const kinds = waveTypes(w, s.turn);
+  const types = [];
+  for (let i = 0; i < waveSize(w, s.turn); i++) types.push(kinds[randint(s, 0, kinds.length - 1)]);
+  // The mad scientist comes first, so a nearly full field still lets the scientist in.
+  if (w.scientist && s.turn >= w.scientist.from && (s.turn - w.scientist.from) % w.scientist.every === 0) types.unshift("scientist");
+  let first = null;
+  const edges = new Set();
+  for (const type of types) {
+    if (s.units.length >= w.cap) break;
+    const edge = w.edges[randint(s, 0, w.edges.length - 1)];
+    const at = nearestFree(s, type, edgeHex(s, edge));
+    if (!at) continue;
+    const u = addUnit(s, type, at);
+    ev("reinforce", { unit: u.id, type, at, edge });
+    first = first || { type, edge, at };
+    edges.add(edge);
+  }
+  // The call names an edge only when the whole wave came from it.
+  if (first) ev("radio", { callsign: "CONTROL", about: "wave", edge: edges.size === 1 ? first.edge : null, at: first.at });
+}
+
 function defensePhase(s, ev) {
   ev("phase", { phase: "defense" });
   const due = s.pending.filter((p) => p.turn <= s.turn);
@@ -1054,6 +1149,7 @@ function defensePhase(s, ev) {
     ev("reinforce", { unit: u.id, type: u.type, at });
     ev("radio", { callsign: UNITS[u.type].radio, about: "arrive", at });
   }
+  if (s.waves && s.units.length < s.waves.cap) rollWave(s, ev);
   if (alive(s.rival)) {
     phaseStart(s, "rival", ev);
     if (s.rival.berserk) playBerserk(s, "rival", ev);
@@ -1084,12 +1180,13 @@ function endTurn(s, ev) {
     defensePhase(s, ev);
     if (s.result) return;
     for (const u of s.units) if (u.panicked > 0) u.panicked -= 1;
-    if (s.turn >= s.turnLimit) {
+    if (s.turnLimit !== null && s.turn >= s.turnLimit) {
       finish(s, "time", ev);
       return;
     }
     s.turn += 1;
     phaseStart(s, "kaiju", ev);
+    if (checkEnd(s, ev)) return;
     if (!s.kaiju.berserk) return;
     playBerserk(s, "kaiju", ev);
     if (s.result) return;
@@ -1114,8 +1211,54 @@ function checkEnd(s, ev) {
   return !!s.result;
 }
 
+const DEATHS = { blast: "sudden", lingering: "lingering", attack: "cuts" };
+
+// How the kaiju died, from the last blow that reached it; null when it did not fall.
+function deathOf(s, outcome) {
+  if (outcome !== "fallen") return null;
+  return DEATHS[s.kaiju.lastHurt] || "cuts";
+}
+
+// What a structure or unit type is worth under a rampage objective's weights.
+export function structureWeight(weights, type) {
+  const w = weights.structures;
+  const st = STRUCTURES[type];
+  let n = st.populated && w.populated !== undefined ? w.populated : w.all;
+  if (w.perHeight) n *= st.height;
+  return n;
+}
+
+export function unitWeight(weights, type) {
+  return Object.hasOwn(weights.units, type) ? weights.units[type] : weights.units.all;
+}
+
+// A tally weighed by an objective: {structures, units, survival, total}.
+export function rampageScore(weights, destroyed, turns) {
+  const structures = Math.round(destroyed.structures.reduce((n, d) => n + STRUCTURES[d.type].points * structureWeight(weights, d.type), 0));
+  const units = Math.round(destroyed.units.reduce((n, d) => n + UNITS[d.type].points * unitWeight(weights, d.type), 0));
+  const survival = weights.perTurn * turns;
+  return { structures, units, survival, total: structures + units + survival };
+}
+
+export function starsFor(thresholds, total) {
+  return 1 + thresholds.filter((t) => total >= t).length;
+}
+
+function finishRampage(s, outcome, ev) {
+  const o = s.objective;
+  const score = rampageScore(o.weights, s.tally.destroyed, s.turn);
+  s.result = { grade: "rampage", outcome, score, objective: o.id, stars: starsFor(o.stars, score.total), death: deathOf(s, outcome), headline: "" };
+  s.result.headline = headline(s.result, s);
+  s.phase = "over";
+  ev("over", { result: s.result, objective: o.name });
+}
+
 function finish(s, outcome, ev) {
   if (s.result) return;
+  if (s.objective.kind === "none") {
+    finishRampage(s, outcome, ev);
+    return;
+  }
   const k = s.kaiju;
   const met = outcome === "goal";
   const partsLeft = PART_SLOTS.filter((p) => k.parts[p].hp > 0).length;
@@ -1130,7 +1273,7 @@ function finish(s, outcome, ev) {
   let grade = "draw";
   if (met) grade = k.parts.body.hp > k.parts.body.max / 2 ? "total victory" : "victory";
   if (outcome === "fallen") grade = "defeat";
-  s.result = { grade, outcome, score, headline: "" };
+  s.result = { grade, outcome, score, death: deathOf(s, outcome), headline: "" };
   s.result.headline = headline(s.result, s);
   s.phase = "over";
   ev("over", { result: s.result });
@@ -1165,9 +1308,19 @@ function trackedEmitter(s, events) {
 }
 
 export function replay(setup, commands) {
-  let s = create(setup);
-  for (const cmd of commands) s = step(s, cmd).state;
-  return s;
+  return replayEvents(setup, commands).state;
+}
+
+// As replay, with every event the commands raised, in order (refusals included).
+export function replayEvents(setup, commands) {
+  let state = create(setup);
+  const events = [];
+  for (const cmd of commands) {
+    const out = step(state, cmd);
+    state = out.state;
+    for (const e of out.events) events.push(e);
+  }
+  return { state, events };
 }
 
 // ---------- queries ----------

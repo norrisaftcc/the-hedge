@@ -54,8 +54,8 @@ function objectiveHex(m) {
   return m.objective.kind === "rival" ? m.rivalStart.at : m.objective.at;
 }
 
-test("three missions with words to brief them by", () => {
-  assert.deepEqual(Object.keys(MISSIONS).sort(), [...IDS].sort());
+test("three missions with words to brief them by, and the rampage", () => {
+  assert.deepEqual(Object.keys(MISSIONS).sort(), [...IDS, "rampage"].sort());
   for (const id of IDS) {
     const m = MISSIONS[id];
     assert.equal(m.id, id);
