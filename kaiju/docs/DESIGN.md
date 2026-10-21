@@ -531,3 +531,97 @@ The page itself is checked in a browser (Playwright, at 375 × 812 and 1280 × 8
 - **Through the hedge's hub**: `rules.step` is the same shape as `Game.act`: command in, events out. A Python port of the rules (or a Node sidecar) could put kaiju behind telnet and WebSocket for hot-seat or network play, with the hedge's transports unchanged.
 - **Hex topology for the hedge**: `hex.js` is the "Hex" row in `docs/TOPOLOGIES.md`, half done.
 - **Native**: Godot, if the art outgrows SVG.
+
+## 14. Rampage and the review [MIS-8, MIS-9]
+
+The game the 1981 review described, and the review the game writes back. Everything here keeps the rules in section 6; Rampage only changes how a game ends, what it scores, and how the army comes.
+
+### 14.1 The mission: `rampage` in `data/missions.js`
+
+- **The city.** The Swathe's builder, the same seed rule: harbour to the south, a city grown by Sidewinder, the plant with its pylons, the lab and the stones standing as ordinary structures. The kaiju starts in the harbour.
+- **No goal.** `objective: {kind: "none"}`. `goalMet` is never true. `turns: null`: there is no turn limit and no `time` outcome.
+- **The question.** `choose: "objective"`: before play the player picks one of the five objectives (14.2). `setup.objective` carries it into `create`; `state.objective.weights` holds it.
+- **Starting forces.** Lighter than the Swathe: two artillery on the top avenue, two tanks, four Guard squads on the streets above the waterfront.
+- **The waves** [MIS-8 "endless reinforcements that grow"]. `mission.waves`, data:
+
+  ```js
+  waves: {
+    size: { base: 1, growEvery: 3, max: 4 },    // turn t brings min(max, base + floor((t - 1) / growEvery)) units
+    mix: [                                       // the types unlocked by turn t; each unit picks one
+      { from: 1, types: ["infantry", "tank"] },
+      { from: 3, types: ["helicopter", "artillery"] },
+      { from: 6, types: ["jet", "missile"] },
+    ],
+    scientist: { from: 5, every: 6 },            // one mad scientist on turns 5, 11, 17, …
+    edges: ["north", "east", "west"],
+    cap: 24,                                     // no wave while 24 units stand (NFR-2)
+  }
+  ```
+
+  In each defense phase, before the units act, the rules roll a wave with the game's dice (`state.rng`). For each unit they roll a type from the unlocked mix, then a hex on a rolled edge where that type can stand (`nearestFree`). Waves are game events (`reinforce`, `radio`), so they are part of a replay.
+
+### 14.2 The objectives: `OBJECTIVES` in `data/missions.js`
+
+The five from the original manual, as weights on what the kaiju destroyed (`tally.destroyed`, which lists each kill) and on the turns it lasted.
+
+| id | name | structures | units | per turn lasted |
+|----|------|-----------|-------|-----------------|
+| `balanced` | Balanced | points × 1 | points × 1 | 10 |
+| `killer` | Killer Monster | populated: points × 2; others × 0 | infantry: points × 3; others × 0.5 | 0 |
+| `combat` | Combat Machine | × 0 | points × 2 | 0 |
+| `destruction` | Destruction | points × height | × 0 | 0 |
+| `survival` | Survival | × 0 | × 0 | 100 |
+
+Each objective also carries `stars: [s2, s3, s4, s5]`, the totals for two to five stars (one star below `s2`). The balance bot sets them (14.6) so that a greedy bot's median game earns three stars.
+
+### 14.3 The endings, and the Three Deaths
+
+- **Outcomes.** A rampage ends `fallen` or `withdrawn`, never `goal` or `time`. `result.grade` is `"rampage"`, so there is no victory, only a score and a rating.
+- **Score.** `result.score = {structures, units, survival, total}`, weighted by the objective. A rampage has no objective, time or parts bonus. `result.objective` names the objective. `result.stars` is 1 to 5 from the thresholds.
+- **The death.** `result.death` is `"cuts"`, `"sudden"` or `"lingering"`, or `null` for a withdrawal. The kaiju keeps `lastHurt`, set by every blow that reaches it: `"blast"` (a power structure), `"lingering"` (14.4), else `"attack"`. When the body falls, `lastHurt` names the death: blast → *the sudden death*; lingering → *the lingering death*; attack → *a thousand cuts*. Other missions record `result.death` the same way when the kaiju falls; it costs nothing and the review uses it.
+
+### 14.4 The lingering death, in Rampage
+
+The original's mad scientist left "a progressive paralysis that is fatal even if you then kill the scientist". In Rampage only (`mission.lingeringGrows: true`), at each kaiju phase start:
+
+- if `lingering ≥ 1`, it rises by 1;
+- when lingering would push AP below 1, the excess falls on the body as damage, with `lastHurt = "lingering"`, and a `hurt` event (`{actor, who, why: "lingering", damage, part: "body"}`) tells it.
+
+Elsewhere lingering stays as in 4.4.
+
+### 14.5 The review: `review(state, events)` in `voice.js`
+
+A pure function of the final state and **every** event of the game, in order. It is deterministic and draws no dice, like the rest of the voice. It works for any mission, not only Rampage.
+
+```js
+export function review(state, events) // -> {magazine, issue, title, dek, byline, paragraphs: [3 or 4 strings], quote, stars, ratingText, text}
+```
+
+- **The magazine** is invented: *Cassette & Disk Monthly*. No real magazine, writer or company is named, apart from the game it imagines reviewing, *Crush, Crumble and Chomp!*, named once as the model.
+- **Paragraph 1, the setup:** the monster, its epithet and mutations, the mission (and the objective in a rampage).
+- **Paragraph 2, what it did:** structures destroyed by kind (with the tallest), units by kind, how many were crushed underfoot and how many eaten, the biggest single blow (the player's attack event with the most damage), and the attack used most.
+- **Paragraph 3, what stopped it:** the death by name, or the withdrawal, the goal or the clock. The unit type that did the kaiju most harm, and the turns it lasted.
+- **Paragraph 4, the verdict:** the quote, a line from the game's own log, verbatim, in quotation marks. It is the `text` of the player's biggest blow, or, if there was none, the last `radio` line. Then the rating.
+- **Rating:** stars as `★★★☆☆`, and a one-line verdict per star count. In the other missions, stars come from the grade: total victory 5, victory 4, draw 3, defeat with a score above 500: 2, else 1.
+- **`text`** is the whole review as plain text, ready to copy.
+- **Voice:** a 1981 games column: earnest, specific, a little dry. The house rules still hold: short sentences, concrete nouns, no exclamation marks.
+
+### 14.6 The page, the bot and the tests
+
+- **Setup.** A fourth mission card, *Rampage*. Its question is the objective: five choices, each with a one-line description.
+- **Top bar.** "Turn 7" with no limit. The goal reads "No goal but the score: Destruction", naming the objective.
+- **End screen.** The front page as now, with the death named in the deck line. Below it, *The review*: the column set as a magazine page, with **Copy as text**. The copy uses `navigator.clipboard.writeText` inside `try`/`catch`, and falls back to selecting a read-only `<textarea>`. Every mission gets the review.
+- **The event record.** The page keeps every event of the game in order, cleared on Deploy, Again or New seed. `review` reads it.
+- **`rules.replayEvents(setup, commands) -> {state, events}`.** The same as `replay`, plus every event, for tests and the bot.
+- **The bot.** `tools/sim.mjs` plays `rampage` to the end (it withdraws never; a guard ends a run at turn 60). It prints, per objective, the median total and turns lasted. Those set the `stars` thresholds.
+- **Tests** (`tests/rampage.test.mjs`, `tests/review.test.mjs`):
+  - Rampage resolves for seeds 1–20.
+  - It never ends on time.
+  - Waves grow and stop at the cap.
+  - Each objective weighs a hand-made tally as the table says.
+  - Each of the Three Deaths is reachable and named.
+  - Lingering grows in Rampage and not elsewhere.
+  - The review is deterministic for a replay, has three or four paragraphs and no exclamation marks, and quotes a line that is in the events.
+  - The `text` holds every paragraph.
+  - A rampage replay pins its score and death.
+  - NFR-1's weight test still passes.
