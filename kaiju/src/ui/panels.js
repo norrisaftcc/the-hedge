@@ -35,6 +35,7 @@ export function partStates(k) {
 
 export function goalShort(state) {
   const o = state.objective;
+  if (o.kind === "none") return `No goal but the score: ${o.name}`;
   if (o.kind === "rival" && state.rival) return `Defeat ${KAIJU[state.rival.id].name}`;
   if (o.type && STRUCTURES[o.type]) return `Destroy the ${STRUCTURES[o.type].name.toLowerCase()}`;
   return state.goal;
@@ -45,9 +46,13 @@ export const ICON_THEME = `<svg viewBox="0 0 24 24" aria-hidden="true" width="20
 
 export function topBar(state, { phase, themeName }) {
   const k = state.kaiju;
-  const turn = `<span class="tb-item"><span class="tb-long">Turn </span><span class="tb-short">T</span><b>${state.turn}</b>/${state.turnLimit}</span>`;
+  const turn = `<span class="tb-item"><span class="tb-long">Turn </span><span class="tb-short">T</span><b>${state.turn}</b>${state.turnLimit ? `/${state.turnLimit}` : ""}</span>`;
   const ap = `<span class="tb-item">AP <b>${k.ap}</b>/${k.apMax}</span>`;
-  const goal = `<span class="tb-goal" title="${esc(state.goal)}">${esc(goalShort(state))}</span>`;
+  const goalText = state.objective.kind === "none" ? `${state.goal} ${state.objective.name}: ${state.objective.text}` : state.goal;
+  const goalHtml = state.objective.kind === "none"
+    ? `<span class="tb-long">No goal but the score: </span><span class="tb-short">Score: </span>${esc(state.objective.name)}`
+    : esc(goalShort(state));
+  const goal = `<span class="tb-goal" title="${esc(goalText)}">${goalHtml}</span>`;
   const ph = phase ? `<span class="tb-phase">${esc(phase)}</span>` : "";
   const states = partStates(k);
   const figs = `<span class="tb-figs" aria-hidden="true">${portrait(k.id, { parts: states })}${silhouette(k.id, { parts: states })}</span>`;

@@ -4,8 +4,8 @@
 
 import * as R from "../rules.js";
 import * as H from "../hex.js";
-import { say } from "../voice.js";
-import { MISSIONS, TARGETS, resolveMission } from "../data/missions.js";
+import { say, review } from "../voice.js";
+import { MISSIONS, TARGETS, OBJECTIVES, resolveMission } from "../data/missions.js";
 import { KAIJU } from "../data/kaiju.js";
 import { MUTATIONS, BUDGET } from "../data/mutations.js";
 import { UNITS } from "../data/units.js";
@@ -27,12 +27,13 @@ const MISSION_IDS = Object.keys(MISSIONS);
 const WIDE = "(min-width: 900px), (orientation: landscape) and (min-width: 640px)";
 const stacked = () => !matchMedia(WIDE).matches;
 
-const PAPERS = { fortress: "The Kessel Range Clarion", swathe: "The Port Halloran Courier", coast: "The Gull Point Gazette" };
+const PAPERS = { fortress: "The Kessel Range Clarion", swathe: "The Port Halloran Courier", coast: "The Gull Point Gazette", rampage: "The Port Halloran Courier" };
 const GRADE_LINE = {
   "total victory": "Total victory",
   victory: "Victory",
   draw: "Draw",
   defeat: "Defeat",
+  rampage: "Rampage over",
 };
 const OUTCOME_LINE = {
   goal: "The objective fell.",
@@ -40,6 +41,12 @@ const OUTCOME_LINE = {
   withdrawn: "The monster left the map.",
   fallen: "The monster fell.",
 };
+const DEATH_LINE = {
+  cuts: "It fell to a thousand cuts.",
+  sudden: "It died the sudden death.",
+  lingering: "It died the lingering death.",
+};
+const OBJECTIVE_IDS = Object.keys(OBJECTIVES);
 const ENERGY_RULE = {
   eat: "Energy from eating.",
   water: "Energy from standing in water.",
@@ -62,7 +69,7 @@ const TARGET_TEXT = {
 
 // ---------- setup ----------
 
-const pick = { kaiju: "radiosaur", mutations: [], mission: "fortress", target: "plant", rival: "", seed: randomSeed() };
+const pick = { kaiju: "radiosaur", mutations: [], mission: "fortress", target: "plant", rival: "", objective: "balanced", seed: randomSeed() };
 
 function spent(muts) {
   return muts.reduce((n, m) => n + MUTATIONS[m].cost, 0);
@@ -133,11 +140,12 @@ function opposition(mission) {
   const count = (list) => {
     const n = {};
     for (const u of list) n[u.type] = (n[u.type] || 0) + 1;
-    return Object.entries(n).map(([t, c]) => `${c} ${UNITS[t].name.toLowerCase()}${c > 1 && !/s$|guard/i.test(UNITS[t].name) ? "s" : ""}`);
+    return Object.entries(n).map(([t, c]) => `${c} ${UNITS[t].name.toLowerCase()}${c > 1 && !/s$|guard|artillery/i.test(UNITS[t].name) ? "s" : ""}`);
   };
   const now = count(mission.units).join(", ");
   const later = mission.reinforcements.map((r) => `${UNITS[r.type].name.toLowerCase()} on turn ${r.turn}`).join(", ");
-  return `${now}.${later ? ` Later: ${later}.` : ""}`;
+  const waves = mission.waves ? " Then waves from the edges, larger every third turn." : "";
+  return `${now}.${later ? ` Later: ${later}.` : ""}${waves}`;
 }
 
 function missionCard(id) {
@@ -153,7 +161,7 @@ function missionCard(id) {
     + `<div class="card-name">${esc(m.name)}</div><div class="card-sub">${esc(m.tagline)}</div>`
     + `<div class="briefing">${m.briefing.map((l) => `<p>${esc(l)}</p>`).join("")}</div>`
     + `<p class="card-goal"><b>Goal.</b> ${esc(m.goal)}</p>`
-    + `<p class="card-note"><b>${m.turns} turns.</b> Opposition: ${esc(opposition(resolved))}</p></div>`;
+    + `<p class="card-note"><b>${m.turns ? `${m.turns} turns.` : "No turn limit."}</b> Opposition: ${esc(opposition(resolved))}</p></div>`;
 }
 
 function questionHtml() {
@@ -171,6 +179,15 @@ function questionHtml() {
     return `<fieldset class="question"><legend>Which monster waits on the coast?</legend>${opt("", "Leave it to chance", "One of the other three, by the seed.")}`
       + others.map((id) => opt(id, KAIJU[id].name, KAIJU[id].epithet)).join("") + `</fieldset>`;
   }
+  if (m.choose === "objective") {
+    const rows = OBJECTIVE_IDS.map((id) => {
+      const o = OBJECTIVES[id];
+      const on = pick.objective === id;
+      return `<label class="choice${on ? " on" : ""}"><input type="radio" name="objective" value="${id}"${on ? " checked" : ""}>`
+        + `<span class="choice-name">${esc(o.name)}</span><span class="choice-text">${esc(o.text)}</span></label>`;
+    }).join("");
+    return `<fieldset class="question"><legend>What counts tonight?</legend>${rows}</fieldset>`;
+  }
   return `<p class="question-none">The fortress asks no questions. The bunker is behind the wall.</p>`;
 }
 
@@ -186,7 +203,8 @@ function renderSetup() {
   $("question").innerHTML = questionHtml();
   if (document.activeElement !== $("seed")) $("seed").value = pick.seed;
   const muts = pick.mutations.map((m) => MUTATIONS[m].name).join(", ") || "no mutations";
-  $("summary").textContent = `${KAIJU[pick.kaiju].name}, ${muts}. ${MISSIONS[pick.mission].name}. Seed ${pick.seed || "0"}.`;
+  const rules = MISSIONS[pick.mission].choose === "objective" ? `: ${OBJECTIVES[pick.objective].name}` : "";
+  $("summary").textContent = `${KAIJU[pick.kaiju].name}, ${muts}. ${MISSIONS[pick.mission].name}${rules}. Seed ${pick.seed || "0"}.`;
   if (restore) {
     const el = document.querySelector(restore);
     if (el) el.focus();
@@ -227,6 +245,7 @@ function setupEvents() {
       if (spent(pick.mutations) > BUDGET) pick.mutations = pick.mutations.filter((m) => m !== t.value);
     } else if (t.name === "target") pick.target = t.value;
     else if (t.name === "rival") pick.rival = t.value;
+    else if (t.name === "objective") pick.objective = t.value;
     else return;
     renderSetup();
   });
@@ -260,6 +279,7 @@ const game = {
   busyText: "",
   phase: "",
   undo: null,
+  events: [],
   list: [],
   keys: {},
   lastAction: "move",
@@ -283,6 +303,7 @@ function deploy(p = pick) {
     const mission = resolveMission(p.mission, { seed, target });
     setup = { kaiju: p.kaiju, mutations: [...p.mutations], mission, target, seed };
     if (m.choose === "rival" && p.rival) setup.rival = p.rival;
+    if (m.choose === "objective") setup.objective = p.objective;
     state = R.create(setup);
   } catch (err) {
     $("summary").textContent = `That will not deploy: ${err.message}`;
@@ -299,10 +320,12 @@ function deploy(p = pick) {
     busy: false,
     phase: "",
     undo: null,
+    events: [],
   });
   $("log").innerHTML = "";
   for (const line of setup.mission.briefing) addLog({ k: "caption", text: line });
   addLog({ k: "caption", text: `Goal: ${setup.mission.goal}` });
+  if (state.objective.kind === "none") addLog({ k: "caption", text: `${state.objective.name}. ${state.objective.text}` });
   if (state.rival) addLog({ k: "caption", text: `The rival is ${KAIJU[state.rival.id].name}, ${KAIJU[state.rival.id].epithet}.` });
   addLog({ k: "phase", text: say("phase", { phase: "kaiju", turn: 1 }) });
   board.reset();
@@ -419,7 +442,9 @@ function renderHint() {
     return;
   }
   if (s.result) {
-    el.innerHTML = P.hint({ text: `The mission is over. ${GRADE_LINE[s.result.grade]}.`, confirm: "Read the papers" });
+    const r = s.result;
+    const text = r.grade === "rampage" ? `The rampage is over. ${r.stars} ${r.stars === 1 ? "star" : "stars"}.` : `The mission is over. ${GRADE_LINE[r.grade]}.`;
+    el.innerHTML = P.hint({ text, confirm: "Read the papers" });
     return;
   }
   let h = { text: "" };
@@ -597,6 +622,7 @@ function undo() {
   game.state = game.undo.state;
   const log = $("log");
   while (log.children.length > game.undo.logLength) log.lastElementChild.remove();
+  game.events.length = game.undo.events;
   addLog({ k: "refuse", text: "The last move is taken back." });
   game.undo = null;
   backToMove();
@@ -606,12 +632,14 @@ async function execute(cmd) {
   if (game.busy) return;
   const before = game.state;
   const { state, events } = R.step(before, cmd);
+  const recorded = game.events.length;
+  game.events.push(...events);
   if (state === before) {
     for (const e of events) addLog(e);
     render();
     return;
   }
-  game.undo = cmd.t === "move" ? { state: before, logLength: $("log").children.length } : null;
+  game.undo = cmd.t === "move" ? { state: before, logLength: $("log").children.length, events: recorded } : null;
   game.mode = { kind: cmd.t === "face" ? "face" : "move" };
   game.preview = null;
   if (cmd.t === "face" && events.every((e) => e.k === "face")) {
@@ -685,6 +713,12 @@ function patch(v, e) {
       break;
     case "hunger":
       k.hunger = e.hunger;
+      break;
+    case "lingering":
+      k.lingering = e.lingering;
+      break;
+    case "hurt":
+      k.parts[e.part].hp = e.after.hp;
       break;
     case "heal":
       k.parts[e.part].hp = e.hp;
@@ -760,6 +794,63 @@ function addLog(e) {
 
 // ---------- end ----------
 
+function scoreRows(s, r) {
+  if (r.grade === "rampage") {
+    return [
+      ["Structures", r.score.structures],
+      ["Units", r.score.units],
+      [`Turns lasted (${s.turn})`, r.score.survival],
+    ];
+  }
+  return [
+    ["Destruction", r.score.destruction],
+    ["Units", r.score.units],
+    ["Objective", r.score.objective],
+    ["Turns left", r.score.time],
+    ["Parts intact", r.score.parts],
+  ];
+}
+
+// The review, set as a page of the magazine. Paragraph 4 opens with the quote and ends with the
+// rating; the page sets the quote as a pull-quote and the rating in its own box instead, and the
+// copied text keeps both.
+function reviewHtml(rv) {
+  const rating = ` Rating: ${rv.ratingText}`;
+  const quoted = `"${rv.quote}"`;
+  const paras = rv.paragraphs.map((p) => (p.endsWith(rating) ? p.slice(0, -rating.length) : p));
+  const last = paras.length - 1;
+  const cut = rv.quote ? paras[last].indexOf(quoted) : -1;
+  if (cut >= 0) paras[last] = paras[last].slice(cut + quoted.length).trim();
+  const verdict = rv.ratingText.replace(/^[★☆]+\s*/, "");
+  const body = paras.filter(Boolean).map((p, i) => `<p${i === 0 ? ' class="rv-first"' : ""}>${esc(p)}</p>`);
+  const quote = rv.quote ? `<blockquote class="rv-quote"><p>${esc(rv.quote)}</p></blockquote>` : "";
+  body.splice(Math.min(2, body.length), 0, quote);
+  return `<section class="review-wrap" aria-labelledby="t-review"><h2 class="review-label" id="t-review">The review</h2>`
+    + `<article class="review">`
+    + `<header class="rv-mast"><div class="rv-name">${esc(rv.magazine)}</div><div class="rv-issue"><span>${esc(rv.issue)}</span><span>Software reviews</span></div></header>`
+    + `<h3 class="rv-title">${esc(rv.title)}</h3><p class="rv-dek">${esc(rv.dek)}</p><p class="rv-byline">${esc(rv.byline)}</p>`
+    + `<div class="rv-body">${body.join("")}</div>`
+    + `<div class="rv-rating"><span class="rv-stars" role="img" aria-label="${rv.stars} of 5 stars">${"★".repeat(rv.stars)}<span class="rv-off">${"☆".repeat(5 - rv.stars)}</span></span>`
+    + `<span class="rv-verdict">${esc(verdict)}</span></div></article>`
+    + `<div class="rv-copy"><button type="button" class="btn" id="copy-review">Copy as text</button><span class="rv-copied" id="copy-note" aria-live="polite"></span></div>`
+    + `<textarea class="rv-text" id="review-text" readonly rows="10" aria-label="The review as text" hidden>${esc(rv.text)}</textarea></section>`;
+}
+
+async function copyReview() {
+  const note = $("copy-note");
+  const area = $("review-text");
+  try {
+    await navigator.clipboard.writeText(area.value);
+    note.textContent = "Copied";
+  } catch (err) {
+    area.hidden = false;
+    area.scrollIntoView({ block: "nearest" });
+    area.focus({ preventScroll: true });
+    area.select();
+    note.textContent = "Copy is blocked here. The text is selected below: press Ctrl+C, or long-press and choose Copy.";
+  }
+}
+
 function showEnd() {
   const s = game.state;
   const r = s.result;
@@ -768,37 +859,45 @@ function showEnd() {
   const def = KAIJU[k.id];
   const states = P.partStates(k);
   const mission = MISSIONS[s.mission];
+  const rampage = r.grade === "rampage";
   const lines = [...$("log").children].filter((li) => !["phase", "caption", "refuse"].includes(li.className)).slice(-7).map((li) => `<p class="${li.className}">${esc(li.textContent)}</p>`).join("");
-  const rows = [
-    ["Destruction", r.score.destruction],
-    ["Units", r.score.units],
-    ["Objective", r.score.objective],
-    ["Turns left", r.score.time],
-    ["Parts intact", r.score.parts],
-  ].map(([n, v]) => `<tr><th scope="row">${n}</th><td>${v}</td></tr>`).join("");
+  const rows = scoreRows(s, r).map(([n, v]) => `<tr><th scope="row">${esc(n)}</th><td>${v}</td></tr>`).join("");
   const crushed = s.tally.destroyed.structures.length;
   const killed = s.tally.destroyed.units.length;
+  const how = r.death ? DEATH_LINE[r.death] : OUTCOME_LINE[r.outcome];
+  const where = rampage ? `on a rampage, playing for ${s.objective.name}` : `in ${mission ? mission.name : s.mission}`;
+  const turn = s.turnLimit ? `Turn ${s.turn} of ${s.turnLimit}` : `Turn ${s.turn}`;
+  const stars = rampage ? `<p class="score-stars" aria-hidden="true"><span class="rv-stars">${"★".repeat(r.stars)}<span class="rv-off">${"☆".repeat(5 - r.stars)}</span></span></p>` : "";
+  let rv = null;
+  try {
+    rv = review(s, game.events);
+  } catch (err) {
+    console.warn("No review:", err);
+  }
   $("end-body").innerHTML = `<article class="paper">`
-    + `<div class="paper-top"><span>Late edition</span><span>Turn ${s.turn} of ${s.turnLimit}</span><span>Five cents</span></div>`
+    + `<div class="paper-top"><span>Late edition</span><span>${turn}</span><span>Five cents</span></div>`
     + `<h1 class="paper-name">${esc(PAPERS[s.mission] || "The Evening Wire")}</h1>`
-    + `<h2 class="headline">${esc(r.headline)}</h2>`
-    + `<p class="deck">${esc(def.name)} in ${esc(mission ? mission.name : s.mission)}. ${esc(OUTCOME_LINE[r.outcome])} ${crushed} ${crushed === 1 ? "structure" : "structures"} and ${killed} ${killed === 1 ? "unit" : "units"} destroyed. Seed ${esc(game.pick.seed)}.</p>`
+    + `<h2 class="headline" tabindex="-1">${esc(r.headline)}</h2>`
+    + `<p class="deck">${esc(def.name)} ${esc(where)}. ${esc(how)} ${crushed} ${crushed === 1 ? "structure" : "structures"} and ${killed} ${killed === 1 ? "unit" : "units"} destroyed. Seed ${esc(game.pick.seed)}.</p>`
     + `<div class="paper-cols"><figure class="paper-photo"><div class="pp-art">${portrait(k.id, { parts: states })}${silhouette(k.id, { parts: states })}</div>`
     + `<figcaption>${esc(def.name)}, ${esc(def.epithet)}, as last seen.</figcaption></figure>`
     + `<div class="wire"><h3>From the wire</h3>${lines}</div></div></article>`
     + `<div class="end-side"><div class="stamp grade-${r.grade.replace(" ", "-")}">${esc(GRADE_LINE[r.grade])}</div>`
-    + `<section class="tile score-tile"><h2 class="tile-title">Score</h2><table class="score"><tbody>${rows}</tbody>`
-    + `<tfoot><tr><th scope="row">Total</th><td>${r.score.total}</td></tr></tfoot></table></section>`
+    + `<section class="tile score-tile"><h2 class="tile-title">${rampage ? `Score: ${esc(s.objective.name)}` : "Score"}</h2><table class="score"><tbody>${rows}</tbody>`
+    + `<tfoot><tr><th scope="row">Total</th><td>${r.score.total}</td></tr></tfoot></table>${stars}</section>`
     + `<div class="end-buttons"><button type="button" class="btn primary" data-end="again"><kbd>A</kbd> Again</button>`
     + `<button type="button" class="btn" data-end="new"><kbd>N</kbd> New seed</button>`
-    + `<button type="button" class="btn" data-end="change"><kbd>C</kbd> Change monster</button></div></div>`;
+    + `<button type="button" class="btn" data-end="change"><kbd>C</kbd> Change monster</button></div></div>`
+    + (rv ? reviewHtml(rv) : "");
   show("end");
+  $("end-body").querySelector(".headline").focus({ preventScroll: true });
 }
 
 function onEnd(what) {
   if (what === "again") deploy(game.pick);
   else if (what === "new") deploy({ ...game.pick, seed: randomSeed() });
   else if (what === "change") {
+    game.events = [];
     Object.assign(pick, game.pick);
     renderSetup();
     show("setup");
@@ -894,6 +993,7 @@ function boot() {
     }
     const end = e.target.closest("[data-end]");
     if (end) onEnd(end.dataset.end);
+    if (e.target.closest("#copy-review")) copyReview();
   });
   $("settings").addEventListener("change", (e) => {
     const { name, value } = e.target;
@@ -917,7 +1017,7 @@ function boot() {
   $("theme-setup").querySelector(".tb-label").textContent = S.settings.theme;
   document.addEventListener("keydown", onKey);
   // Read-only, for browser tests: the current state and whether events are still playing.
-  window.kaiju = { get state() { return game.state; }, get busy() { return game.busy; } };
+  window.kaiju = { get state() { return game.state; }, get busy() { return game.busy; }, get events() { return game.events.length; } };
   show("setup");
 }
 

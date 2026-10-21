@@ -1,6 +1,6 @@
-// The three missions: maps, forces, briefings. resolveMission fills in the map (growing the
-// city for the swathe) and returns a fresh object for rules.create. Maps are 12 columns by
-// 14 rows of glyphs, odd-r offset, row 0 at the top; positions are [col, row].
+// The four missions: maps, forces, briefings. resolveMission fills in the map (growing the
+// city for the swathe and the rampage) and returns a fresh object for rules.create. Maps are
+// 12 columns by 14 rows of glyphs, odd-r offset, row 0 at the top; positions are [col, row].
 
 import { Mulberry32, seedFromText } from "../rng.js";
 import { growCity } from "../city.js";
@@ -11,6 +11,58 @@ export const ROWS = 14;
 
 const row = (r) => Array.from({ length: COLS }, (_, c) => [c, r]);
 const column = (c, from, to) => Array.from({ length: to - from + 1 }, (_, i) => [c, from + i]);
+
+// The rampage's five objectives, after the original's: weights on what the kaiju destroyed and
+// on the turns it lasted. A structure weighs `all`, or `populated` for a populated one when
+// given, times its height when `perHeight`; a unit weighs its own type's entry, else `all`.
+// stars: the totals for two, three, four and five stars, set with tools/sim.mjs.
+export const OBJECTIVES = {
+  balanced: {
+    id: "balanced",
+    name: "Balanced",
+    text: "Everything counts: what you break, what you kill, how long you last.",
+    structures: { all: 1 },
+    units: { all: 1 },
+    perTurn: 10,
+    stars: [200, 350, 600, 900],
+  },
+  killer: {
+    id: "killer",
+    name: "Killer Monster",
+    text: "People count. Occupied buildings double, Guard squads triple.",
+    structures: { all: 0, populated: 2 },
+    units: { all: 0.5, infantry: 3 },
+    perTurn: 0,
+    stars: [200, 350, 650, 1000],
+  },
+  combat: {
+    id: "combat",
+    name: "Combat Machine",
+    text: "Only the army counts, at double points.",
+    structures: { all: 0 },
+    units: { all: 2 },
+    perTurn: 0,
+    stars: [150, 275, 450, 700],
+  },
+  destruction: {
+    id: "destruction",
+    name: "Destruction",
+    text: "Only buildings count, and the tall ones count most.",
+    structures: { all: 1, perHeight: true },
+    units: { all: 0 },
+    perTurn: 0,
+    stars: [200, 400, 700, 1000],
+  },
+  survival: {
+    id: "survival",
+    name: "Survival",
+    text: "Only time counts: 100 for every turn you last.",
+    structures: { all: 0 },
+    units: { all: 0 },
+    perTurn: 100,
+    stars: [300, 600, 1000, 1500],
+  },
+};
 
 export const MISSIONS = {
   fortress: {
@@ -166,6 +218,42 @@ export const MISSIONS = {
     objective: { kind: "rival" },
     choose: "rival",
   },
+
+  rampage: {
+    id: "rampage",
+    name: "Rampage",
+    tagline: "No target and no clock. They will get you in the end.",
+    briefing: [
+      "Port Halloran again, or a city very like it.",
+      "No orders this time. No target, and no clock.",
+      "The army will keep coming, more of it every hour.",
+      "They will get you in the end. The question is what it costs them.",
+    ],
+    goal: "No goal but the score.",
+    turns: null,
+    map: null,
+    generator: "city",
+    kaijuStart: { at: [5, 12], facing: 1 },
+    retreat: row(13),
+    units: [],
+    reinforcements: [],
+    objective: { kind: "none" },
+    targets: undefined,
+    choose: "objective",
+    objectives: OBJECTIVES,
+    waves: {
+      size: { base: 1, growEvery: 3, max: 4 },
+      mix: [
+        { from: 1, types: ["infantry", "tank"] },
+        { from: 3, types: ["helicopter", "artillery"] },
+        { from: 6, types: ["jet", "missile"] },
+      ],
+      scientist: { from: 5, every: 6 },
+      edges: ["north", "east", "west"],
+      cap: 24,
+    },
+    lingeringGrows: true,
+  },
 };
 
 export const TARGETS = ["plant", "lab", "leyline"];
@@ -199,8 +287,16 @@ export const SWATHE = {
   turns: { helicopter: [2, 5], scientist: 4, jet: 7 },
 };
 
-// The swathe: a city grown from the seed, a harbour below it, three targets in its top third.
-function buildSwathe(mission, seed, target) {
+// The rampage's lighter forces, placed as the swathe's; the waves bring the rest.
+export const RAMPAGE = {
+  artillery: [3, 8],
+  tanks: [[3, 6], [8, 6]],
+  infantry: [1, 4, 7, 10],
+};
+
+// The harbour city: a city grown from the seed, a harbour below it, three targets in its top
+// third. Returns the map, the targets, and pick(score), which takes the best free street hex.
+function buildCity(seed) {
   const city = growCity({ seed, cols: COLS, rows: ROWS - HARBOUR.length });
   const terrain = [...city.terrain, ...HARBOUR];
   const features = [...city.features, ...HARBOUR.map(() => ".".repeat(COLS))];
@@ -259,8 +355,6 @@ function buildSwathe(mission, seed, target) {
     take(o.col, o.row);
   }
 
-  // Forces in the streets. Artillery on the top avenue; a tank by each target, on its south
-  // side; Guard squads on the streets above the waterfront; reinforcements from the north.
   const roads = [];
   for (let r = 0; r < city.terrain.length; r++) for (let c = 0; c < COLS; c++) if (isRoad(c, r) && features[r][c] === ".") roads.push([c, r]);
   const arrivals = [[0, 0], [10, 0], [6, 0]];
@@ -270,8 +364,19 @@ function buildSwathe(mission, seed, target) {
     used.add(`${best[0]},${best[1]}`);
     return best;
   };
+  return { map: { terrain, features }, targets, arrivals, pick };
+}
+
+const artilleryAt = (pick, c0) => ({ type: "artillery", at: pick(([c, r]) => r * 100 + Math.abs(c - c0)) });
+const tankNear = (pick, [c0, r0]) => ({ type: "tank", at: pick(([c, r]) => Math.abs(c - c0) * 3 + Math.abs(r - r0) * 2) });
+const guardAt = (pick, c0) => ({ type: "infantry", at: pick(([c, r]) => (r < 6 || r > 9 ? 1000 : 0) + Math.abs(c - c0) * 3 + Math.abs(r - 8)) });
+
+// The swathe's forces in the streets. Artillery on the top avenue; a tank by each target, on its
+// south side; Guard squads on the streets above the waterfront; reinforcements from the north.
+function buildSwathe(mission, seed, target) {
+  const { map, targets, arrivals, pick } = buildCity(seed);
   const units = [];
-  for (const c0 of SWATHE.artillery) units.push({ type: "artillery", at: pick(([c, r]) => r * 100 + Math.abs(c - c0)) });
+  for (const c0 of SWATHE.artillery) units.push(artilleryAt(pick, c0));
   for (const id of TARGETS) {
     const t = targets[id];
     units.push({ type: "tank", at: pick((p) => {
@@ -279,12 +384,8 @@ function buildSwathe(mission, seed, target) {
       return (d >= 1 && d <= 2 ? 0 : 1000 + d * 10) - p[1] * 2;
     }) });
   }
-  for (const [c0, r0] of SWATHE.tanks) {
-    units.push({ type: "tank", at: pick(([c, r]) => Math.abs(c - c0) * 3 + Math.abs(r - r0) * 2) });
-  }
-  for (const c0 of SWATHE.infantry) {
-    units.push({ type: "infantry", at: pick(([c, r]) => (r < 6 || r > 9 ? 1000 : 0) + Math.abs(c - c0) * 3 + Math.abs(r - 8)) });
-  }
+  for (const at of SWATHE.tanks) units.push(tankNear(pick, at));
+  for (const c0 of SWATHE.infantry) units.push(guardAt(pick, c0));
   const lab = targets.lab;
   const t = SWATHE.turns;
   const reinforcements = [
@@ -295,7 +396,7 @@ function buildSwathe(mission, seed, target) {
   ];
   return {
     ...mission,
-    map: { terrain, features },
+    map,
     units,
     reinforcements,
     targets,
@@ -303,13 +404,23 @@ function buildSwathe(mission, seed, target) {
   };
 }
 
+// The rampage: the same city, lighter forces, no target. The waves come in the rules.
+function buildRampage(mission, seed) {
+  const { map, targets, pick } = buildCity(seed);
+  const units = [
+    ...RAMPAGE.artillery.map((c0) => artilleryAt(pick, c0)),
+    ...RAMPAGE.tanks.map((at) => tankNear(pick, at)),
+    ...RAMPAGE.infantry.map((c0) => guardAt(pick, c0)),
+  ];
+  return { ...mission, map, units, reinforcements: [], targets };
+}
+
 // A fresh copy of the mission with its map filled in. opts: {seed, target}; only the swathe
-// reads them. A text seed keeps its digits, as rules.create reads it.
+// and the rampage read them. A text seed keeps its digits, as rules.create reads it.
 export function resolveMission(id, { seed = 0, target } = {}) {
-  const base = MISSIONS[id];
-  if (!base) throw new Error(`Unknown mission: ${id}`);
-  const mission = structuredClone(base);
+  if (!Object.hasOwn(MISSIONS, id)) throw new Error(`Unknown mission: ${id}`);
+  const mission = structuredClone(MISSIONS[id]);
   const n = typeof seed === "string" ? seedFromText(seed) : (Number(seed) || 0) >>> 0;
-  if (mission.generator === "city") return buildSwathe(mission, n, target);
+  if (mission.generator === "city") return id === "rampage" ? buildRampage(mission, n) : buildSwathe(mission, n, target);
   return mission;
 }
