@@ -1166,7 +1166,7 @@ function victimInfo(state, v) {
   return { key: v.key, kind: "structure", id: v.key, type: st.type, name: STRUCTURES[st.type].name, hp: st.hp, max: st.maxHp };
 }
 
-// Who could fire on the actor next defense phase from where it stands now.
+// Who could strike the actor next defense phase from where it stands now: units, then the other kaiju.
 function returnFire(state, actor) {
   const k = state[actor];
   const out = [];
@@ -1179,6 +1179,23 @@ function returnFire(state, actor) {
     const acc = clamp(def.accuracy - (k.passives.includes("eldritch") ? RULES.eldritchAccuracy : 0), RULES.accuracyMin, RULES.accuracyMax);
     out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: damageRange(def.attack[0], def.attack[1], -k.armor, false) });
   }
+  // The other kaiju: its best attack that could reach, walking first with the AP it will have.
+  const other = actor === "kaiju" ? "rival" : "kaiju";
+  const o = state[other];
+  if (!alive(o)) return out;
+  const vs = { kind: "kaiju", actor };
+  let best = null;
+  for (const base of KAIJU[o.id].attacks) {
+    const a = attackOf(state, other, base.id);
+    if (a.damage[1] === 0 || a.pattern === "teleport") continue;
+    if (o.parts[a.uses].hp <= 0 || (a.effects.oncePerMission && o.used[a.id]) || o.energy < a.energy || o.apMax < a.ap) continue;
+    if (H.distance(o.at, k.at) > o.apMax - a.ap + a.range) continue;
+    const hitChance = kaijuAccuracy(state, other, a, vs, 1);
+    const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, other, a, vs), false);
+    const value = hitChance * (damage[0] + damage[1]);
+    if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, name: `${KAIJU[o.id].name}: ${a.name}`, hitChance, damage } };
+  }
+  if (best) out.push(best.entry);
   return out;
 }
 
