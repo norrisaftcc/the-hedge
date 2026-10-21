@@ -77,7 +77,7 @@ export function neighbor(k, d)            // key of the hex in direction d
 export function neighbors(k)              // six keys, in DIRS order
 export function distance(a, b)            // hex steps between two keys
 export function line(a, b)                // keys from a to b inclusive (cube lerp, round; nudge by 1e-6)
-export function directionTo(a, b)         // 0..5, the DIRS direction nearest the bearing from a to b; ties to the lower index
+export function directionTo(a, b)         // 0..5, the DIRS direction nearest the bearing from a to b; ties to the lower index, except 5/0, which goes to 5
 export function ray(k, d, n)              // the n keys stepping from k in direction d (not k itself)
 export function cone(k, d, n)             // keys h with 1 <= distance(k,h) <= n and directionTo(k,h) === d
 export function ring(k, n), range(k, n)   // ring at exactly n; all within n (k included)
@@ -87,6 +87,8 @@ export function toPixel(k, size)          // {x: size*√3*(q + r/2), y: size*1.
 export function corners(x, y, size)       // six [x,y] points of a pointy hex, for SVG polygons
 export function arc(facing, from, to)     // "front" | "rear": d = (directionTo(to, from) - facing + 6) % 6; rear when d is 2, 3 or 4
 ```
+
+Each direction owns one boundary bearing (the counter-clockwise one, 30° past it), so every cone has the same shape: a bearing exactly between two directions goes to the lower index, except the one at 330° between 5 and 0, which goes to 5.
 
 `arc(facing, attackerKey, targetKey)` reads: seen from the target, facing `facing`, where does the attacker stand. The front arc is the three sides ahead; the rear arc the three behind [KAI-4].
 
@@ -151,11 +153,11 @@ KAIJU.radiosaur = {
 |---|---|---|---|---|
 | epithet | the atomic tyrannosaurus | the Atlantean colossus | from the City of Angles | the sentai giant robot |
 | ap | 6 | 5 | 6 | 5 (+1 while thrusters not crippled) |
-| armor | 1 | 2 | 0 | 2 |
+| armor | 2 | 2 | 0 | 2 |
 | head | Head 6 | Crowned head 6 | Crown 5 | Cockpit 6 |
 | arms | Forelimbs 5 | Arms 7 | Feelers 6 | Arms 6 |
-| body | Body 16 | Torso 18 | Mantle 14 | Chassis 15 |
-| legs | Legs 9 | Legs 10 | Footing 8 | Legs 8 |
+| body | Body 16 | Torso 18 | Mantle 18 | Chassis 15 |
+| legs | Legs 8 | Legs 10 | Footing 8 | Legs 8 |
 | aux | Tail 6 | Trident 5 | The Eye 5 | Thrusters 5 |
 | hitTable legs/body/arms/head/aux | 3/4/2/1/2 | 3/5/2/1/1 | 2/4/3/1/2 | 3/4/3/1/1 |
 | energy max/start/rule | 10/3/eat | 8/4/water | 10/2/panic | 12/12/battery |
@@ -166,9 +168,11 @@ KAIJU.radiosaur = {
 Attacks (`ap`, `energy`, `kind`, `uses`, `pattern`, `range`, `damage`, `accuracy`, `effects`):
 
 - **Radiosaur.** `bite` Bite: 2, 0, melee, head, single, 1, 3–5, 85. `tail` Tail sweep: 2, 0, melee, aux, rear, 1, 2–3, 80. `breath` Atomic breath: 3, 4, special, head, line, 4, 4–6, 90.
-- **Thalassor.** `fist` Fist: 2, 0, melee, arms, single, 1, 3–5, 85. `trident` Trident cast: 2, 1, ranged, aux, single, 3, 3–4, 75. `surge` Tidal surge: 3, 4, special, arms, cone, 3, 3–4, 90, `{waterBonus: 1}`.
-- **The Squamous One.** `grab` Tentacle grab: 2, 0, melee, arms, single, 2, 2–4, 85, `{pull: true}`. `gaze` The gaze: 2, 2, special, aux, cone, 3, 0–0, 100, `{panic: 2}`. `angle` Wrong angle: 1, 3, special, legs, teleport, 3.
-- **Dai-Rengō.** `punch` Rocket punch: 2, 1, ranged, arms, single, 3, 3–4, 80. `sword` Beam sword: 2, 1, melee, arms, single, 1, 4–6, 85. `finish` Final formation: 4, 6, special, body, single, 1, 9–12, 95, `{oncePerMission: true}`.
+- **Thalassor.** `fist` Fist: 2, 0, melee, arms, single, 1, 3–6, 85. `trident` Trident cast: 2, 1, ranged, aux, single, 3, 3–4, 75. `surge` Tidal surge: 3, 4, special, arms, cone, 3, 3–4, 90, `{waterBonus: 1}`.
+- **The Squamous One.** `grab` Tentacle grab: 2, 0, melee, arms, single, 2, 4–6, 85, `{pull: true}`. `gaze` The gaze: 2, 2, special, aux, cone, 3, 0–0, 100, `{panic: 2}`. `angle` Wrong angle: 1, 3, special, legs, teleport, 3.
+- **Dai-Rengō.** `punch` Rocket punch: 2, 1, ranged, arms, single, 3, 3–4, 80. `sword` Beam sword: 2, 1, melee, arms, single, 1, 3–5, 85. `finish` Final formation: 4, 6, special, body, single, 1, 9–12, 95, `{oncePerMission: true}`.
+
+The numbers in this section and in 4.4 are the ones after the first balance pass with `tools/sim.mjs` (a greedy bot playing every monster and mission over a run of seeds). Changed from the first draft: Radiosaur armor 1 → 2, legs 9 → 8; Thalassor fist 3–5 → 3–6; the Squamous One mantle 14 → 18, grab 2–4 → 4–6; Dai-Rengō sword 4–6 → 3–5.
 
 Passives:
 
@@ -205,16 +209,18 @@ Unspent points: +1 body hp each.
 | id | name | hp | armor | move | range | minRange | attack | acc | morale | points | air | edible (hunger) | reload | effect |
 |----|------|----|-------|------|-------|----------|--------|-----|--------|--------|-----|-----------------|--------|--------|
 | infantry | National Guard | 2 | 0 | 2 | 1 | 1 | 1–2 | 60 | 5 | 10 | | 4 | | |
-| tank | Tank | 4 | 1 | 3 | 2 | 1 | 2–3 | 65 | 7 | 30 | | 1 | | |
-| artillery | Artillery | 3 | 0 | 1 | 4 | 2 | 2–4 | 55 | 6 | 40 | | 1 | | indirect (ignores line of sight) |
-| helicopter | Attack helicopter | 3 | 0 | 5 | 2 | 1 | 2–3 | 65 | 6 | 40 | yes | | | |
-| jet | Jet | 3 | 0 | 8 | 1 | 1 | 3–4 | 70 | 8 | 60 | yes | | | |
+| tank | Tank | 4 | 1 | 3 | 2 | 1 | 2–4 | 65 | 7 | 30 | | 1 | | |
+| artillery | Artillery | 3 | 0 | 1 | 6 | 2 | 3–5 | 65 | 6 | 40 | | 1 | | indirect (ignores line of sight) |
+| helicopter | Attack helicopter | 3 | 0 | 5 | 2 | 1 | 2–4 | 65 | 6 | 40 | yes | | | |
+| jet | Jet | 3 | 0 | 8 | 1 | 1 | 3–5 | 70 | 8 | 60 | yes | | | |
 | missile | Missile battery | 3 | 1 | 1 | 5 | 2 | 3–5 | 60 | 8 | 50 | | | | indirect |
 | gun | Gun emplacement | 5 | 2 | 0 | 4 | 1 | 2–4 | 60 | 10 | 50 | | | | |
 | maser | Maser cannon | 8 | 2 | 0 | 6 | 1 | 5–7 | 75 | 99 | 150 | | | 2 | |
 | scientist | Mad scientist | 2 | 0 | 6 | 2 | 1 | 1–1 | 70 | 99 | 100 | yes | | | lingering |
 
-`reload: 2`: after firing, the unit skips its next fire. `lingering`: each hit adds 1 to the target kaiju's `lingering`; AP is reduced by `lingering` for the rest of the mission [DEF-9]. Morale 99: never panics.
+`reload: 2`: after firing, the unit skips its next fire. `lingering`: each hit adds 1 to the target kaiju's `lingering`; AP is reduced by `lingering` for the rest of the mission [DEF-9]. Morale 99: never panics. Air units fly over any terrain but may not stop over a solid structure.
+
+Balance pass (see 4.2): tank attack 2–3 → 2–4; artillery range 4 → 6, attack 2–4 → 3–5, accuracy 55 → 65; helicopter attack 2–3 → 2–4; jet attack 3–4 → 3–5.
 
 ### 4.5 Missions: `src/data/missions.js` [MIS-1..3]
 
@@ -410,7 +416,7 @@ export function planBerserk(state)       // -> [kaiju commands]
 ```
 
 - **Unit.** Panicked: move to the reachable hex farthest from every kaiju. Otherwise: choose the nearest kaiju as target (in Mission 3 either kaiju). Score each reachable hex (move points, terrain costs, no entering kaiju or other unit hexes; air units ignore terrain and may cross water): +10 if in range and (line of sight or indirect), +3 if in a structure (infantry), −2 per hex of distance from the ideal range (max range), −5 if adjacent to a kaiju and range > 1. Move to the best; fire if able. Ties to the lowest key so plans are deterministic.
-- **Rival.** If body ≤ 25%: walk toward `rivalRetreat`, withdraw on arrival. Otherwise: if a special attack can hit the player kaiju and energy allows, use it; else if a melee or ranged attack reaches, face and use the best expected damage; else move toward the player kaiju (preferring water for a `water` kaiju). Roar if three or more units are near and it has not roared.
+- **Rival.** If body ≤ 25%: walk toward `rivalRetreat`, withdraw on arrival. Otherwise: if a special attack can hit the player kaiju and energy allows, use it; else if a melee or ranged attack reaches, face and use the best expected damage; else, for a `battery` kaiju at 2 energy or less, walk to a hex beside an undestroyed power structure (never through one) and wait there; else move toward the player kaiju (preferring water for a `water` kaiju). Roar if three or more units are near and it has not roared.
 - **Berserk.** Move toward the nearest edible unit or populated structure; eat it when adjacent.
 
 ## 9. Words: `src/voice.js` [UI-6, NFR-5]
