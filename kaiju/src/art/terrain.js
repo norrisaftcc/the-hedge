@@ -419,7 +419,8 @@ function fortress() {
 export function backdrop(terrain, { structure: s } = {}) {
   const t = SCENES[terrain] ? terrain : "open";
   const [far, near] = SCENES[t]();
-  const extra = s && STRUCT_SCENES[s] ? [].concat(STRUCT_SCENES[s]()) : [far];
+  const known = s && STRUCT_SCENES[s] ? s : null; // only a known id reaches the markup
+  const extra = known ? [].concat(STRUCT_SCENES[known]()) : [far];
   const scene = sky() + extra[0] + near + (extra[1] || "");
-  return `<svg viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${t}${s ? " with " + s : ""} backdrop" class="backdrop" preserveAspectRatio="xMidYMid slice">${scene}</svg>`;
+  return `<svg viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${t}${known ? " with " + known : ""} backdrop" class="backdrop" preserveAspectRatio="xMidYMid slice">${scene}</svg>`;
 }
