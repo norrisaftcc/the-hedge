@@ -92,11 +92,12 @@ function kaijuSide(actor, before, after) {
   return { kind: "kaiju", id: k0.id, name: def.name, bars, parts0: states(k0), parts1: states(k1), down: k1.parts.body.hp <= 0 };
 }
 
-// Panic results for units hit by a zero-damage attack: the events after the run, up to the next attack.
-function panicWord(events, end, ids) {
+// Panic results for units hit by a zero-damage attack: the events within the run, and after it
+// up to the next attack.
+function panicWord(events, group, ids) {
   let broke = 0;
   let held = 0;
-  for (let i = end + 1; i < events.length && events[i].k !== "attack" && !BREAK.has(events[i].k); i++) {
+  for (let i = group.start; i < events.length && (i <= group.end || (events[i].k !== "attack" && !BREAK.has(events[i].k))); i++) {
     const e = events[i];
     if (e.k === "panic" && ids.includes(e.unit)) e.broke ? broke++ : held++;
   }
@@ -118,10 +119,10 @@ export function buildScene(group, before, after, events) {
   const damage = group.events.reduce((sum, e) => sum + (e.hit ? e.damage : 0), 0);
   const shots = group.events.length;
   let result;
-  if (group.events.every((e) => e.zero)) result = { text: panicWord(events, group.end, defenderIds), hit: true };
+  if (group.events.every((e) => e.zero)) result = { text: panicWord(events, group, defenderIds), hit: true };
   else if (!hits) result = { text: "MISS", hit: false };
   else {
-    const lost = right.kind === "unit" ? Math.min(damage, right.bars[0].before) : damage;
+    const lost = right.kind === "unit" ? right.bars[0].before - right.bars[0].after : damage;
     result = { text: `−${lost}`, hit: true };
   }
   let note = "";

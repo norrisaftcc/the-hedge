@@ -837,7 +837,10 @@ function onKey(e) {
   }
   if (screen !== "play" || game.busy) return;
   if (key === "Enter") {
-    if (e.target.closest("button")) return;
+    // A focused button keeps its own Enter, except the current action's button while a target
+    // is picked: render() puts focus back there after the arrow keys pick one.
+    const b = e.target.closest("button");
+    if (b && !(game.preview && b.dataset.action === modeId())) return;
     e.preventDefault();
     return confirm();
   }
@@ -893,9 +896,13 @@ function boot() {
     if (end) onEnd(end.dataset.end);
   });
   $("settings").addEventListener("change", (e) => {
-    if (e.target.name === "theme") S.setTheme(e.target.value);
-    if (e.target.name === "cutaway") S.setCutaway(e.target.value);
+    const { name, value } = e.target;
+    if (name === "theme") S.setTheme(value);
+    if (name === "cutaway") S.setCutaway(value);
     renderSettings();
+    // The radio was replaced; focus its successor so the arrow keys stay in the group.
+    const back = $("settings-body").querySelector(`input[name="${name}"][value="${value}"]`);
+    if (back) back.focus();
   });
   $("settings").addEventListener("close", () => {
     const back = document.body.dataset.screen === "play" ? $("topbar").querySelector('[data-ui="settings"]') : null;

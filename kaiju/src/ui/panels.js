@@ -100,7 +100,7 @@ export function status(state) {
     + `<div class="st-sil">${silhouette(k.id, { parts: states })}</div></div>`
     + `<div class="status-vitals"><div class="st-name">${esc(def.name)}<span class="st-epithet">${esc(def.epithet)}</span></div>${bars}`
     + `<div class="st-facts">${facts.map(esc).join(" · ")}</div></div></div>`
-    + `<ul class="parts">${parts}</ul>${rival}`;
+    + `<div class="status-more"><ul class="parts">${parts}</ul>${rival}</div>`;
 }
 
 export function inspect(text) {
@@ -191,15 +191,17 @@ export function forecastSheet(fc, { name, note, panic = 0 }) {
     : `<p class="fc-none">Nothing in the pattern to strike.</p>`;
   let back = "Nothing can strike you next phase from here.";
   if (fc.returnFire.length) {
+    // Units of one type can differ: each one's rear bonus is its own.
     const groups = new Map();
     for (const r of fc.returnFire) {
-      const g = groups.get(r.name) || { n: 0, hit: r.hitChance, dmg: r.damage };
+      const key = `${r.name}|${r.hitChance}|${range(r.damage)}`;
+      const g = groups.get(key) || { n: 0, name: r.name, hit: r.hitChance, dmg: r.damage };
       g.n += 1;
-      groups.set(r.name, g);
+      groups.set(key, g);
     }
     const most = fc.returnFire.reduce((sum, r) => sum + r.damage[1], 0);
     const likely = Math.round(fc.returnFire.reduce((sum, r) => sum + (r.hitChance / 100) * ((r.damage[0] + r.damage[1]) / 2), 0));
-    back = "Return fire next phase: " + [...groups].map(([n, g]) => `${g.n > 1 ? g.n + " × " : ""}${n} (${g.hit}%, ${range(g.dmg)})`).join(", ") + `. About ${likely} damage, at most ${most}.`;
+    back = "Return fire next phase: " + [...groups.values()].map((g) => `${g.n > 1 ? g.n + " × " : ""}${g.name} (${g.hit}%, ${range(g.dmg)})`).join(", ") + `. About ${likely} damage, at most ${most}.`;
   }
   return `<h2 class="tile-title">Forecast</h2><div class="sheet-body"><div class="fc-head"><b>${esc(name)}</b><span class="fc-cost">${costs.join(" · ")}</span></div>`
     + (note ? `<p class="fc-note">${esc(note)}</p>` : "") + table + `<p class="fc-return">${esc(back)}</p></div>`
