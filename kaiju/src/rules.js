@@ -50,7 +50,9 @@ const byId = (a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1));
 function emitter(s, events) {
   return (k, data = {}) => {
     const full = { turn: s.turn, ...data };
-    events.push({ k, text: say(k, full), ...full });
+    const e = { k, text: say(k, full), ...full };
+    events.push(e);
+    return e;
   };
 }
 
@@ -103,11 +105,11 @@ const toKey = (at) => H.offsetToKey(at[0], at[1]);
 
 function makeKaiju(id, actor, start, mutations = []) {
   const def = KAIJU[id];
-  if (!def) throw new Error(`Unknown kaiju: ${id}`);
+  if (!Object.hasOwn(KAIJU, id)) throw new Error(`Unknown kaiju: ${id}`);
   let spent = 0;
   const seen = new Set();
   for (const m of mutations) {
-    if (!MUTATIONS[m]) throw new Error(`Unknown mutation: ${m}`);
+    if (!Object.hasOwn(MUTATIONS, m)) throw new Error(`Unknown mutation: ${m}`);
     if (seen.has(m)) throw new Error(`Mutation chosen twice: ${m}`);
     if (def.forbid.includes(m)) throw new Error(`${def.name} cannot take ${MUTATIONS[m].name}`);
     seen.add(m);
@@ -181,11 +183,12 @@ export function create(setup) {
   if (mission.objective.kind === "destroy" || mission.objective.kind === "chosen") {
     let at = mission.objective.at;
     if (mission.objective.kind === "chosen") {
-      if (!mission.targets || !mission.targets[target]) throw new Error(`Mission ${mission.id} needs a target`);
+      if (!mission.targets || !Object.hasOwn(mission.targets, target)) throw new Error(`Mission ${mission.id} needs a target`);
       at = mission.targets[target];
     }
     const key = toKey(at);
-    const st = map.hexes[key] && map.hexes[key].structure;
+    if (!map.hexes[key]) throw new Error(`Mission ${mission.id} has its objective off the map`);
+    const st = map.hexes[key].structure;
     objective = { kind: "destroy", at: key, type: st ? st.type : null };
   }
   const s = {
@@ -382,15 +385,21 @@ function unitCanStand(s, type, key, ignoreId = null) {
   if (kaijuAt(s, key)) return false;
   const there = unitAt(s, key);
   if (there && there.id !== ignoreId) return false;
-  return unitEnterCost(s, type, key) !== null;
+  return !solidAt(s, key) && unitEnterCost(s, type, key) !== null;
 }
 
+function solidAt(s, key) {
+  const st = s.map.hexes[key] && s.map.hexes[key].structure;
+  return !!st && STRUCTURES[st.type].solid;
+}
+
+// The price to pass through a hex. Air units fly over anything; none may stop on a solid structure.
 function unitEnterCost(s, type, key) {
   const hex = s.map.hexes[key];
   if (!hex) return null;
   const def = UNITS[type];
-  if (hex.structure && STRUCTURES[hex.structure.type].solid) return null;
   if (def.air) return 1;
+  if (solidAt(s, key)) return null;
   const t = TERRAIN[hex.terrain];
   if (t.ground === false) return null;
   if (t.infantryOnly && type !== "infantry") return null;
@@ -405,7 +414,9 @@ export function unitReach(state, unitId) {
   if (def.move <= 0) return {};
   const taken = new Set(state.units.map((x) => x.at));
   for (const a of ACTORS) if (alive(state[a])) taken.add(state[a].at);
-  return dijkstra(u.at, def.move, (key) => (taken.has(key) ? null : unitEnterCost(state, u.type, key)));
+  const all = dijkstra(u.at, def.move, (key) => (taken.has(key) ? null : unitEnterCost(state, u.type, key)));
+  for (const key of Object.keys(all)) if (solidAt(state, key)) delete all[key];
+  return all;
 }
 
 // ---------- attacks: definitions and patterns ----------
@@ -674,11 +685,19 @@ function doMove(s, actor, cmd, ev) {
   const from = k.at;
   k.ap -= r.cost;
   k.facing = H.directionTo(r.path.length > 1 ? r.path[r.path.length - 2] : from, cmd.to);
-  ev("move", { actor, who: k.id, from, to: cmd.to, path: r.path, cost: r.cost });
+  const move = ev("move", { actor, who: k.id, from, to: cmd.to, path: r.path, cost: r.cost });
+  let walked = 0;
   for (const step of r.path) {
     k.at = step;
+    walked += 1;
     enterHex(s, actor, step, ev);
     if (!alive(k)) break;
+  }
+  if (walked < r.path.length) {
+    // A blast ended the walk: the move event tells only the part that happened.
+    Object.assign(move, { to: k.at, path: r.path.slice(0, walked), cost: all[k.at].cost });
+    const { k: _kind, text: _text, ...data } = move;
+    move.text = say("move", data);
   }
   return null;
 }
@@ -1167,36 +1186,57 @@ function victimInfo(state, v) {
 }
 
 // Who could strike the actor next defense phase from where it stands now: units, then the other kaiju.
+// Each range runs from the weakest blow to the strongest over the hexes the striker could use.
 function returnFire(state, actor) {
   const k = state[actor];
   const out = [];
   if (!alive(k)) return out;
   for (const u of [...state.units].sort(byId)) {
     if (u.panicked > 0 || u.reload > 0) continue;
-    const spots = [u.at, ...Object.keys(unitReach(state, u.id))];
-    if (!spots.some((h) => canFire(state, u, h, k.at))) continue;
+    const spots = [u.at, ...Object.keys(unitReach(state, u.id))].filter((h) => canFire(state, u, h, k.at));
+    if (!spots.length) continue;
     const def = UNITS[u.type];
     const acc = clamp(def.accuracy - (k.passives.includes("eldritch") ? RULES.eldritchAccuracy : 0), RULES.accuracyMin, RULES.accuracyMax);
-    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: damageRange(def.attack[0], def.attack[1], -k.armor, false) });
+    const rears = spots.map((h) => (H.arc(k.facing, h, k.at) === "rear" ? RULES.rearBonus : 0));
+    const lo = damageRange(def.attack[0], def.attack[1], Math.min(...rears) - k.armor, false)[0];
+    const hi = damageRange(def.attack[0], def.attack[1], Math.max(...rears) - k.armor, false)[1];
+    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: [lo, hi] });
   }
-  // The other kaiju: its best attack that could reach, walking first with the AP it will have.
+  const best = otherKaijuThreat(state, actor);
+  if (best) out.push(best);
+  return out;
+}
+
+// The other kaiju's best blow next phase: its phase start is played on a copy, then every hex
+// it could walk to with the attack's AP kept back is tried, with the attack's own pattern and sight.
+function otherKaijuThreat(state, actor) {
   const other = actor === "kaiju" ? "rival" : "kaiju";
-  const o = state[other];
-  if (!alive(o)) return out;
+  if (!alive(state[other])) return null;
+  const ghost = structuredClone(state);
+  phaseStart(ghost, other, () => {});
+  const o = ghost[other];
+  const spots = { [o.at]: { cost: 0 }, ...reach(ghost, other) };
+  const home = o.at;
   const vs = { kind: "kaiju", actor };
   let best = null;
   for (const base of KAIJU[o.id].attacks) {
-    const a = attackOf(state, other, base.id);
-    if (a.damage[1] === 0 || a.pattern === "teleport") continue;
-    if (o.parts[a.uses].hp <= 0 || (a.effects.oncePerMission && o.used[a.id]) || o.energy < a.energy || o.apMax < a.ap) continue;
-    if (H.distance(o.at, k.at) > o.apMax - a.ap + a.range) continue;
-    const hitChance = kaijuAccuracy(state, other, a, vs, 1);
-    const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, other, a, vs), false);
-    const value = hitChance * (damage[0] + damage[1]);
-    if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, name: `${KAIJU[o.id].name}: ${a.name}`, hitChance, damage } };
+    const a = attackOf(ghost, other, base.id);
+    if (a.damage[1] === 0 || a.pattern === "teleport" || attackBlocked(ghost, other, a)) continue;
+    for (const [spot, r] of Object.entries(spots)) {
+      if (r.cost > o.ap - a.ap) continue;
+      o.at = spot;
+      const facings = a.pattern === "single" ? [o.facing] : [0, 1, 2, 3, 4, 5];
+      const face = facings.find((d) => patternHexes(ghost, other, a, d).includes(ghost[actor].at));
+      if (face === undefined) continue;
+      o.facing = face;
+      const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
+      const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
+      const value = hitChance * (damage[0] + damage[1]);
+      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, name: `${KAIJU[o.id].name}: ${a.name}`, hitChance, damage } };
+    }
+    o.at = home;
   }
-  if (best) out.push(best.entry);
-  return out;
+  return best && best.entry;
 }
 
 // facing: optional; forecast as if the actor first turned that way (the AI uses it).
