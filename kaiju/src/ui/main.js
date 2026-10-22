@@ -55,14 +55,6 @@ const ENERGY_RULE = {
   panic: "Energy from every unit that breaks.",
   battery: "A battery that drains each turn; it charges beside power.",
 };
-const PASSIVE = {
-  reactorBelly: "Reactor belly: power blasts feed it.",
-  stoneBody: "Stone body: heals in water.",
-  regen: "Regenerates.",
-  eldritch: "Eldritch: harder to hit.",
-  noHunger: "No hunger.",
-  thrusters: "Thrusters: +1 AP while they work.",
-};
 const TARGET_TEXT = {
   plant: ["Power plant", "Explodes when crushed or eaten. Pylons beside it."],
   lab: ["Research lab", "Solid. Must be battered down. Populated."],
@@ -144,7 +136,7 @@ function monsterCard(id) {
     const cost = `${a.ap} AP${a.energy ? `, ${a.energy} energy` : ""}`;
     return `<li><b>${esc(a.name)}</b> <span>${cost} · ${patternText(a, s.range)} · ${dmg}</span></li>`;
   }).join("");
-  const passives = def.passives.map((p) => PASSIVE[p]).join(" ");
+  const passives = def.passives.map(P.passiveText).join(" ");
   return `<div class="card monster-card${chosen ? " chosen" : ""}" role="radio" tabindex="${chosen ? 0 : -1}" aria-checked="${chosen}" data-kaiju="${id}">`
     + `<div class="mc-art"><div class="mc-portrait">${portrait(def.look)}</div><div class="mc-sil">${silhouette(def.look)}</div></div>`
     + `<div class="mc-body"><div class="card-name">${esc(def.name)}</div><div class="card-sub">${esc(def.epithet)}</div>`
@@ -746,7 +738,7 @@ function patch(v, e) {
   const k = e.actor ? v[e.actor] : null;
   const unit = (id) => v.units.find((u) => u.id === id);
   const hitKaiju = (kk, ev) => {
-    if (!kk || !ev.part) return;
+    if (!kk || !ev.part || ev.phased) return; // a phased hit leaves the part as it was
     kk.parts[ev.part].hp = ev.after.hp;
     if (ev.spill) kk.parts.body.hp = Math.max(0, kk.parts.body.hp - ev.spill);
   };

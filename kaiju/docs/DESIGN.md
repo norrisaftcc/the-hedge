@@ -162,7 +162,7 @@ KAIJU.radiosaur = {
 | hitTable legs/body/arms/head/aux | 3/4/2/1/2 | 3/5/2/1/1 | 2/4/3/1/2 | 3/4/3/1/1 |
 | energy max/start/rule | 10/3/eat | 8/4/water | 10/2/panic | 12/12/battery |
 | hunger max/start | 10/3 | 12/2 | 10/4 | none |
-| passives | reactorBelly | stoneBody | regen, eldritch | noHunger, thrusters |
+| passives | reactorBelly | stoneBody | regen, eldritch, phaseOut | noHunger, thrusters |
 | forbid | | | regen | regen, gut |
 
 Attacks (`ap`, `energy`, `kind`, `uses`, `pattern`, `range`, `damage`, `accuracy`, `effects`):
@@ -180,6 +180,7 @@ Passives:
 - `stoneBody`: at phase start, standing on shore or water, heal 1 on the most damaged part.
 - `regen`: at phase start, heal 1 on the most damaged part.
 - `eldritch`: attacks against this kaiju have −10 accuracy.
+- `phaseOut`: a hit that lands on this kaiju then rolls `RULES.phaseOut` (25, a percent). On a pass the hit does nothing: no damage and no effect (§18.3). A blast and lingering harm never roll it.
 - `noHunger`: no hunger track; cannot eat.
 - `thrusters`: +1 AP while the aux part is not crippled.
 
@@ -324,10 +325,10 @@ The kaiju enters a hex for its terrain cost plus the structure's height. It may 
 For each target in the pattern:
 
 - **Line of sight.** `lineOfSight(a, b)` holds when no hex strictly between `a` and `b` on `hex.line` has `blocksLos` (only mountains do). Single-target attacks beyond distance 1 and cones need it; a line stops after the first mountain hex; attacks at distance 1 never need it.
-- **Accuracy** = attack accuracy − head penalty (intact 0, hurt 10, bad 20, crippled 30) − 10 if the target is an `eldritch` kaiju − 10 if the target is a unit in a structure − 5 per hex beyond 1 for `ranged` attacks; clamp to 5..95. Hit when d100 ≤ accuracy. Structures are always hit.
+- **Accuracy** = attack accuracy − head penalty (intact 0, hurt 10, bad 20, crippled 30) − 10 if the target is an `eldritch` kaiju − 10 if the target is a unit in a structure − 5 per hex beyond 1 for `ranged` attacks; clamp to 5..95. Hit when d100 ≤ accuracy. A hit on a kaiju with `phaseOut` then rolls `RULES.phaseOut` on the same dice (§18.3). Structures are always hit.
 - **Damage** = randint(min, max) + 1 if the target is a kaiju struck in its rear arc + `waterBonus` if it applies − arms penalty for `melee` attacks (intact 0, hurt 0, bad 1, crippled 2) − target armor − 1 if a unit in a structure. At least 1 on a hit, unless the attack's max is 0.
 - **Hit location** on a kaiju: roll on its `hitTable`. Damage beyond a part's hp, or to a crippled part, goes to the body.
-- **Units fire** by the same rules: accuracy from the unit table (− 10 against `eldritch`), damage from its attack range, the kaiju's armor, the rear-arc bonus, hit location. A unit may fire only when the distance is from its `minRange` to its `range`, inclusive, and it has line of sight or is `indirect` (artillery, missiles). Unit fire has no range penalty.
+- **Units fire** by the same rules: accuracy from the unit table (− 10 against `eldritch`), damage from its attack range, the kaiju's armor, the rear-arc bonus, hit location. A unit may fire only when the distance is from its `minRange` to its `range`, inclusive, and it has line of sight or is `indirect` (artillery, missiles). Unit fire has no range penalty. A landed shot on a kaiju with `phaseOut` rolls the phase die as a kaiju's blow does.
 
 ### 6.3 Parts [KAI-3]
 
@@ -845,7 +846,7 @@ These are the bot's numbers, a floor rather than a forecast.
 - **It changes the four characters least.** No monster gains or loses an attack. The slam is one rule that all of them share, and it takes the body, which cannot be crippled.
 - **It moves the non-Coast numbers least.** The slam needs a rival, and only the Coast has one. The fortress, swathe and rampage cells and their replays do not move.
 - **The hero bot's stuck turns fall, but not to 0. Criterion 4 of §17.6 is not met.** `stuck0` is the column that counts the KAI-11 case: turns beside the rival with no damaging command even at the AP the rules gave. In the worst cell of `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero` it is 3.15 a game before the slam (at 87bad43) and 0.80 after (Thalassor against Thalassor). Across the sixteen cells it is 30 turns in 320 games after (26 Thalassor, 4 Dai-Rengō; the column is a mean over 20 games, so a mean of 0.30 is 6 turns). On the held-out seeds, `node kaiju/tools/sim.mjs 21-60 all coast:<rival>:hero`, it is 52 turns in 640 games (31 Thalassor, 21 Dai-Rengō), and 0.63 a game in the worst cell. These are the bot's numbers, simulated. `stuck` still counts turns that end with 1 AP left, which a slam (2 AP) cannot use; it is not the KAI-11 measure.
-- **The win rates are not evidence for the slam.** A move under about 15 points on 20 seeds is noise. The hero bot's mean win rate over the four monsters, by rival, at 87bad43 and now: the Squamous One 54% to 65%, Radiosaur 49% to 53%, Thalassor 35% to 35%, Dai-Rengō 29% to 34% (`node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`). Only `stuck0` supports the change. One classic cell does move beyond the band: the Squamous One as the player's monster on the Coast, rival left to chance, falls from 55% to 40% (`node kaiju/tools/sim.mjs 1-20 squamous coast`). The rival slams too.
+- **The win rates are not evidence for the slam.** A move under about 15 points on 20 seeds is noise (a rule of thumb: one standard error of the difference between two win rates near 50%, from 20 games each; `node -e 'console.log(100 * Math.sqrt(2 * 0.25 / 20))'` prints 15.8). The hero bot's mean win rate over the four monsters, by rival, at 87bad43 and now: the Squamous One 54% to 65%, Radiosaur 49% to 53%, Thalassor 35% to 35%, Dai-Rengō 29% to 34% (`node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`). Only `stuck0` supports the change. One classic cell does move beyond the band: the Squamous One as the player's monster on the Coast, rival left to chance, falls from 55% to 40% (`node kaiju/tools/sim.mjs 1-20 squamous coast`). The rival slams too.
 
 What is built:
 - `RULES.slamName` ("Body slam"), `slamAp` (2), `slamDamage` (2–4) and `slamAccuracy` (80) in `src/data/kaiju.js`. The rules code holds none of them.
@@ -864,3 +865,73 @@ The hero bot meets both: the `stuck0` column of `node kaiju/tools/sim.mjs 1-20 a
 - slam costs 1 when the kaiju has 1 AP left (a data change, `slamAp`, and a rule);
 - hunger never takes the last AP;
 - leave it, since a starving monster with crippled legs is meant to be in trouble, and say so in KAI-11.
+
+## 18. Soft body: the Squamous One lasts by another route [KAI-12; issue #24]
+
+### 18.1 What playtest 001 showed
+
+Playtest 001 was the Squamous One with iron gut, deep reserves and bulk, on the Swathe, seed 39724. It took 39 damage and fell on turn 2. The other three monsters last by **armor**: each hit loses points. The Squamous One has armor 0. It has **eldritch**, −10 accuracy for anything that shoots at it, and **regen**, 1 hit point a turn on its worst part. Expected damage per shot, by the computation in #24 (hit chance × mean of `max(1, roll − armor)`, from `src/data/units.js` and §6.2):
+
+| Shooter (damage, accuracy) | Squamous today | Armor 2 |
+|---|---|---|
+| Tank (2–4, 65) | 1.65 | 0.87 |
+| Artillery (3–5, 65) | 2.20 | 1.30 |
+| Infantry (1–2, 60) | 0.75 | 0.60 |
+
+The heavy guns do about twice as much to it. The bot hides this because it sprints with Wrong angle and avoids fights (#24). A person fights.
+
+### 18.2 The aim
+
+A soft, regrowing horror lasts as long as bronze, steel or scales, by a different route. Its weakness is one a player can learn. It is not a trap. Meow'thprrtep, the variant, plays by the same rules (§15).
+
+### 18.3 Directions, tried as data
+
+Each is a passive in `src/data/kaiju.js`, with its numbers in `RULES`. Each is built on its own copy of the branch and measured. The ones not chosen are kept as patches in `kaiju/docs/experiments/soft-body/`, as for §17.
+
+- **Armor under another name (the yardstick).** Armor 1, then armor 2. It makes the monster play like the other three, which is what #24 wants to avoid. It is measured only to give the others a target.
+- **Blow-through.** No single hit does more than `RULES.blowThroughCap` (2) to it. Armor blunts many small hits; this blunts a few big ones. The heavy guns become the weak answer to a blob.
+- **Phase-out.** A hit that lands still has `RULES.phaseOut` (25%, and 40% as a second try) to pass through. The rules roll it on the seeded dice, after the hit roll. The event says so (`phased: true`), and the log tells it, naming the part the hit crossed: "The tank fires. The shot passes through where the Squamous One's mantle was a moment ago." A power structure's blast does not phase out, so §16's warnings stay true. A hit that passes through does nothing at all, so a mad scientist's ray that passes through adds no lingering (the unit table, §4.4); `tests/phase.test.mjs` pins it. That cuts the ray's paralysis by the phase rate, as it cuts its damage.
+- **Unravel and reform.** A part other than the body brought to 0 does not cripple. It **unravels**: it is gone, with its attacks and effects, and a hit on it goes to the body, as a hit on a crippled part does now. At the start of the monster's phase, a part that has been unravelled for `RULES.reformTurns` (2) of its phases reforms at half its hit points, rounded up, for `RULES.reformEnergy` (3) energy. With too little energy it waits. Its energy comes from panic, so the army that breaks feeds its comeback. Regen does not heal an unravelled part; it heals the worst of the others.
+- **The mix the brainstorm suggests:** phase-out at 25% plus unravel and reform. Not built; it is a patch (§18.7).
+
+### 18.4 Measuring
+
+For each direction and for the code before any of them. These are bot numbers, a floor rather than a forecast.
+- `node kaiju/tools/sim.mjs 1-20 squamous` and `node kaiju/tools/sim.mjs 21-60 squamous`: every mission.
+- `node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`: playtest 001's setup.
+- `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous`: playtest 002's rival must stay a threat.
+- `node kaiju/tools/sim.mjs 1-20 all coast:squamous:hero`: the rival again, fought monster to monster (§17.4).
+- Damage taken per turn survived, from `damage.mjs` over the same seeds. The bot sprints, so turns survived matter more than its win rate.
+
+### 18.5 Choosing
+
+1. It is not armor by another name.
+2. Against the army, it lasts about as long per turn as an armor-2 monster.
+3. As the Coast rival it is still a threat. Playtest 002 was close.
+4. It tells the player what happened, in the log, so the weakness can be learned.
+5. It moves no other monster.
+
+### 18.6 The page, the voice and the version
+
+- **The setup card** says the monster must not stand and trade blows, and names the passive in plain words. "Eldritch: harder to hit." undersells it, and gets plainer words.
+- **The voice:** every phase-out is a log line, chosen by a hash. (Built. The log lines for an unravelling and a reform were planned with the unravel rule, which was not built.)
+- **The silhouette:** an unravelled part shows like a crippled one, with its own mark. Not built: there is no unravel rule (§18.7).
+- **Version:** 0.5.0, with a CHANGELOG entry.
+
+### 18.7 As built and measured
+
+**Phase-out at 25%, alone, was built.** The table of directions is in the PR (#24); the others are patches in `kaiju/docs/experiments/soft-body/`, with the commands. Bot numbers, simulated, so a floor and not a forecast. Seeds 21-60 unless said. The built numbers are from `node kaiju/tools/toughness.mjs 21-60 squamous`, `node kaiju/tools/sim.mjs 21-60 squamous` and `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous`, and the same commands on ba639f2 for the "before".
+- **It lasts longer by luck, which is not armor (§18.5 item 1).** It takes 6.20 damage a turn and lasts 4.3 turns, against 8.58 and 3.9 before. Armor 2 takes 4.12 and lasts 4.3, and it lets the bot win 99% of its games. The log says every phase-out (item 4).
+- **Item 2 is met on turns, not on damage a turn.** The turns match armor 2. The damage a turn is 6.20, not 4.12: it is softer than armor, and it must not stand and trade blows (KAI-12), which is what the card says.
+- **The rival stays a threat, not a wall (item 3).** Dai-Rengō wins 35% against a Squamous rival on the Coast, from 53%. Armor 2 leaves 5%, blow-through 0%.
+- **Why not the others.** Unravel and reform leave the damage a turn at 8.58, and only make the rival harder (25%). The mix takes 6.12 a turn, as phase-out alone does, with a harder rival (23%) and a second rule to learn. The built rules at 40% take 5.01 a turn and the bot wins 87% (`kaiju/docs/experiments/soft-body/README.md`, "The built rules at 40", with the commands). The first cut at 40, in `phase-out-40.patch`, measured 4.77 and 90%, before the part roll; it is not comparable at every row.
+- **The bot's Squamous One is now the strongest of the four,** 81% on `node kaiju/tools/sim.mjs 1-20`, against 57% to 65% for the others. The bot plays greedy, and its numbers are a floor for a careless player, not a forecast for a good one. If the owner finds it too strong, the rate below is the lever. Playtest it before judging it.
+- **Playtest 001's seed:** the bot's Squamous One now wins on turn 2 with 28 damage taken, where it fell on turn 3 with 40 (`node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`). One game, and not the human's.
+
+**The forecast keeps the hit chance and reports the phase beside it.** `forecast(...)` rows (targets, the slam, return fire) carry `hitChance`, the chance to land, and `phase`, the percent of landed hits that pass through. The sheet shows "75% to hit, and one in four of the hits pass through". The figure "About N damage" in the return fire counts the phase and says so. The balance bot's value of a blow (`worth()` and `rivalEffect()` in `tools/sim.mjs`) and the rival's and army's planning (`expected()` in `src/ai.js`) both scale by `1 − phase`; `tests/phase.test.mjs` pins the bot's. Counting it in the bot moved no win rate in these tables: `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous` gives 35% with and without. Folding the two into one hit chance was tried in the mix patch. It hides what the player is deciding: how often a blow lands, and how often a landed blow is wasted.
+
+**What the event carries.** A phased hit is `hit: true, phased: true, damage: 0`, with the part it crossed. Choosing that part is one more roll, so the log can name it from data and the voice rolls nothing. A kaiju with the passive rolls the phase die for every landed hit, so a seeded game moves even when no hit in it phased. The Coast replay is re-recorded for that (`replay.test.mjs`), and the playtest 001 blast test now pins what it meant: the bot takes no lethal blast (a survivable one on the objective is allowed by §16.3). A blast never phases.
+
+**The other monsters move only through the Coast.** Plain `coast` picks the rival by seed, and for Radiosaur it is the Squamous One in 5 of seeds 1-20 (the command is in the experiments README). Their Coast rows in `node kaiju/tools/sim.mjs 1-20` move for that reason, and no other row does. §18.5 item 5 holds for stats and rules, not for that row.
+
+**The rate is one number, for the owner to tune.** `RULES.phaseOut` (25) in `src/data/kaiju.js`. The card, the sheet, the bot, the forecast and the tests read it. The phase and rules tests pass at 10, 25, 40 and 60: on a scratch copy, `sed -i "s/phaseOut: 25,/phaseOut: $n,/" kaiju/src/data/kaiju.js`, then `node --test kaiju/tests/phase.test.mjs kaiju/tests/phase-page.test.mjs kaiju/tests/rules.test.mjs`, with n set to 10, 40 and 60 (65 of 65 at each, and at 25). The Coast replays are pinned at 25 and move with it, as they should. 40 was measured (above); nothing between 25 and 40 was.

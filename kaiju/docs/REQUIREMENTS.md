@@ -102,6 +102,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | KAI-9 | S | Berserk: when hunger reaches its maximum, the kaiju's next phase is played for it: it goes for the nearest food and eats. Then hunger drops. |
 | KAI-10 | S | Power plants and pylons explode when the kaiju enters, stomps or eats them, dealing heavy damage to it. The atomic tyrannosaurus takes the blast as energy instead. Ranged attacks destroy them safely. |
 | KAI-11 | M | A living monster can hurt an adjacent rival kaiju. No single crippled part, and no spent once-a-mission attack, leaves it without a damaging action, at the AP the rules give. Not met, and open for the owner: crippled legs plus hunger, or plus an empty battery, leave 1 AP, and the body slam costs 2 (DESIGN §17.8). (Issue #27, playtest 002.) |
+| KAI-12 | S | The Squamous One is as hard to kill as the armored three, by a route of its own that a player can learn and play around. The setup card tells the player it must not stand and trade blows. (Issue #24, playtest 001.) |
 
 ### 5.4 Defense forces and rival kaiju
 

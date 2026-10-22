@@ -79,7 +79,7 @@ export const KAIJU = {
       atk("gaze", "The gaze", 2, 2, "special", "aux", "cone", 3, [0, 0], 100, { panic: 2 }),
       atk("angle", "Wrong angle", 1, 3, "special", "legs", "teleport", 3, [0, 0], 100),
     ],
-    passives: ["regen", "eldritch"],
+    passives: ["regen", "eldritch", "phaseOut"],
     forbid: ["regen"],
   },
   dairengo: {
@@ -117,6 +117,7 @@ export const RULES = {
   armsMelee: { intact: 0, hurt: 0, bad: 1, crippled: 2 },
   legsAp: { intact: 0, hurt: 1, bad: 2, crippled: 3 },
   eldritchAccuracy: 10,
+  phaseOut: 25, // percent: a hit that landed passes through (DESIGN 18.3)
   coverAccuracy: 10,
   coverDamage: 1,
   rangedPerHex: 5,

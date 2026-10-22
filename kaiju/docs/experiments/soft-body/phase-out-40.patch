@@ -1,0 +1,188 @@
+diff --git a/kaiju/src/ai.js b/kaiju/src/ai.js
+index 279bbb0..b30d2cc 100644
+--- a/kaiju/src/ai.js
++++ b/kaiju/src/ai.js
+@@ -66,7 +66,7 @@ function expected(state, actor, attackId, target, facing) {
+   const f = forecast(state, attackId, target, actor, facing);
+   const foe = f.targets.find((t) => t.kind === "kaiju");
+   if (!foe) return 0;
+-  return (foe.hitChance / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
++  return (foe.hitChance / 100) * (1 - (foe.phase || 0) / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
+ }
+ 
+ // Every way the actor can strike the other kaiju from where it stands: [{attack, facing, target, value}].
+diff --git a/kaiju/src/data/kaiju.js b/kaiju/src/data/kaiju.js
+index d864f36..c3c75f1 100644
+--- a/kaiju/src/data/kaiju.js
++++ b/kaiju/src/data/kaiju.js
+@@ -79,7 +79,7 @@ export const KAIJU = {
+       atk("gaze", "The gaze", 2, 2, "special", "aux", "cone", 3, [0, 0], 100, { panic: 2 }),
+       atk("angle", "Wrong angle", 1, 3, "special", "legs", "teleport", 3, [0, 0], 100),
+     ],
+-    passives: ["regen", "eldritch"],
++    passives: ["regen", "eldritch", "phaseOut"],
+     forbid: ["regen"],
+   },
+   dairengo: {
+@@ -117,6 +117,7 @@ export const RULES = {
+   armsMelee: { intact: 0, hurt: 0, bad: 1, crippled: 2 },
+   legsAp: { intact: 0, hurt: 1, bad: 2, crippled: 3 },
+   eldritchAccuracy: 10,
++  phaseOut: 40, // percent: a hit that landed passes through (DESIGN 18.3)
+   coverAccuracy: 10,
+   coverDamage: 1,
+   rangedPerHex: 5,
+diff --git a/kaiju/src/rules.js b/kaiju/src/rules.js
+index c48a19e..0a52452 100644
+--- a/kaiju/src/rules.js
++++ b/kaiju/src/rules.js
+@@ -43,6 +43,18 @@ function roll(s, sides) {
+   return v;
+ }
+ 
++// Phase-out (DESIGN 18.3): the chance, in percent, that a hit which landed passes through. Zero for
++// a kaiju without the passive. Blasts and lingering harm never ask it.
++export function phaseChance(k) {
++  return k.passives.includes("phaseOut") ? RULES.phaseOut : 0;
++}
++
++// Rolled on the state's dice, after the hit roll, and only for a target that can phase out.
++function phasesOut(s, k) {
++  const p = phaseChance(k);
++  return p > 0 && roll(s, 100) <= p;
++}
++
+ function randint(s, low, high) {
+   const m = new Mulberry32(s.rng);
+   const v = m.randint(low, high);
+@@ -877,6 +889,11 @@ function strikeKaiju(s, actor, a, targetActor, ev) {
+     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+     return;
+   }
++  if (phasesOut(s, t)) {
++    const body = t.parts.body;
++    ev("attack", { ...base, hit: true, phased: true, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
++    return;
++  }
+   const damage = Math.max(1, randint(s, a.damage[0], a.damage[1]) + kaijuDamageMod(s, actor, a, v));
+   const res = damageKaiju(s, targetActor, hitLocation(s, t), damage, ev);
+   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
+@@ -1097,6 +1114,11 @@ function doUfire(s, cmd, ev, fired) {
+     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+     return null;
+   }
++  if (phasesOut(s, t)) {
++    const body = t.parts.body;
++    ev("attack", { ...base, hit: true, phased: true, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
++    return null;
++  }
+   const damage = Math.max(1, randint(s, def.attack[0], def.attack[1]) + (rear ? RULES.rearBonus : 0) - t.armor);
+   const res = damageKaiju(s, target, hitLocation(s, t), damage, ev);
+   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
+@@ -1399,7 +1421,7 @@ function returnFire(state, actor) {
+     const rears = spots.map((h) => (H.arc(k.facing, h, k.at) === "rear" ? RULES.rearBonus : 0));
+     const lo = damageRange(def.attack[0], def.attack[1], Math.min(...rears) - k.armor, false)[0];
+     const hi = damageRange(def.attack[0], def.attack[1], Math.max(...rears) - k.armor, false)[1];
+-    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: [lo, hi] });
++    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, phase: phaseChance(k), damage: [lo, hi] });
+   }
+   const best = otherKaijuThreat(state, actor);
+   if (best) out.push(best);
+@@ -1430,8 +1452,8 @@ function otherKaijuThreat(state, actor) {
+       o.facing = face;
+       const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
+       const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
+-      const value = hitChance * (damage[0] + damage[1]);
+-      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, damage } };
++      const value = hitChance * (1 - phaseChance(ghost[actor]) / 100) * (damage[0] + damage[1]);
++      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, phase: phaseChance(state[actor]), damage } };
+     }
+     o.at = home;
+   }
+@@ -1460,6 +1482,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
+       targets.push({
+         ...victimInfo(state, v),
+         hitChance: kaijuAccuracy(state, actor, SLAM, v, 1),
++        phase: phaseChance(state[v.actor]),
+         damage: damageRange(SLAM.damage[0], SLAM.damage[1], kaijuDamageMod(state, actor, SLAM, v), false),
+       });
+     }
+@@ -1479,6 +1502,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
+         targets.push({
+           ...victimInfo(state, v),
+           hitChance: zero ? 100 : kaijuAccuracy(state, actor, a, v, dist),
++          phase: v.kind === "kaiju" && !zero ? phaseChance(state[v.actor]) : 0,
+           damage: damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, actor, a, v), zero),
+         });
+       }
+diff --git a/kaiju/src/ui/main.js b/kaiju/src/ui/main.js
+index ddd0b4b..b596643 100644
+--- a/kaiju/src/ui/main.js
++++ b/kaiju/src/ui/main.js
+@@ -60,6 +60,7 @@ const PASSIVE = {
+   stoneBody: "Stone body: heals in water.",
+   regen: "Regenerates.",
+   eldritch: "Eldritch: harder to hit.",
++  phaseOut: "Phase-out: some hits that land pass through.",
+   noHunger: "No hunger.",
+   thrusters: "Thrusters: +1 AP while they work.",
+ };
+diff --git a/kaiju/src/ui/panels.js b/kaiju/src/ui/panels.js
+index 5634a2a..9ea6c0c 100644
+--- a/kaiju/src/ui/panels.js
++++ b/kaiju/src/ui/panels.js
+@@ -258,13 +258,13 @@ export function forecastSheet(fc, { name, note, panic = 0, blast = null }) {
+     // Units of one type can differ: each one's rear bonus is its own.
+     const groups = new Map();
+     for (const r of fc.returnFire) {
+-      const key = `${r.name}|${r.hitChance}|${range(r.damage)}`;
++      const key = `${r.name}|${r.hitChance}|${r.phase || 0}|${range(r.damage)}`;
+       const g = groups.get(key) || { n: 0, name: r.name, hit: r.hitChance, dmg: r.damage };
+       g.n += 1;
+       groups.set(key, g);
+     }
+     const most = fc.returnFire.reduce((sum, r) => sum + r.damage[1], 0);
+-    const likely = Math.round(fc.returnFire.reduce((sum, r) => sum + (r.hitChance / 100) * ((r.damage[0] + r.damage[1]) / 2), 0));
++    const likely = Math.round(fc.returnFire.reduce((sum, r) => sum + (r.hitChance / 100) * (1 - (r.phase || 0) / 100) * ((r.damage[0] + r.damage[1]) / 2), 0));
+     back = "Return fire next phase: " + [...groups.values()].map((g) => `${g.n > 1 ? g.n + " × " : ""}${g.name} (${g.hit}%, ${range(g.dmg)})`).join(", ") + `. About ${likely} damage, at most ${most}.`;
+   }
+   return `<h2 class="tile-title">Forecast</h2><div class="sheet-body"><div class="fc-head"><b>${esc(name)}</b><span class="fc-cost">${costs.join(" · ")}</span></div>`
+diff --git a/kaiju/src/voice.js b/kaiju/src/voice.js
+index 2e5cadb..90e07d8 100644
+--- a/kaiju/src/voice.js
++++ b/kaiju/src/voice.js
+@@ -143,6 +143,16 @@ export const LINES = {
+     ],
+     "unitHitsKaiju.gun": ["The gun emplacement fires. {damage} on {Target}'s {part}{rear}.", "Fire from the wall. {Target}'s {part} takes {damage}{rear}."],
+     "unitHitsKaiju.jet": ["The jet comes in low. {damage} on {Target}'s {part}{rear}.", "Missiles from the jet. {Target}'s {part} takes {damage}{rear}."],
++    phasedUnit: [
++      "The shot passes through. {Target} was a moment elsewhere.",
++      "{Weapon} from the {unit}. It lands, and finds nothing to hurt.",
++      "The {unit} aims well. {Target} is not quite there.",
++    ],
++    phasedKaiju: [
++      "{Attack} lands on {Target} and goes on through.",
++      "{Name}'s {attack} meets {Target}, and then meets the air behind it.",
++      "{Attack}. {Target} is not quite where it was.",
++    ],
+     unitMissesKaiju: ["The {unit} fires at {Target} and misses.", "The {unit} fires its {weapon}. A miss.", "The {unit} misses. {Target} does not notice."],
+   },
+   destroyed: {
+@@ -437,7 +447,8 @@ const VARS = {
+       ...(a.side === "unit" ? unitVars(a.type) : {}),
+     };
+     let kinds;
+-    if (a.side === "unit") kinds = [d.hit ? "unitHitsKaiju" : "unitMissesKaiju"];
++    if (d.phased) kinds = [a.side === "unit" ? "phasedUnit" : "phasedKaiju"];
++    else if (a.side === "unit") kinds = [d.hit ? "unitHitsKaiju" : "unitMissesKaiju"];
+     else if (t.side === "structure") kinds = STRUCTURES[t.type] && STRUCTURES[t.type].populated ? ["kaijuHitsBuilding", "kaijuHitsStructure"] : ["kaijuHitsStructure"];
+     else if (t.side === "unit") kinds = [d.zero ? "gaze" : d.hit ? "kaijuHitsUnit" : "kaijuMissesUnit"];
+     else kinds = [d.hit ? "kaijuHitsKaiju" : "kaijuMissesKaiju"];
+@@ -445,6 +456,7 @@ const VARS = {
+     const tail = onKaiju && d.hit && d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(t.type, t.variant)}.` : "";
+     // A look gets the ".alt" lines first: they name the blow by its attack, not the base kaiju's word for it.
+     const alt = a.side !== "unit" && !!a.variant;
++    if (d.phased) return { variants: kinds, vars, tail: "" };
+     return { variants: kinds.flatMap((v) => [...(alt ? [`${v}.${id}.alt`] : []), `${v}.${id}`, v]), vars, tail };
+   },
+   destroyed: (d) => ({ variant: d.what, vars: { Name: kaijuName(d.type, d.variant), ...thingVars(d.what, d.type, d.variant) } }),

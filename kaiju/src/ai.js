@@ -66,7 +66,7 @@ function expected(state, actor, attackId, target, facing) {
   const f = forecast(state, attackId, target, actor, facing);
   const foe = f.targets.find((t) => t.kind === "kaiju");
   if (!foe) return 0;
-  return (foe.hitChance / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
+  return (foe.hitChance / 100) * (1 - (foe.phase || 0) / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
 }
 
 // Every way the actor can strike the other kaiju from where it stands: [{attack, facing, target, value}].
