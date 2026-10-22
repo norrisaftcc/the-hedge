@@ -37,14 +37,18 @@ const GAMES = [
   {
     name: "coast",
     setup: { kaiju: "squamous", mission: "coast", target: null, rival: "dairengo", seed: 7 },
+    // Re-recorded with the bot for v0.5.0: phase-out rolls the dice after each hit that lands on the
+    // Squamous One, so the old command list no longer ends the mission (DESIGN 18.7).
     commands: [
       "m 5,7 | end",
       "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
-      "sl 6,6 | sl 6,6 | sl 6,6 | end",
+      "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
+      "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
+      "a grab 6,6 | a grab 6,6",
     ],
-    result: { grade: "defeat", outcome: "fallen", turn: 5, death: "cuts", score: { destruction: 10, units: 10, objective: 0, time: 0, parts: 0, total: 20 } },
+    result: { grade: "total victory", outcome: "goal", turn: 7, death: null, score: { destruction: 20, units: 10, objective: 500, time: 180, parts: 250, total: 960 } },
   },
   {
     // The bot never withdraws; the mad scientist arrives on turn 5 and the paralysis does the rest.

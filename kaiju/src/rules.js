@@ -43,6 +43,27 @@ function roll(s, sides) {
   return v;
 }
 
+// Phase-out (DESIGN 18.3): the chance, in percent, that a hit which landed passes through. Zero for
+// a kaiju without the passive. Blasts and lingering harm never ask it.
+export function phaseChance(k) {
+  return k.passives.includes("phaseOut") ? RULES.phaseOut : 0;
+}
+
+// Rolled on the state's dice, after the hit roll, and only for a target that can phase out.
+function phasesOut(s, k) {
+  const p = phaseChance(k);
+  return p > 0 && roll(s, 100) <= p;
+}
+
+// A hit that passed through: the hit roll said it landed, the phase roll said it did nothing. The
+// event still names the part it crossed (one more roll on the state's dice, so the log can say so),
+// carries hit: true and phased: true, and no damage. Clients must not draw a wound from it.
+function phasedHit(s, t, base, ev) {
+  const part = hitLocation(s, t);
+  const p = t.parts[part];
+  ev("attack", { ...base, hit: true, phased: true, damage: 0, part, before: { hp: p.hp, max: p.max }, after: { hp: p.hp, max: p.max }, spill: 0 });
+}
+
 function randint(s, low, high) {
   const m = new Mulberry32(s.rng);
   const v = m.randint(low, high);
@@ -877,6 +898,10 @@ function strikeKaiju(s, actor, a, targetActor, ev) {
     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
     return;
   }
+  if (phasesOut(s, t)) {
+    phasedHit(s, t, base, ev);
+    return;
+  }
   const damage = Math.max(1, randint(s, a.damage[0], a.damage[1]) + kaijuDamageMod(s, actor, a, v));
   const res = damageKaiju(s, targetActor, hitLocation(s, t), damage, ev);
   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
@@ -1095,6 +1120,10 @@ function doUfire(s, cmd, ev, fired) {
   if (!hit) {
     const body = t.parts.body;
     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+    return null;
+  }
+  if (phasesOut(s, t)) {
+    phasedHit(s, t, base, ev);
     return null;
   }
   const damage = Math.max(1, randint(s, def.attack[0], def.attack[1]) + (rear ? RULES.rearBonus : 0) - t.armor);
@@ -1399,7 +1428,7 @@ function returnFire(state, actor) {
     const rears = spots.map((h) => (H.arc(k.facing, h, k.at) === "rear" ? RULES.rearBonus : 0));
     const lo = damageRange(def.attack[0], def.attack[1], Math.min(...rears) - k.armor, false)[0];
     const hi = damageRange(def.attack[0], def.attack[1], Math.max(...rears) - k.armor, false)[1];
-    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: [lo, hi] });
+    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, phase: phaseChance(k), damage: [lo, hi] });
   }
   const best = otherKaijuThreat(state, actor);
   if (best) out.push(best);
@@ -1430,8 +1459,9 @@ function otherKaijuThreat(state, actor) {
       o.facing = face;
       const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
       const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
-      const value = hitChance * (damage[0] + damage[1]);
-      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, damage } };
+      const phase = phaseChance(state[actor]);
+      const value = hitChance * (1 - phase / 100) * (damage[0] + damage[1]);
+      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, phase, damage } };
     }
     o.at = home;
   }
@@ -1460,6 +1490,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
       targets.push({
         ...victimInfo(state, v),
         hitChance: kaijuAccuracy(state, actor, SLAM, v, 1),
+        phase: phaseChance(state[v.actor]),
         damage: damageRange(SLAM.damage[0], SLAM.damage[1], kaijuDamageMod(state, actor, SLAM, v), false),
       });
     }
@@ -1479,6 +1510,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
         targets.push({
           ...victimInfo(state, v),
           hitChance: zero ? 100 : kaijuAccuracy(state, actor, a, v, dist),
+          phase: v.kind === "kaiju" && !zero ? phaseChance(state[v.actor]) : 0,
           damage: damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, actor, a, v), zero),
         });
       }

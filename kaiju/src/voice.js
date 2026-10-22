@@ -143,6 +143,20 @@ export const LINES = {
     ],
     "unitHitsKaiju.gun": ["The gun emplacement fires. {damage} on {Target}'s {part}{rear}.", "Fire from the wall. {Target}'s {part} takes {damage}{rear}."],
     "unitHitsKaiju.jet": ["The jet comes in low. {damage} on {Target}'s {part}{rear}.", "Missiles from the jet. {Target}'s {part} takes {damage}{rear}."],
+    // A phased hit landed and did nothing (DESIGN 18.3). Every line names the part the hit crossed, from the
+    // event, and none of them reads as a miss: the shot was true, and there was nothing there to take it.
+    phasedUnit: [
+      "The {unit} fires. The shot passes through where {Target}'s {part} {was} a moment ago.",
+      "{Weapon} from the {unit}. It crosses {Target}'s {part} and finds nothing to hurt.",
+      "The {unit} aims well. {Target}'s {part} {is} not quite there.",
+      "The {unit} hits {Target}'s {part} and the hit goes on out the other side.",
+    ],
+    phasedKaiju: [
+      "{Attack} lands on {Target}'s {part} and goes on through.",
+      "{Name}'s {attack} meets {Target}'s {part}, and then meets the air behind it.",
+      "{Attack}. Nothing of {Target}'s {part} is where the blow falls.",
+      "{Attack} passes through where {Target}'s {part} {was} a moment ago.",
+    ],
     unitMissesKaiju: ["The {unit} fires at {Target} and misses.", "The {unit} fires its {weapon}. A miss.", "The {unit} misses. {Target} does not notice."],
   },
   destroyed: {
@@ -384,6 +398,7 @@ function partVars(id, variant, part) {
   return {
     part: p ? p.name.toLowerCase().replace(/^the /, "") : part,
     is: plural ? "are" : "is",
+    was: plural ? "were" : "was",
     has: plural ? "have" : "has",
     takes: plural ? "take" : "takes",
     stops: plural ? "stop" : "stops",
@@ -437,7 +452,8 @@ const VARS = {
       ...(a.side === "unit" ? unitVars(a.type) : {}),
     };
     let kinds;
-    if (a.side === "unit") kinds = [d.hit ? "unitHitsKaiju" : "unitMissesKaiju"];
+    if (d.phased) kinds = [a.side === "unit" ? "phasedUnit" : "phasedKaiju"];
+    else if (a.side === "unit") kinds = [d.hit ? "unitHitsKaiju" : "unitMissesKaiju"];
     else if (t.side === "structure") kinds = STRUCTURES[t.type] && STRUCTURES[t.type].populated ? ["kaijuHitsBuilding", "kaijuHitsStructure"] : ["kaijuHitsStructure"];
     else if (t.side === "unit") kinds = [d.zero ? "gaze" : d.hit ? "kaijuHitsUnit" : "kaijuMissesUnit"];
     else kinds = [d.hit ? "kaijuHitsKaiju" : "kaijuMissesKaiju"];
@@ -445,6 +461,7 @@ const VARS = {
     const tail = onKaiju && d.hit && d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(t.type, t.variant)}.` : "";
     // A look gets the ".alt" lines first: they name the blow by its attack, not the base kaiju's word for it.
     const alt = a.side !== "unit" && !!a.variant;
+    if (d.phased) return { variants: kinds, vars, tail: "" };
     return { variants: kinds.flatMap((v) => [...(alt ? [`${v}.${id}.alt`] : []), `${v}.${id}`, v]), vars, tail };
   },
   destroyed: (d) => ({ variant: d.what, vars: { Name: kaijuName(d.type, d.variant), ...thingVars(d.what, d.type, d.variant) } }),

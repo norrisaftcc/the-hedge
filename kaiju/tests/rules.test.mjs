@@ -340,6 +340,9 @@ test("forecast: cover, ranged fall-off, eldritch, return fire", () => {
   const q = game({ kaiju: "squamous" });
   putUnit(q, "tank", E);
   assert.equal(forecast(q, "grab", E).returnFire[0].hitChance, 55);
+  // The Squamous One's phase-out (DESIGN 18) is reported beside the hit chance, never folded into it.
+  assert.equal(forecast(q, "grab", E).returnFire[0].phase, 25);
+  assert.equal(f.returnFire[0].phase, 0, "Thalassor does not phase out");
 });
 
 function gunShot(facing) {
