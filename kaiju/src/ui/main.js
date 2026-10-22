@@ -7,6 +7,7 @@ import * as H from "../hex.js";
 import { say, review } from "../voice.js";
 import { MISSIONS, TARGETS, OBJECTIVES, resolveMission } from "../data/missions.js";
 import { KAIJU } from "../data/kaiju.js";
+import { kaijuDef, LOOKS } from "../data/variants.js";
 import { MUTATIONS, BUDGET } from "../data/mutations.js";
 import { UNITS } from "../data/units.js";
 import { STRUCTURES } from "../data/terrain.js";
@@ -69,14 +70,44 @@ const TARGET_TEXT = {
 
 // ---------- setup ----------
 
-const pick = { kaiju: "radiosaur", mutations: [], mission: "fortress", target: "plant", rival: "", objective: "balanced", seed: randomSeed() };
+// variant is the chosen look's id, or null for the kaiju's own. touched is true once the player
+// has set a mutation by hand: from then on a look's preset build no longer replaces their choice.
+const pick = { kaiju: "radiosaur", variant: null, mutations: [], touched: false, mission: "fortress", target: "plant", rival: "", objective: "balanced", seed: randomSeed() };
+
+// The def of the monster the setup screen shows for a kaiju id: the chosen look for the chosen
+// kaiju, the base look for the others.
+const defFor = (id) => kaijuDef(id, id === pick.kaiju ? pick.variant : null);
+
+// A preset build, cut down to what the kaiju may take and what the budget allows.
+function presetFor(def) {
+  const out = [];
+  for (const m of def.preset || []) {
+    if (def.forbid.includes(m) || spent([...out, m]) > BUDGET) continue;
+    out.push(m);
+  }
+  return out;
+}
+
+function chooseKaiju(id) {
+  if (id === pick.kaiju) return;
+  pick.kaiju = id;
+  pick.variant = null;
+  pick.mutations = pick.touched ? pick.mutations.filter((m) => !defFor(id).forbid.includes(m)) : [];
+}
+
+function chooseLook(lookId) {
+  if (!Object.hasOwn(LOOKS, pick.kaiju) || !LOOKS[pick.kaiju].includes(lookId)) return;
+  pick.variant = lookId === pick.kaiju ? null : lookId;
+  const def = defFor(pick.kaiju);
+  pick.mutations = pick.touched ? pick.mutations.filter((m) => !def.forbid.includes(m)) : presetFor(def);
+}
 
 function spent(muts) {
   return muts.reduce((n, m) => n + MUTATIONS[m].cost, 0);
 }
 
 function statsFor(id, muts) {
-  const def = KAIJU[id];
+  const def = defFor(id);
   const s = { ap: def.ap, armor: def.armor, body: def.parts.body.hp, energy: def.energy.max, range: 0, roar: 3 };
   if (def.passives.includes("thrusters")) s.ap += 1;
   for (const m of muts) {
@@ -101,7 +132,7 @@ function patternText(a, extra) {
 }
 
 function monsterCard(id) {
-  const def = KAIJU[id];
+  const def = defFor(id);
   const chosen = pick.kaiju === id;
   const base = statsFor(id, []);
   const s = chosen ? statsFor(id, pick.mutations) : base;
@@ -114,15 +145,34 @@ function monsterCard(id) {
   }).join("");
   const passives = def.passives.map((p) => PASSIVE[p]).join(" ");
   return `<div class="card monster-card${chosen ? " chosen" : ""}" role="radio" tabindex="${chosen ? 0 : -1}" aria-checked="${chosen}" data-kaiju="${id}">`
-    + `<div class="mc-art"><div class="mc-portrait">${portrait(id)}</div><div class="mc-sil">${silhouette(id)}</div></div>`
+    + `<div class="mc-art"><div class="mc-portrait">${portrait(def.look)}</div><div class="mc-sil">${silhouette(def.look)}</div></div>`
     + `<div class="mc-body"><div class="card-name">${esc(def.name)}</div><div class="card-sub">${esc(def.epithet)}</div>`
     + `<dl class="stats">${stat("AP", s.ap, "ap")}${stat("Armor", s.armor, "armor")}${stat(esc(def.parts.body.name), s.body, "body")}${stat("Energy", s.energy, "energy")}${stat("Hunger", def.hunger ? def.hunger.max : "none")}</dl>`
     + `<ul class="attacks">${attacks}</ul>`
     + `<p class="card-note">${esc(ENERGY_RULE[def.energy.rule])} ${esc(passives)}</p></div></div>`;
 }
 
+// The row of looks under the monster cards: a button for each look of the chosen kaiju, a small
+// portrait and its name, then the chosen look's description.
+function looksHtml() {
+  const list = LOOKS[pick.kaiju];
+  const def = defFor(pick.kaiju);
+  const base = kaijuDef(pick.kaiju);
+  if (!list || list.length < 2) return "";
+  const buttons = list.map((lookId) => {
+    const d = kaijuDef(pick.kaiju, lookId === pick.kaiju ? null : lookId);
+    const on = lookId === def.look;
+    return `<button type="button" class="look${on ? " on" : ""}" data-look="${lookId}" aria-pressed="${on}" tabindex="${on ? 0 : -1}" title="${esc(d.name)}, ${esc(d.epithet)}">`
+      + `<span class="look-art" aria-hidden="true">${portrait(lookId)}</span><span class="look-name">${esc(d.name)}</span></button>`;
+  }).join("");
+  const preset = def.preset ? `<p class="look-preset">Starts with ${esc(presetFor(def).map((m) => MUTATIONS[m].name).join(" and ") || "no mutations")}. Change it below.</p>` : "";
+  return `<p class="look-head" id="look-head">Looks of ${esc(base.name)}</p>`
+    + `<div class="looks-row" role="group" aria-labelledby="look-head">${buttons}</div>`
+    + `<div class="look-text"><b>${esc(def.name)}</b>, <i>${esc(def.epithet)}</i>. ${esc(def.blurb)}</div>${preset}`;
+}
+
 function mutationRows() {
-  const def = KAIJU[pick.kaiju];
+  const def = defFor(pick.kaiju);
   const left = BUDGET - spent(pick.mutations);
   return Object.values(MUTATIONS).map((m) => {
     const on = pick.mutations.includes(m.id);
@@ -177,7 +227,7 @@ function questionHtml() {
     const opt = (value, name, text) => `<label class="choice${pick.rival === value ? " on" : ""}"><input type="radio" name="rival" value="${value}"${pick.rival === value ? " checked" : ""}>`
       + `<span class="choice-name">${esc(name)}</span><span class="choice-text">${esc(text)}</span></label>`;
     return `<fieldset class="question"><legend>Which monster waits on the coast?</legend>${opt("", "Leave it to chance", "One of the other three, by the seed.")}`
-      + others.map((id) => opt(id, KAIJU[id].name, KAIJU[id].epithet)).join("") + `</fieldset>`;
+      + others.map((id) => opt(id, kaijuDef(id).name, kaijuDef(id).epithet)).join("") + `</fieldset>`;
   }
   if (m.choose === "objective") {
     const rows = OBJECTIVE_IDS.map((id) => {
@@ -193,18 +243,21 @@ function questionHtml() {
 
 function renderSetup() {
   const focus = document.activeElement;
-  const restore = focus && (focus.dataset.kaiju ? `[data-kaiju="${focus.dataset.kaiju}"]` : focus.dataset.mission ? `[data-mission="${focus.dataset.mission}"]`
+  const restore = focus && (focus.dataset.kaiju ? `[data-kaiju="${focus.dataset.kaiju}"]` : focus.dataset.look ? `[data-look="${focus.dataset.look}"]` : focus.dataset.mission ? `[data-mission="${focus.dataset.mission}"]`
     : focus.name ? `input[name="${focus.name}"][value="${focus.value}"]` : null);
   $("monsters").innerHTML = KAIJU_IDS.map(monsterCard).join("");
+  $("looks").innerHTML = looksHtml();
+  const chosen = defFor(pick.kaiju);
   const left = BUDGET - spent(pick.mutations);
-  $("points").innerHTML = `<b>${left}</b> of ${BUDGET} points left${left ? ` <span class="unspent">unspent: +${left} ${esc(KAIJU[pick.kaiju].parts.body.name.toLowerCase())}</span>` : ""}`;
+  $("points").innerHTML = `<b>${left}</b> of ${BUDGET} points left${left ? ` <span class="unspent">unspent: +${left} ${esc(chosen.parts.body.name.toLowerCase())}</span>` : ""}`;
   $("mutations").innerHTML = mutationRows();
   $("missions").innerHTML = MISSION_IDS.map(missionCard).join("");
   $("question").innerHTML = questionHtml();
   if (document.activeElement !== $("seed")) $("seed").value = pick.seed;
   const muts = pick.mutations.map((m) => MUTATIONS[m].name).join(", ") || "no mutations";
   const rules = MISSIONS[pick.mission].choose === "objective" ? `: ${OBJECTIVES[pick.objective].name}` : "";
-  $("summary").textContent = `${KAIJU[pick.kaiju].name}, ${muts}. ${MISSIONS[pick.mission].name}${rules}. Seed ${pick.seed || "0"}.`;
+  const lookName = chosen.variant ? `${chosen.name} (${kaijuDef(pick.kaiju).name})` : chosen.name;
+  $("summary").textContent = `${lookName}, ${muts}. ${MISSIONS[pick.mission].name}${rules}. Seed ${pick.seed || "0"}.`;
   if (restore) {
     const el = document.querySelector(restore);
     if (el) el.focus();
@@ -214,10 +267,14 @@ function renderSetup() {
 function setupEvents() {
   const root = $("setup");
   root.addEventListener("click", (e) => {
+    const look = e.target.closest("[data-look]");
+    if (look) {
+      chooseLook(look.dataset.look);
+      return renderSetup();
+    }
     const card = e.target.closest("[data-kaiju], [data-mission]");
     if (card && card.dataset.kaiju) {
-      pick.kaiju = card.dataset.kaiju;
-      pick.mutations = pick.mutations.filter((m) => !KAIJU[pick.kaiju].forbid.includes(m));
+      if (Object.hasOwn(KAIJU, card.dataset.kaiju)) chooseKaiju(card.dataset.kaiju);
       renderSetup();
     } else if (card && card.dataset.mission) {
       pick.mission = card.dataset.mission;
@@ -230,7 +287,13 @@ function setupEvents() {
       e.target.click();
     }
     const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-    if (step && e.target.matches(".card[role=radio]")) {
+    if (step && e.target.matches(".look")) {
+      e.preventDefault();
+      const group = [...e.target.parentElement.querySelectorAll(".look")];
+      const next = group[(group.indexOf(e.target) + step + group.length) % group.length];
+      next.focus();
+      next.click();
+    } else if (step && e.target.matches(".card[role=radio]")) {
       e.preventDefault();
       const group = [...e.target.parentElement.querySelectorAll(".card[role=radio]")];
       const next = group[(group.indexOf(e.target) + step + group.length) % group.length];
@@ -241,6 +304,7 @@ function setupEvents() {
   root.addEventListener("change", (e) => {
     const t = e.target;
     if (t.name === "mutation") {
+      pick.touched = true;
       pick.mutations = t.checked ? [...pick.mutations, t.value] : pick.mutations.filter((m) => m !== t.value);
       if (spent(pick.mutations) > BUDGET) pick.mutations = pick.mutations.filter((m) => m !== t.value);
     } else if (t.name === "target") pick.target = t.value;
@@ -302,6 +366,7 @@ function deploy(p = pick) {
   try {
     const mission = resolveMission(p.mission, { seed, target });
     setup = { kaiju: p.kaiju, mutations: [...p.mutations], mission, target, seed };
+    if (p.variant) setup.variant = p.variant;
     if (m.choose === "rival" && p.rival) setup.rival = p.rival;
     if (m.choose === "objective") setup.objective = p.objective;
     state = R.create(setup);
@@ -326,7 +391,7 @@ function deploy(p = pick) {
   for (const line of setup.mission.briefing) addLog({ k: "caption", text: line });
   addLog({ k: "caption", text: `Goal: ${setup.mission.goal}` });
   if (state.objective.kind === "none") addLog({ k: "caption", text: `${state.objective.name}. ${state.objective.text}` });
-  if (state.rival) addLog({ k: "caption", text: `The rival is ${KAIJU[state.rival.id].name}, ${KAIJU[state.rival.id].epithet}.` });
+  if (state.rival) addLog({ k: "caption", text: `The rival is ${kaijuDef(state.rival.id, state.rival.variant).name}, ${kaijuDef(state.rival.id, state.rival.variant).epithet}.` });
   addLog({ k: "phase", text: say("phase", { phase: "kaiju", turn: 1 }) });
   board.reset();
   show("play");
@@ -856,7 +921,7 @@ function showEnd() {
   const r = s.result;
   if (!r) return;
   const k = s.kaiju;
-  const def = KAIJU[k.id];
+  const def = kaijuDef(k.id, k.variant);
   const states = P.partStates(k);
   const mission = MISSIONS[s.mission];
   const rampage = r.grade === "rampage";
@@ -879,7 +944,7 @@ function showEnd() {
     + `<h1 class="paper-name">${esc(PAPERS[s.mission] || "The Evening Wire")}</h1>`
     + `<h2 class="headline" tabindex="-1">${esc(r.headline)}</h2>`
     + `<p class="deck">${esc(def.name)} ${esc(where)}. ${esc(how)} ${crushed} ${crushed === 1 ? "structure" : "structures"} and ${killed} ${killed === 1 ? "unit" : "units"} destroyed. Seed ${esc(game.pick.seed)}.</p>`
-    + `<div class="paper-cols"><figure class="paper-photo"><div class="pp-art">${portrait(k.id, { parts: states })}${silhouette(k.id, { parts: states })}</div>`
+    + `<div class="paper-cols"><figure class="paper-photo"><div class="pp-art">${portrait(def.look, { parts: states })}${silhouette(def.look, { parts: states })}</div>`
     + `<figcaption>${esc(def.name)}, ${esc(def.epithet)}, as last seen.</figcaption></figure>`
     + `<div class="wire"><h3>From the wire</h3>${lines}</div></div></article>`
     + `<div class="end-side"><div class="stamp grade-${r.grade.replace(" ", "-")}">${esc(GRADE_LINE[r.grade])}</div>`

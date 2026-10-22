@@ -4,6 +4,7 @@
 import * as H from "../hex.js";
 import { hexTile, structure as structureArt } from "../art/terrain.js";
 import { token as kaijuToken, facingNotch } from "../art/kaiju.js";
+import { kaijuDef } from "../data/variants.js";
 import { token as unitToken } from "../art/units.js";
 import { STRUCTURES } from "../data/terrain.js";
 import { UNITS } from "../data/units.js";
@@ -65,7 +66,7 @@ function kaijuPiece(k, actor) {
   const ring = actor === "rival"
     ? `<circle r="20.5" fill="none" style="stroke: var(--danger)" stroke-width="2.4" stroke-dasharray="5 3"/>`
     : `<circle r="20.5" fill="none" style="stroke: var(--ink)" stroke-width="1.4"/>`;
-  return `<g class="piece kaiju ${actor}" transform="translate(${f1(x)},${f1(y)})">${ring}${kaijuToken(k.id)}`
+  return `<g class="piece kaiju ${actor}" transform="translate(${f1(x)},${f1(y)})">${ring}${kaijuToken(kaijuDef(k.id, k.variant).look)}`
     + `<g transform="rotate(${-60 * k.facing})">${facingNotch()}</g></g>`;
 }
 

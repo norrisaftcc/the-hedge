@@ -1,7 +1,8 @@
 // The play screen's panels as HTML strings: top bar, status, inspect, actions, the log's lines,
 // the hint bar under the map and the forecast sheet. main.js puts them on the page.
 
-import { KAIJU, PART_SLOTS } from "../data/kaiju.js";
+import { PART_SLOTS } from "../data/kaiju.js";
+import { kaijuDef } from "../data/variants.js";
 import { STRUCTURES } from "../data/terrain.js";
 import { UNITS } from "../data/units.js";
 import { portrait, silhouette } from "../art/kaiju.js";
@@ -36,7 +37,7 @@ export function partStates(k) {
 export function goalShort(state) {
   const o = state.objective;
   if (o.kind === "none") return `No goal but the score: ${o.name}`;
-  if (o.kind === "rival" && state.rival) return `Defeat ${KAIJU[state.rival.id].name}`;
+  if (o.kind === "rival" && state.rival) return `Defeat ${kaijuDef(state.rival.id, state.rival.variant).name}`;
   if (o.type && STRUCTURES[o.type]) return `Destroy the ${STRUCTURES[o.type].name.toLowerCase()}`;
   return state.goal;
 }
@@ -55,7 +56,8 @@ export function topBar(state, { phase, themeName }) {
   const goal = `<span class="tb-goal" title="${esc(goalText)}">${goalHtml}</span>`;
   const ph = phase ? `<span class="tb-phase">${esc(phase)}</span>` : "";
   const states = partStates(k);
-  const figs = `<span class="tb-figs" aria-hidden="true">${portrait(k.id, { parts: states })}${silhouette(k.id, { parts: states })}</span>`;
+  const look = kaijuDef(k.id, k.variant).look;
+  const figs = `<span class="tb-figs" aria-hidden="true">${portrait(look, { parts: states })}${silhouette(look, { parts: states })}</span>`;
   return `${figs}<div class="tb-facts">${turn}${ap}${ph}${goal}</div>`
     + `<div class="tb-buttons"><button type="button" class="btn icon" data-ui="theme" title="Theme: ${themeName}. Light, dark, or as the system says." aria-label="Theme: ${themeName}">${ICON_THEME}<span class="tb-label">${themeName}</span></button>`
     + `<button type="button" class="btn icon" data-ui="settings" title="Settings" aria-label="Settings">${ICON_GEAR}</button></div>`;
@@ -74,7 +76,7 @@ const STATE_WORD = { intact: "intact", hurt: "hurt", bad: "badly hurt", crippled
 
 export function status(state) {
   const k = state.kaiju;
-  const def = KAIJU[k.id];
+  const def = kaijuDef(k.id, k.variant);
   const states = partStates(k);
   const battery = def.energy.rule === "battery";
   let bars = bar("AP", k.ap, k.apMax, "b-ap");
@@ -92,17 +94,17 @@ export function status(state) {
   let rival = "";
   const r = state.rival;
   if (r) {
-    const rdef = KAIJU[r.id];
+    const rdef = kaijuDef(r.id, r.variant);
     const rs = partStates(r);
     const gone = r.withdrawn ? "withdrawn" : r.parts.body.hp <= 0 ? "down" : "";
     const worst = PART_SLOTS.filter((p) => rs[p] !== "intact").map((p) => `${rdef.parts[p].name.toLowerCase()} ${STATE_WORD[rs[p]]}`);
-    rival = `<div class="rival-row"><div class="rival-sil">${silhouette(r.id, { parts: rs })}</div><div class="rival-text">`
+    rival = `<div class="rival-row"><div class="rival-sil">${silhouette(rdef.look, { parts: rs })}</div><div class="rival-text">`
       + `<div class="rival-name">Rival: ${esc(rdef.name)}${gone ? ` <i>(${gone})</i>` : ""}</div>`
       + bar(rdef.parts.body.name, r.parts.body.hp, r.parts.body.max, "b-rival")
       + `<div class="rival-parts">${worst.length ? esc(worst.join(", ")) : "Unmarked."}</div></div></div>`;
   }
-  return `<div class="status-main"><div class="status-figs"><div class="st-portrait">${portrait(k.id, { parts: states })}</div>`
-    + `<div class="st-sil">${silhouette(k.id, { parts: states })}</div></div>`
+  return `<div class="status-main"><div class="status-figs"><div class="st-portrait">${portrait(def.look, { parts: states })}</div>`
+    + `<div class="st-sil">${silhouette(def.look, { parts: states })}</div></div>`
     + `<div class="status-vitals"><div class="st-name">${esc(def.name)}<span class="st-epithet">${esc(def.epithet)}</span></div>${bars}`
     + `<div class="st-facts">${facts.map(esc).join(" · ")}</div></div></div>`
     + `<div class="status-more"><ul class="parts">${parts}</ul>${rival}</div>`;

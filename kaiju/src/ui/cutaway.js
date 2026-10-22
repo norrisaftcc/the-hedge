@@ -2,7 +2,8 @@
 // the bottom, Fire Emblem fashion. planScenes picks which attack events get a scene and groups
 // them; buildScene reads the scene from the board before and after; playScene shows it.
 
-import { KAIJU, PART_SLOTS } from "../data/kaiju.js";
+import { PART_SLOTS } from "../data/kaiju.js";
+import { kaijuDef } from "../data/variants.js";
 import { UNITS } from "../data/units.js";
 import { figure as kaijuFigure } from "../art/kaiju.js";
 import { figure as unitFigure } from "../art/units.js";
@@ -83,13 +84,13 @@ function unitSide(type, ids, before, after) {
 function kaijuSide(actor, before, after) {
   const k0 = before[actor];
   const k1 = after[actor];
-  const def = KAIJU[k0.id];
+  const def = kaijuDef(k0.id, k0.variant);
   const bars = [];
   for (const p of PART_SLOTS) {
     if (k0.parts[p].hp !== k1.parts[p].hp) bars.push({ label: def.parts[p].name, before: k0.parts[p].hp, after: k1.parts[p].hp, max: k0.parts[p].max });
   }
   if (!bars.length) bars.push({ label: def.parts.body.name, before: k0.parts.body.hp, after: k1.parts.body.hp, max: k0.parts.body.max });
-  return { kind: "kaiju", id: k0.id, name: def.name, bars, parts0: states(k0), parts1: states(k1), down: k1.parts.body.hp <= 0 };
+  return { kind: "kaiju", id: k0.id, look: def.look, name: def.name, bars, parts0: states(k0), parts1: states(k1), down: k1.parts.body.hp <= 0 };
 }
 
 // Panic results for units hit by a zero-damage attack: the events within the run, and after it
@@ -140,7 +141,7 @@ export function buildScene(group, before, after, events) {
 }
 
 function figureOf(side, flip, after) {
-  if (side.kind === "kaiju") return kaijuFigure(side.id, { flip, parts: after ? side.parts1 : side.parts0 });
+  if (side.kind === "kaiju") return kaijuFigure(side.look, { flip, parts: after ? side.parts1 : side.parts0 });
   const n = after ? side.count1 : side.count0;
   if (n > 0) return unitFigure(side.type, { flip, count: n });
   return `<div class="fallen">${unitFigure(side.type, { flip, count: 1 })}</div>`;
