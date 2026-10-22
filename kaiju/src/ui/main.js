@@ -33,7 +33,7 @@ const GRADE_LINE = {
   victory: "Victory",
   draw: "Draw",
   defeat: "Defeat",
-  rampage: "Rampage over",
+  rampage: "Last call",
 };
 const OUTCOME_LINE = {
   goal: "The objective fell.",

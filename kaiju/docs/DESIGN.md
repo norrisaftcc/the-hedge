@@ -534,7 +534,9 @@ The page itself is checked in a browser (Playwright, at 375 × 812 and 1280 × 8
 
 ## 14. Rampage and the review [MIS-8, MIS-9]
 
-The game the 1981 review described, and the review the game writes back. Everything here keeps the rules in section 6; Rampage only changes how a game ends, what it scores, and how the army comes.
+The game the 1981 review described, and the review the game writes back.
+
+**Name.** The mode is called **Hex and the City** on the page: eat and smash what you like, until the hangover hits. It was first called Rampage, which is also the name of a 1986 arcade game. Its id stays `rampage` in data, setups, tests and pinned replays, so this section still says Rampage. The end stamp reads "Last call". Everything here keeps the rules in section 6; Rampage only changes how a game ends, what it scores, and how the army comes.
 
 ### 14.1 The mission: `rampage` in `data/missions.js`
 
