@@ -410,6 +410,7 @@ function candidates() {
   if (m.kind === "move") return Object.keys(R.reach(s));
   if (m.kind === "attack" || m.kind === "teleport") return R.attackTargets(s, m.attack);
   if (m.kind === "stomp") return R.stompTargets(s);
+  if (m.kind === "slam") return R.slamTargets(s);
   if (m.kind === "eat") return R.eatTargets(s);
   return [];
 }
@@ -492,6 +493,12 @@ function render() {
   restoreFocus();
 }
 
+// The name of an action as the rules list it, so a rename in the data shows on the page.
+function actionName(id) {
+  const a = game.list.find((x) => x.id === id);
+  return a ? a.name : id;
+}
+
 function targetName(key) {
   const d = R.describeHex(game.state, key);
   if (d.kaiju) return d.kaiju.name;
@@ -540,6 +547,9 @@ function renderHint() {
     h = { text: p ? `${a.name}: read the forecast, then confirm.` : `${a.name}: tap a target outlined in red.`, cancel: "Cancel" };
   } else if (m.kind === "stomp") {
     h = { text: p ? "Stomp: read the forecast, then confirm." : "Stomp: tap an adjacent target.", cancel: "Cancel" };
+  } else if (m.kind === "slam") {
+    const name = actionName("slam");
+    h = { text: p ? `${name}: read the forecast, then confirm.` : `${name}: tap the monster beside you.`, cancel: "Cancel" };
   } else if (m.kind === "eat") {
     h = p ? { text: `Eat ${targetName(p)}: 1 AP.`, confirm: "Eat", cancel: "Cancel" } : { text: "Eat: tap something adjacent and edible.", cancel: "Cancel" };
   } else if (m.kind === "withdraw") {
@@ -550,7 +560,7 @@ function renderHint() {
 
 function sheetWanted() {
   const m = game.mode;
-  return !game.busy && !game.state.result && !!game.preview && (m.kind === "attack" || m.kind === "stomp");
+  return !game.busy && !game.state.result && !!game.preview && (m.kind === "attack" || m.kind === "stomp" || m.kind === "slam");
 }
 
 function renderSheet() {
@@ -563,9 +573,9 @@ function renderSheet() {
   }
   const s = game.state;
   const m = game.mode;
-  const id = m.kind === "stomp" ? "stomp" : m.attack;
+  const id = m.kind === "attack" ? m.attack : m.kind;
   const fc = R.forecast(s, id, game.preview);
-  let name = "Stomp";
+  let name = m.kind === "slam" ? actionName("slam") : "Stomp";
   let note = "";
   let panic = 0;
   if (m.kind === "attack") {
@@ -574,7 +584,7 @@ function renderSheet() {
     panic = a.effects.panic || 0;
     if (a.pattern === "line" || a.pattern === "cone") note = "It strikes everything in the hatched pattern, aimed the way the monster faces. Turn first to aim elsewhere.";
     else if (a.pattern === "rear") note = "It strikes everything in the hatched hexes behind the monster.";
-  }
+  } else if (m.kind === "slam") note = "The body is thrown at the monster beside it. It needs no facing, and a crippled limb does not weaken it.";
   const opening = sheet.hidden;
   const focused = sheet.contains(document.activeElement) ? focusKey(document.activeElement) : null;
   sheet.innerHTML = P.forecastSheet(fc, { name, note, panic, blast: blastNow() });
@@ -608,7 +618,7 @@ function setMode(mode) {
     const c = candidates();
     const a = mode.attack ? R.attackOf(game.state, "kaiju", mode.attack) : null;
     if (a && ["line", "cone", "rear"].includes(a.pattern) && c.length) game.preview = c[0];
-    else if ((mode.kind === "attack" || mode.kind === "stomp" || mode.kind === "eat") && c.length === 1) game.preview = c[0];
+    else if ((mode.kind === "attack" || mode.kind === "stomp" || mode.kind === "slam" || mode.kind === "eat") && c.length === 1) game.preview = c[0];
   }
   render();
 }
@@ -630,7 +640,7 @@ function onAction(id) {
   else if (a.kind === "attack") {
     const att = R.attackOf(game.state, "kaiju", id);
     setMode({ kind: att.pattern === "teleport" ? "teleport" : "attack", attack: id });
-  } else if (id === "stomp" || id === "eat" || id === "withdraw") setMode({ kind: id });
+  } else if (id === "stomp" || id === "slam" || id === "eat" || id === "withdraw") setMode({ kind: id });
   else if (id === "roar") execute({ t: "roar" });
   else if (id === "end") execute({ t: "end" });
 }
@@ -646,7 +656,7 @@ function onHex(key) {
     } else if (m.kind !== "withdraw") {
       const c = candidates();
       if (c.includes(key)) {
-        const sheet = m.kind === "attack" || m.kind === "stomp";
+        const sheet = m.kind === "attack" || m.kind === "stomp" || m.kind === "slam";
         if (game.preview === key && !sheet) return confirm();
         game.preview = key;
       } else game.preview = null;
@@ -669,6 +679,7 @@ function confirm() {
   if (m.kind === "move" && p) execute({ t: "move", to: p });
   else if ((m.kind === "attack" || m.kind === "teleport") && p) execute({ t: "attack", attack: m.attack, target: p });
   else if (m.kind === "stomp" && p) execute({ t: "stomp", target: p });
+  else if (m.kind === "slam" && p) execute({ t: "slam", target: p });
   else if (m.kind === "eat" && p) execute({ t: "eat", target: p });
   else if (m.kind === "withdraw") execute({ t: "withdraw" });
 }

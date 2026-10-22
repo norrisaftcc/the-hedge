@@ -116,6 +116,16 @@ export const LINES = {
     "kaijuHitsKaiju.finish.alt": ["{Attack}. All of it in one blow. {Target} takes {damage} on the {part}{rear}."],
     "kaijuHitsKaiju.grab": ["Tentacles find {Target}'s {part}. {damage} damage{rear}.", "Tentacle grab. {Target}'s {part} is held, and hurt. {damage} damage{rear}."],
     "kaijuHitsKaiju.grab.alt": ["{Attack} finds {Target}'s {part}. {damage} damage{rear}.", "{Attack}. {Target}'s {part} is held, and hurt. {damage} damage{rear}."],
+    "kaijuHitsKaiju.slam": [
+      "{Name} puts its whole weight into {Target}. {damage} on the {part}{rear}.",
+      "Body slam. {Target}'s {part} {takes} {damage}{rear}.",
+      "{Name} closes the gap and leans. {Target}'s {part} {takes} {damage}{rear}.",
+    ],
+    "kaijuMissesKaiju.slam": [
+      "{Name} throws its weight at {Target} and meets only air.",
+      "Body slam. {Target} is elsewhere by the time it arrives.",
+      "{Name} leans into the space {Target} has just left.",
+    ],
     kaijuMissesKaiju: ["{Attack} misses {Target}.", "{Target} sways clear of the {attack}.", "{Attack}. {Target} is not there to receive it."],
     gaze: ["{Name} looks at the {thing}.", "The {thing} meets {Name}'s gaze.", "{Name}'s gaze rests on the {thing}."],
     unitHitsKaiju: [

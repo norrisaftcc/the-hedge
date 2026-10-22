@@ -12,7 +12,8 @@ import { blastWords } from "../voice.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-// Keys for each action id. Attacks take 2, 3 and 4 in the order the kaiju lists them.
+// Keys for each action id. Attacks take 2, 3 and 4 in the order the kaiju lists them; stomp 5, eat 6,
+// withdraw 7, Body slam 8. In Face mode the digits 1 to 6 turn instead.
 export function actionKeys(list) {
   const keys = {};
   let n = 2;
@@ -22,6 +23,7 @@ export function actionKeys(list) {
     else if (a.id === "stomp") keys[a.id] = "5";
     else if (a.id === "eat") keys[a.id] = "6";
     else if (a.id === "withdraw") keys[a.id] = "7";
+    else if (a.id === "slam") keys[a.id] = "8";
     else if (a.id === "face") keys[a.id] = "F";
     else if (a.id === "roar") keys[a.id] = "R";
     else if (a.id === "end") keys[a.id] = "E";
