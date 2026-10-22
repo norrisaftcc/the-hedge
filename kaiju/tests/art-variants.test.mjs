@@ -223,3 +223,16 @@ test("the base drawings are unchanged, byte for byte", () => {
   }
   assert.deepEqual(got, BASE_HASHES);
 });
+
+// Feedback on #20: Meow'thprrtep's coat and feet were as dark as the damage marks, so hurt and bad
+// parts did not show until crippled. The marks are #120d0a (src/art/defs.js); keep 3:1 against both.
+test("Meow'thprrtep's coat and feet keep 3:1 contrast with the damage marks", async () => {
+  const { VARIANT_ART } = await import("../src/art/variants.js");
+  const lum = (hex) => {
+    const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+  const pal = VARIANT_ART.meowthprrtep.pal;
+  for (const key of ["mantle", "dark"]) assert.ok(ratio(pal[key], "#120d0a") >= 3, `${key} ${pal[key]}: ${ratio(pal[key], "#120d0a").toFixed(2)}:1`);
+});

@@ -44,7 +44,8 @@ function pawArt(g, c, w = 1.2) {
    read as a cat, and a paw at the end of each feeler. Slate mantle, tabby feelers. */
 
 const MEOW = {
-  mantle: "#3d4a63", dark: "#1f2a3d", light: "#7a8fb0", head: "#d9b98a", headLight: "#f2deb8", headDark: "#9a7650",
+  // A grey tabby, light enough that the near-black damage marks read on coat and feet (playtest feedback).
+  mantle: "#9aa5b8", dark: "#5f6b82", light: "#cfd7e3", head: "#d9b98a", headLight: "#f2deb8", headDark: "#9a7650",
   fur: "#d98f52", furDark: "#a8622e", pad: "#f2a3b0", sucker: "#f2a3b0",
   eye: "#e8f03c", eyeOdd: "#6fe0d0", pupil: "#1b0a14", red: "#c2283a", white: "#f4efd8",
   bg: "#5aa39a", bg2: "#468a82", frame: "#14302d",
