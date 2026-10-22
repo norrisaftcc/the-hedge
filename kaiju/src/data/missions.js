@@ -221,8 +221,8 @@ export const MISSIONS = {
 
   rampage: {
     id: "rampage",
-    name: "Rampage",
-    tagline: "No target and no clock. They will get you in the end.",
+    name: "Hex and the City",
+    tagline: "Eat and smash what you like, until the hangover hits.",
     briefing: [
       "Port Halloran again, or a city very like it.",
       "No orders this time. No target, and no clock.",

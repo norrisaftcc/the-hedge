@@ -7,7 +7,7 @@ For coding agents working in this repository. People should start with `README.m
 Two games, one repository, and a teaching example of how they were built.
 
 - **The Hedge** (`hedge/`, `web/`, `spells/`, `tests/`): a telnet maze game in Python. Players walk the maze or write spells in a small Scheme to walk it for them. Architecture: `docs/ARCHITECTURE.md`. Spell language: `docs/LANGUAGE.md`.
-- **Kaiju** (`kaiju/`): a turn-based tactical game for one giant monster. It is static web files with no build step. Read `kaiju/docs/REQUIREMENTS.md` first (§0 is the thesis), then `kaiju/docs/DESIGN.md` (the contract), then `kaiju/README.md`.
+- **Kaiju Dashboard** (`kaiju/`, a working title): a turn-based tactical game for one giant monster. It is static web files with no build step. Read `kaiju/docs/REQUIREMENTS.md` first (§0 is the thesis), then `kaiju/docs/DESIGN.md` (the contract), then `kaiju/README.md`.
 - **MazeBuilder** (`vendor/MazeBuilder`): a git submodule. Both games grow their mazes and cities with its algorithms.
 
 ## Setup and checks

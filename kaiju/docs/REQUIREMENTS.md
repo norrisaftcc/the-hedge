@@ -1,6 +1,6 @@
 # Kaiju: requirements and user stories
 
-Working title: **Kaiju**. Status: spike. This file comes before the design. It says what the spike must do, not how.
+Working title: **Kaiju Dashboard** (it was **Kaiju**). Status: spike. This file comes before the design. It says what the spike must do, not how.
 
 ## 0. Thesis
 
@@ -137,7 +137,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | MIS-4 | M | Each mission has a turn limit. When it runs out the mission ends; the score counts but the goal is failed. |
 | MIS-5 | M | Defeat: the kaiju's body falls to zero. The kaiju may also choose to withdraw off a map edge marked as its retreat. |
 | MIS-6 | M | Score: destruction points, units destroyed, objective bonus, turns left, parts intact. The end screen shows a breakdown and a newspaper headline. |
-| MIS-8 | M | **Rampage**, the 1981 mode. A city, no goal but the score, endless reinforcements that grow, and no victory: it ends when the kaiju falls or withdraws. Before play the player picks an objective that weights the score, as the original's five did: Balanced, Killer Monster (people), Combat Machine (units only), Destruction (structures, tall ones most), Survival (turns lasted). The end names the death: a thousand cuts, the sudden death (a power plant), or the lingering death (the mad scientist). |
+| MIS-8 | M | **Hex and the City** (first called Rampage), the 1981 mode. A city, no goal but the score, endless reinforcements that grow, and no victory: it ends when the kaiju falls or withdraws. Before play the player picks an objective that weights the score, as the original's five did: Balanced, Killer Monster (people), Combat Machine (units only), Destruction (structures, tall ones most), Survival (turns lasted). The end names the death: a thousand cuts, the sudden death (a power plant), or the lingering death (the mad scientist). |
 | MIS-9 | M | **The review.** The end screen offers a short review of this play-through in the manner of a 1981 computer magazine: a headline, three or four paragraphs drawn from the game's events (what the monster did, what stopped it, a quoted line from the log), and a rating. It can be copied as text. |
 | MIS-7 | M | Results are graded, as in *OGRE*: total victory (goal met, body above half), victory (goal met), draw (time ran out or withdrew with the goal unmet), defeat (body at zero). |
 
