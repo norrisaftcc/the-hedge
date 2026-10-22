@@ -7,7 +7,7 @@ import { STRUCTURES } from "../data/terrain.js";
 import { UNITS } from "../data/units.js";
 import { portrait, silhouette } from "../art/kaiju.js";
 import { STATE_FILL } from "../art/defs.js";
-import { partState, reach, forecast, blastRisk } from "../rules.js";
+import { partState, reach, forecast, blastRisk, food } from "../rules.js";
 import { blastWords } from "../voice.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -175,6 +175,11 @@ export function blastPreview(state, kind, key, reachable = null) {
     const t = forecast(state, "stomp", key).targets.find((x) => x.kind === "structure");
     if (!t || t.damage[1] < t.hp) return null;
     return blastWords([risk], "stomp", { maybe: t.damage[0] < t.hp, hp, room });
+  }
+  // An edible unit on the hex is eaten first, and the structure stays (food in rules.js).
+  if (kind === "eat") {
+    const f = food(state, "kaiju", key);
+    if (!f || f.what !== "structure") return null;
   }
   return blastWords([risk], kind, { hp, room });
 }

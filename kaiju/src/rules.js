@@ -954,7 +954,9 @@ function doStomp(s, actor, cmd, ev) {
   return null;
 }
 
-function food(state, actor, key) {
+// What an eat on this hex would take: an edible unit first, then a structure. The page reads it,
+// so a warning never names a structure the eat would leave standing.
+export function food(state, actor, key) {
   const k = state[actor];
   const u = unitAt(state, key);
   if (u && !UNITS[u.type].air && UNITS[u.type].edible) return { what: "unit", unit: u };

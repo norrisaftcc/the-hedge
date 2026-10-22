@@ -885,20 +885,24 @@ function blastSubject(verb) {
 }
 
 export function blastWords(risks, verb, { maybe = false, hp = Infinity, room = Infinity } = {}) {
-  const names = listing(risks.map((r) => `the ${structureWords(r.type)[0]}`));
+  // Two of a kind are counted: "two pylons and the power plant", not "the pylon and the pylon".
+  const kinds = new Map();
+  for (const r of risks) tally(kinds, r.type);
+  const names = listing([...kinds].map(([type, n]) => words(n, structureWords(type), true)));
+  const setsOff = maybe ? "may set off" : "sets off";
   if (risks.every((r) => r.energy !== undefined)) {
     // Eating a power structure is not a blast: the belly takes the charge, and the rules pay the eat figure.
     // The rules clamp energy at the top, so the figure is what the battery can take.
     const gain = (n) => (Math.min(n, Math.max(0, room)) > 0 ? `+${Math.min(n, Math.max(0, room))} energy` : "the battery is already full");
     if (verb === "eat") return { text: `Eating it takes the ${structureWords(risks[0].type)[0]}'s charge: ${gain(RULES.reactorEatEnergy)}.`, good: true, lethal: false };
     const total = risks.reduce((n, r) => n + r.energy, 0);
-    return { text: `${blastSubject(verb)} sets off ${names}: ${gain(total)}.`, good: true, lethal: false };
+    return { text: `${blastSubject(verb)} ${setsOff} ${names}: ${gain(total)}.`, good: true, lethal: false };
   }
   const lo = risks.reduce((n, r) => n + r.damage[0], 0);
   const hi = risks.reduce((n, r) => n + r.damage[1], 0);
   const lethal = risks.some((r) => r.lethal) || hi >= hp;
   const range = `${rangeText([lo, hi])} damage${risks.length > 1 ? " in all" : ""}`;
-  let text = `${blastSubject(verb)} ${maybe ? "may set off" : "sets off"} ${names}: ${range}.`;
+  let text = `${blastSubject(verb)} ${setsOff} ${names}: ${range}.`;
   if (lethal) text += " It could be the last thing the monster does.";
   return { text, good: false, lethal };
 }

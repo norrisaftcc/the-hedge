@@ -226,7 +226,57 @@ test("eating a power structure near a full battery is told the capped gain", () 
 
 test("blastWords: a walk through two power hexes caps the sum at the room left", () => {
   const risks = [{ type: "pylon", name: "Pylon", energy: 5 }, { type: "pylon", name: "Pylon", energy: 5 }];
-  assert.equal(blastWords(risks, "cross").text, "Walking there sets off the pylon and the pylon: +10 energy.");
-  assert.equal(blastWords(risks, "cross", { room: 7 }).text, "Walking there sets off the pylon and the pylon: +7 energy.");
-  assert.equal(blastWords(risks, "cross", { room: 0 }).text, "Walking there sets off the pylon and the pylon: the battery is already full.");
+  assert.equal(blastWords(risks, "cross").text, "Walking there sets off two pylons: +10 energy.");
+  assert.equal(blastWords(risks, "cross", { room: 7 }).text, "Walking there sets off two pylons: +7 energy.");
+  assert.equal(blastWords(risks, "cross", { room: 0 }).text, "Walking there sets off two pylons: the battery is already full.");
+});
+
+// Review of #29, finding 1: an edible unit on a power hex is eaten first, and the structure stays.
+test("eating a unit that stands on a pylon gives no warning, and the rules set nothing off", () => {
+  for (const kaiju of ["squamous", "radiosaur"]) {
+    const s = field(kaiju);
+    s.kaiju.at = at(8, 4);
+    s.kaiju.hunger = s.kaiju.hungerMax;
+    s.units.push({ id: "u99", type: "infantry", at: at(8, 3), hp: 1, panicked: 0, reload: 0 });
+    assert.ok(eatTargets(s).includes(at(8, 3)), kaiju);
+    assert.equal(blastPreview(s, "eat", at(8, 3)), null, kaiju);
+    assert.deepEqual(blastHexes(s, "eat", eatTargets(s)), { danger: [], good: [] }, kaiju);
+    const out = step(s, { t: "eat", target: at(8, 3) });
+    assert.equal(blastEvent(out.events), undefined, kaiju);
+    assert.ok(out.state.map.hexes[at(8, 3)].structure, kaiju);
+  }
+});
+
+// Finding 2: a stomp that may leave the plant standing is a "may" for Radiosaur too.
+test("Radiosaur is told it may set off a plant its stomp may not fell", () => {
+  const s = field("radiosaur");
+  s.kaiju.at = at(5, 4);
+  s.map.hexes[at(5, 3)].structure.hp = RULES.stompDamage[1];
+  assert.match(blastPreview(s, "stomp", at(5, 3)).text, /^Stomping it may set off the power plant: \+/);
+});
+
+// Finding 5: two of a kind are counted, not listed twice.
+test("blastWords counts two pylons rather than naming the pylon twice", () => {
+  const risks = [{ type: "pylon", name: "Pylon", damage: [2, 3] }, { type: "pylon", name: "Pylon", damage: [2, 3] }, { type: "plant", name: "Power plant", damage: [6, 9] }];
+  assert.equal(blastWords(risks, "cross").text, "Walking there sets off two pylons and the power plant: 10–15 damage in all.");
+});
+
+// Finding 6: the page passes body hp, so blasts that are each survivable can be lethal together.
+test("a walk through the pylon and the plant is lethal on the page at body hp 12, not at 13", () => {
+  // Two walls with one gap each: a pylon in row 4, the plant in row 3. The way north crosses both.
+  const m = blank({ objective: { kind: "destroy", at: [5, 3] } });
+  for (let col = 0; col < 12; col++) {
+    paint(m, "features", col, 4, col === 5 ? "T" : "W");
+    paint(m, "features", col, 3, col === 5 ? "P" : "W");
+  }
+  const s = create(setup(m, { kaiju: "squamous" }));
+  s.kaiju.at = at(5, 5);
+  s.kaiju.ap = 12;
+  const r = reach(s);
+  const via = Object.keys(r).find((k) => r[k].path.includes(at(5, 4)) && r[k].path.includes(at(5, 3)) && k !== at(5, 3));
+  assert.ok(via, "a reachable hex whose path crosses both");
+  s.kaiju.parts.body.hp = 12;
+  assert.equal(blastPreview(s, "move", via).lethal, true);
+  s.kaiju.parts.body.hp = 13;
+  assert.equal(blastPreview(s, "move", via).lethal, false);
 });

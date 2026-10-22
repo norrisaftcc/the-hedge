@@ -511,9 +511,9 @@ kbd {
 
 /* ---------- blast risk (DESIGN §16.4): a triangle for a risk, a circle for news; the words carry it without colour ---------- */
 
+.blast-note { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 4px 8px; font-size: 14px; font-weight: 600; background: var(--paper); border-left: 5px double var(--danger); }
 .hint-blast { order: 3; flex: 1 0 100%; margin: 0; }
 .fc-blast { flex: none; margin: 4px 0 0; }
-.blast-note { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 4px 8px; font-size: 14px; font-weight: 600; background: var(--paper); border-left: 5px double var(--danger); }
 .blast-note.good { border-left: 5px dotted var(--good); }
 .blast-note.lethal { border: 2px solid var(--danger); border-left: 5px double var(--danger); }
 .blast-note.bad .blast-badge { color: var(--danger); }

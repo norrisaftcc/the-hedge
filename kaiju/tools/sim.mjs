@@ -126,17 +126,15 @@ function worth(state, f) {
 }
 
 // Whether the bot may set off the power structure on this hex (§16.3). A lethal blast, never.
-// A survivable one only on the objective, and only when no attack could break the objective
-// safely this turn (safeAttack). A monster with reactorBelly wants the blast.
-function blastAllowed(state, key, safeAttack) {
+// A survivable one only on the objective. A monster with reactorBelly wants the blast.
+// "A safe attack first" needs no test here: plan() takes the goal strike of most value, and an
+// attack on the objective is never valued below a stomp on it. A move or an eat is only planned
+// when no goal strike is open.
+function blastAllowed(state, key) {
   const risk = blastRisk(state, key);
   if (!risk || risk.energy !== undefined) return true;
-  return !risk.lethal && key === state.objective.at && !safeAttack;
+  return !risk.lethal && key === state.objective.at;
 }
-
-// Whether a strike from strikes() breaks the objective without setting it off: an attack, not a
-// stomp, whose forecast reaches the objective.
-const safeObjectiveStrike = (list) => list.some((s) => s.objective && !s.stomp);
 
 // Every strike open to the kaiju now: [{cmds, value, goal, ap}], turning first where that helps.
 // Single attacks ignore facing; area attacks are tried in every facing. A stomp that would set
@@ -152,21 +150,18 @@ export function strikes(state) {
       if (a.pattern === "single" && d !== k.facing) continue;
       const targets = attackTargets(turned, a.id);
       for (const target of a.pattern === "single" ? targets : targets.slice(0, 1)) {
-        const f = { ...forecast(turned, a.id, target), panic: a.effects.panic };
-        const w = worth(state, f);
-        const hitsObjective = f.targets.some((t) => t.kind === "structure" && t.key === state.objective.at && t.hitChance > 0);
-        out.push({ cmds: [...face, { t: "attack", attack: a.id, target }], ...w, ap: a.ap, objective: hitsObjective });
+        const w = worth(state, { ...forecast(turned, a.id, target), panic: a.effects.panic });
+        out.push({ cmds: [...face, { t: "attack", attack: a.id, target }], ...w, ap: a.ap });
       }
     }
     if (d === k.facing && k.ap >= RULES.stompAp) {
       for (const target of stompTargets(state)) {
         const w = worth(state, forecast(state, "stomp", target));
-        out.push({ cmds: [{ t: "stomp", target }], ...w, ap: RULES.stompAp, stomp: true, at: target });
+        out.push({ cmds: [{ t: "stomp", target }], ...w, ap: RULES.stompAp, stomp: target });
       }
     }
   }
-  const safe = safeObjectiveStrike(out);
-  return out.filter((s) => !s.stomp || blastAllowed(state, s.at, safe));
+  return out.filter((s) => !s.stomp || blastAllowed(state, s.stomp));
 }
 
 const perAp = (list) => list.reduce((a, b) => (b.value / b.ap > a.value / a.ap ? b : a));
@@ -175,10 +170,10 @@ function hungry(k) {
   return k.hunger !== null && k.hunger >= Math.ceil(RULES.hungryAt * k.hungerMax) - 1;
 }
 
-function eatCommand(state, safeAttack) {
+function eatCommand(state) {
   const k = state.kaiju;
   if (!hungry(k) || k.ap < RULES.eatAp) return null;
-  const safe = eatTargets(state).filter((h) => blastAllowed(state, h, safeAttack));
+  const safe = eatTargets(state).filter((h) => blastAllowed(state, h));
   if (!safe.length) return null;
   const objective = safe.find((h) => h === state.objective.at);
   return { t: "eat", target: objective || safe.sort()[0] };
@@ -205,13 +200,13 @@ function chargeHexes(state) {
 }
 
 // A move toward the goal. Avoid stepping onto power structures unless the kaiju feeds on them,
-// or the objective is one and could not be broken safely this turn (blastAllowed).
-function moveCommand(state, safeAttack) {
+// or the objective is one and the blast would not kill (blastAllowed).
+function moveCommand(state) {
   const k = state.kaiju;
   const options = reach(state);
   const costs = goalCosts(state, chargeHexes(state) || goalHexes(state));
   const far = (h) => (costs.has(h) ? costs.get(h) : 999);
-  const blasts = (path) => path.some((h) => !blastAllowed(state, h, safeAttack));
+  const blasts = (path) => path.some((h) => !blastAllowed(state, h));
   // A kaiju that drinks the sea likes to stand in it, as the rival does.
   const wet = (h) => (kaijuDef(k.id, k.variant).energy.rule === "water" && TERRAIN[state.map.hexes[h].terrain].water ? 0.5 : 0);
   let bestKey = null;
@@ -241,17 +236,16 @@ function moveCommand(state, safeAttack) {
 // toward the goal; spend what AP is left on lesser strikes; end the turn.
 export function plan(state) {
   if (state.result) return [];
-  const all = strikes(state);
-  const safeAttack = safeObjectiveStrike(all);
-  const eat = eatCommand(state, safeAttack);
+  const eat = eatCommand(state);
   if (eat) return [eat];
+  const all = strikes(state);
   const goal = all.filter((s) => s.goal);
   if (goal.length) return goal.reduce((a, b) => (b.value > a.value ? b : a)).cmds;
   const roar = roarCommand(state);
   if (roar) return [roar];
   const rich = all.filter((s) => s.value >= RICH);
   if (rich.length) return perAp(rich).cmds;
-  const move = state.kaiju.ap > 0 ? moveCommand(state, safeAttack) : null;
+  const move = state.kaiju.ap > 0 ? moveCommand(state) : null;
   if (move) return [move];
   const lesser = all.filter((s) => s.value >= WORTH_IT);
   if (lesser.length) return perAp(lesser).cmds;

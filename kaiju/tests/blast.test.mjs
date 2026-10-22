@@ -96,6 +96,7 @@ test("the bot does not stomp the objective plant when the blast could kill it", 
   assert.deepEqual(plan(besidePlant(STRUCTURES.plant.blast[1])), [{ t: "end" }]);
 });
 
+// With no special gate: plan() takes the goal strike of most value, and the attack outvalues the stomp.
 test("the bot attacks the plant rather than stomp it when it has the AP for an attack", () => {
   const s = besidePlant(21);
   s.kaiju.ap = 6;
