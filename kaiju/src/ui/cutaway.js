@@ -116,18 +116,22 @@ export function buildScene(group, before, after, events) {
   const defenderIds = [...new Set(group.events.map((e) => e.defender.id))];
   const left = attacker.side === "unit" ? unitSide(attacker.type, attackerIds, before, before) : kaijuSide(attacker.side, before, before);
   const right = defender.side === "unit" ? unitSide(defender.type, defenderIds, before, after) : kaijuSide(defender.side, before, after);
-  const hits = group.events.filter((e) => e.hit).length;
+  // A phased hit landed and did nothing (DESIGN 18.3): it is not a wound and not a miss.
+  const phased = group.events.filter((e) => e.phased).length;
+  const hits = group.events.filter((e) => e.hit && !e.phased).length;
   const damage = group.events.reduce((sum, e) => sum + (e.hit ? e.damage : 0), 0);
   const shots = group.events.length;
   let result;
   if (group.events.every((e) => e.zero)) result = { text: panicWord(events, group, defenderIds), hit: true };
+  else if (!hits && phased) result = { text: "THROUGH", hit: false };
   else if (!hits) result = { text: "MISS", hit: false };
   else {
     const lost = right.kind === "unit" ? right.bars[0].before - right.bars[0].after : damage;
     result = { text: `−${lost}`, hit: true };
   }
   let note = "";
-  if (shots > 1) note = hits === shots ? `${shots} hits` : `${hits} of ${shots} hit`;
+  if (shots > 1) note = hits === shots ? `${shots} hits` : `${hits + phased} of ${shots} hit`;
+  if (phased) note = (note ? note + ", " : "") + (phased === 1 ? "1 passed through" : `${phased} passed through`);
   if (group.events.some((e) => e.hit && e.rear)) note = (note ? note + ", " : "") + "from behind";
   return {
     title: cap(e0.attack.name),

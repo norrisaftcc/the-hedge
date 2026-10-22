@@ -303,6 +303,7 @@ kbd {
 .fc-table .num { font-family: var(--mono); text-align: right; white-space: nowrap; }
 .fc-table th:not(:first-child) { text-align: right; }
 .fc-return { margin: 6px 0; font-size: 13.5px; }
+.fc-phase { margin: 6px 0; font-size: 13.5px; font-style: italic; color: var(--muted); }
 .fc-none { font-style: italic; color: var(--muted); }
 .sheet-buttons { display: flex; flex: none; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 
