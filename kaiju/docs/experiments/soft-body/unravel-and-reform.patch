@@ -1,0 +1,242 @@
+diff --git a/kaiju/src/data/kaiju.js b/kaiju/src/data/kaiju.js
+index d864f36..2189517 100644
+--- a/kaiju/src/data/kaiju.js
++++ b/kaiju/src/data/kaiju.js
+@@ -79,7 +79,7 @@ export const KAIJU = {
+       atk("gaze", "The gaze", 2, 2, "special", "aux", "cone", 3, [0, 0], 100, { panic: 2 }),
+       atk("angle", "Wrong angle", 1, 3, "special", "legs", "teleport", 3, [0, 0], 100),
+     ],
+-    passives: ["regen", "eldritch"],
++    passives: ["regen", "eldritch", "unravel"],
+     forbid: ["regen"],
+   },
+   dairengo: {
+@@ -149,6 +149,8 @@ export const RULES = {
+   reactorEatEnergy: 6,
+   panicEnergy: 1,
+   heal: 1,
++  reformTurns: 2,
++  reformEnergy: 3,
+   retreatBelow: 0.25,
+ };
+ 
+diff --git a/kaiju/src/rules.js b/kaiju/src/rules.js
+index c48a19e..7e77fd8 100644
+--- a/kaiju/src/rules.js
++++ b/kaiju/src/rules.js
+@@ -145,6 +145,7 @@ function makeKaiju(id, actor, start, mutations = null, variant = null) {
+     hungerEvery: 1,
+     lingering: 0,
+     lastHurt: null,
++    unravelled: {},
+     used: { roar: false, finish: false },
+     berserk: false,
+     withdrawn: false,
+@@ -297,6 +298,7 @@ function heal(s, actor, ev) {
+   let best = null;
+   for (const p of PART_SLOTS) {
+     const part = k.parts[p];
++    if (Object.hasOwn(k.unravelled, p)) continue; // an unravelled part is not healed; it reforms
+     const missing = part.max - part.hp;
+     if (missing > 0 && (!best || missing > best.missing)) best = { p, missing };
+   }
+@@ -309,6 +311,25 @@ function heal(s, actor, ev) {
+   if (after !== before) ev("part", { actor, who: k.id, variant: k.variant, part: best.p, state: after });
+ }
+ 
++// Unravel and reform (DESIGN 18.3). A part is unravelled from the hit that brought it to 0 until
++// it reforms. Each of the monster's own phases adds one to its count. At the start of a phase, a
++// part whose count has reached reformTurns comes back at half its hit points, rounded up, for
++// reformEnergy. With too little energy it waits. Slot order breaks a tie.
++function reform(s, actor, ev) {
++  const k = s[actor];
++  if (!k.passives.includes("unravel")) return;
++  for (const p of PART_SLOTS) if (Object.hasOwn(k.unravelled, p)) k.unravelled[p] += 1;
++  for (const p of PART_SLOTS) {
++    if (!Object.hasOwn(k.unravelled, p) || k.unravelled[p] < RULES.reformTurns) continue;
++    if (k.energy < RULES.reformEnergy) continue;
++    changeEnergy(s, actor, -RULES.reformEnergy, "reform", ev);
++    const part = k.parts[p];
++    part.hp = Math.ceil(part.max / 2);
++    delete k.unravelled[p];
++    ev("reform", { actor, who: k.id, variant: k.variant, part: p, hp: part.hp, max: part.max });
++  }
++}
++
+ function phaseStart(s, actor, ev) {
+   const k = s[actor];
+   const def = kaijuDef(k.id, k.variant);
+@@ -327,6 +348,7 @@ function phaseStart(s, actor, ev) {
+   if (rule === "water" && terrain.water) {
+     changeEnergy(s, actor, terrain.water === "deep" ? RULES.waterDeep : RULES.waterShallow, "water", ev);
+   }
++  reform(s, actor, ev);
+   if (k.passives.includes("regen")) heal(s, actor, ev);
+   if (k.passives.includes("stoneBody") && terrain.water) heal(s, actor, ev);
+   if (s.lingeringGrows && k.lingering >= 1) lingeringGrows(s, actor, ev);
+@@ -642,7 +664,10 @@ function damageKaiju(s, actor, part, dmg, ev, why = "attack") {
+     after,
+     spill,
+     report: () => {
+-      if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, variant: k.variant, part: hitPart, state: partState(p) });
++      if (hitPart !== "body" && p.hp <= 0 && before.hp > 0 && k.passives.includes("unravel")) {
++        k.unravelled[hitPart] = 0;
++        ev("unravel", { actor, who: k.id, variant: k.variant, part: hitPart });
++      } else if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, variant: k.variant, part: hitPart, state: partState(p) });
+       if (hitPart !== "body" && partState(k.parts.body) !== bodyBefore) {
+         ev("part", { actor, who: k.id, variant: k.variant, part: "body", state: partState(k.parts.body) });
+       }
+diff --git a/kaiju/src/ui/main.js b/kaiju/src/ui/main.js
+index ddd0b4b..e35e890 100644
+--- a/kaiju/src/ui/main.js
++++ b/kaiju/src/ui/main.js
+@@ -60,6 +60,7 @@ const PASSIVE = {
+   stoneBody: "Stone body: heals in water.",
+   regen: "Regenerates.",
+   eldritch: "Eldritch: harder to hit.",
++  unravel: "Unravels: a broken part comes apart, then reforms for energy.",
+   noHunger: "No hunger.",
+   thrusters: "Thrusters: +1 AP while they work.",
+ };
+diff --git a/kaiju/src/voice.js b/kaiju/src/voice.js
+index 2e5cadb..b32d4f2 100644
+--- a/kaiju/src/voice.js
++++ b/kaiju/src/voice.js
+@@ -199,6 +199,16 @@ export const LINES = {
+     bad: ["{Name}'s {part} {is} badly hurt.", "{Name}'s {part} {is} in poor shape.", "{Name}'s {part} {is} close to giving out."],
+     crippled: ["{Name}'s {part} {is} crippled.", "{Name}'s {part} {stops} working.", "{Name}'s {part} {is} finished."],
+   },
++  unravel: [
++    "{Name}'s {part} {comes} apart into angles and {is} gone.",
++    "The {part} of {Name} {unwinds}. Nothing is there to hit.",
++    "{Name}'s {part} {folds} away into a corner that was not there.",
++  ],
++  reform: [
++    "{Name}'s {part} {comes} back out of the angles, {hp} of {max}.",
++    "The {part} of {Name} {reforms}. {hp} of {max}.",
++    "{Name}'s {part} {unfolds} from a corner, {hp} of {max}.",
++  ],
+   heal: ["{Name}'s {part} {heals} to {hp} of {max}.", "{Name} mends. The {part}: {hp} of {max}.", "{Name}'s {part} {closes}. {hp} of {max}."],
+   roar: [
+     "{Name} roars. Everything within {radius} hexes hears it.",
+@@ -364,7 +374,7 @@ export const HEADLINES = {
+ const PRESS = { radiosaur: "LIZARD", thalassor: "STATUE", squamous: "THING", dairengo: "ROBOT" };
+ const PLACES = { fortress: "KESSEL", swathe: "PORT HALLORAN", coast: "GULL POINT", rampage: "PORT HALLORAN" };
+ 
+-const ENERGY_WHY = { eat: "the meal", water: "the sea", panic: "fear", drain: "the drain", charge: "the grid", reactor: "the reactor" };
++const ENERGY_WHY = { eat: "the meal", water: "the sea", panic: "fear", drain: "the drain", charge: "the grid", reactor: "the reactor", reform: "the reforming" };
+ 
+ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+ const lower = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+@@ -390,6 +400,11 @@ function partVars(id, variant, part) {
+     heals: plural ? "heal" : "heals",
+     closes: plural ? "close" : "closes",
+     shows: plural ? "show" : "shows",
++    comes: plural ? "come" : "comes",
++    unwinds: plural ? "unwind" : "unwinds",
++    folds: plural ? "fold" : "folds",
++    reforms: plural ? "reform" : "reforms",
++    unfolds: plural ? "unfold" : "unfolds",
+   };
+ }
+ 
+@@ -468,6 +483,8 @@ const VARS = {
+   hunger: (d) => ({ variant: d.hunger >= 0.7 * d.max ? "high" : "normal", vars: { Name: kaijuName(d.who, d.variant), hunger: d.hunger, max: d.max } }),
+   part: (d) => ({ variant: d.state, vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part) } }),
+   heal: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part), hp: d.hp, max: d.max } }),
++  unravel: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part) } }),
++  reform: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part), hp: d.hp, max: d.max } }),
+   roar: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), radius: d.radius } }),
+   berserk: (d) => ({ vars: { Name: kaijuName(d.who, d.variant) } }),
+   reinforce: (d) => ({ vars: unitVars(d.type) }),
+diff --git a/kaiju/tests/unravel.test.mjs b/kaiju/tests/unravel.test.mjs
+new file mode 100644
+index 0000000..a3e8bca
+--- /dev/null
++++ b/kaiju/tests/unravel.test.mjs
+@@ -0,0 +1,85 @@
++// KAI-12 (issue #24, DESIGN 18.3), the unravel and reform experiment: a part other than the body
++// brought to 0 unravels; it reforms at half its hit points, rounded up, after RULES.reformTurns of
++// the monster's phases, for RULES.reformEnergy energy. Regen does not heal it.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import { create, step } from "../src/rules.js";
++import { RULES } from "../src/data/kaiju.js";
++import { blank, putUnit, at, setup } from "./fixtures.mjs";
++
++const endTurn = (s) => step(s, { t: "end" });
++
++test("the Squamous One and its variant carry the unravel passive; the other three do not", () => {
++  for (const [kaiju, variant, want] of [["squamous", null, true], ["squamous", "meowthprrtep", true], ["radiosaur", null, false], ["thalassor", null, false], ["dairengo", null, false]]) {
++    const s = create(setup(blank(), { kaiju, variant, mutations: variant ? undefined : [] }));
++    assert.equal(s.kaiju.passives.includes("unravel"), want, `${kaiju}:${variant}`);
++    assert.deepEqual(s.kaiju.unravelled, {});
++  }
++});
++
++test("a hit that brings a part to 0 unravels it, and a part that is already gone sends hits to the body", () => {
++  const s = create(setup(blank(), { kaiju: "squamous", mutations: [] }));
++  for (const p of ["head", "arms", "legs", "aux"]) s.kaiju.parts[p].hp = 1;
++  s.kaiju.energy = 0;
++  for (let i = 0; i < 6; i++) putUnit(s, "artillery", at(5 + (i % 3), 3 + Math.floor(i / 3)));
++  const { events, state } = endTurn(s);
++  const un = events.filter((e) => e.k === "unravel");
++  assert.ok(un.length > 0, "something unravelled");
++  for (const e of un) {
++    assert.equal(Object.hasOwn(state.kaiju.unravelled, e.part), true);
++    assert.equal(state.kaiju.parts[e.part].hp, 0);
++    assert.ok(e.text.length > 0);
++  }
++  assert.ok(!events.some((e) => e.k === "part" && e.state === "crippled" && e.who === "squamous" && e.part !== "body"));
++});
++
++test("reform: after reformTurns phases, with energy, at ceil(max/2); regen never heals it", () => {
++  let s = create(setup(blank(), { kaiju: "squamous", mutations: [] }));
++  s.kaiju.parts.arms.hp = 0;
++  s.kaiju.unravelled.arms = 0;
++  s.kaiju.parts.body.hp -= 3; // regen has something else to heal
++  s.kaiju.energy = RULES.reformEnergy + 1;
++  let out = endTurn(s);
++  assert.equal(out.state.kaiju.parts.arms.hp, 0, "one phase: not yet");
++  assert.equal(out.events.filter((e) => e.k === "heal").every((e) => e.part !== "arms"), true);
++  out = endTurn(out.state);
++  const re = out.events.find((e) => e.k === "reform");
++  assert.ok(re, "second phase: reform");
++  assert.equal(re.hp, Math.ceil(s.kaiju.parts.arms.max / 2));
++  // Regen runs after the reform in the same phase and may add one to the worst part.
++  assert.ok([re.hp, re.hp + RULES.heal].includes(out.state.kaiju.parts.arms.hp));
++  assert.equal(Object.hasOwn(out.state.kaiju.unravelled, "arms"), false);
++  assert.equal(out.state.kaiju.energy, 1);
++  assert.ok(re.text.length > 0);
++});
++
++test("reform waits for energy and then goes the phase it has it", () => {
++  let s = create(setup(blank(), { kaiju: "squamous", variant: "meowthprrtep", mutations: undefined }));
++  s.kaiju.parts.head.hp = 0;
++  s.kaiju.unravelled.head = 0;
++  s.kaiju.energy = RULES.reformEnergy - 1;
++  let out = endTurn(s);
++  out = endTurn(out.state);
++  out = endTurn(out.state);
++  assert.equal(out.state.kaiju.parts.head.hp, 0);
++  assert.equal(out.events.some((e) => e.k === "reform"), false);
++  out.state.kaiju.energy = RULES.reformEnergy;
++  out = endTurn(out.state);
++  const re = out.events.find((e) => e.k === "reform");
++  assert.equal(re.hp, Math.ceil(out.state.kaiju.parts.head.max / 2));
++  assert.equal(out.state.kaiju.energy, 0);
++});
++
++test("the same state and the same commands give the same events", () => {
++  const make = () => {
++    const s = create(setup(blank(), { kaiju: "squamous", mutations: [] }));
++    s.kaiju.parts.arms.hp = 0;
++    s.kaiju.unravelled.arms = 1;
++    s.kaiju.energy = 5;
++    return s;
++  };
++  const a = endTurn(make());
++  const b = endTurn(make());
++  assert.deepEqual(a.events, b.events);
++  assert.deepEqual(a.state, b.state);
++});

@@ -27,7 +27,7 @@ const hitThenPhase = () => rigDice((m) => m.roll(100) <= 10 && m.roll(100) <= RU
 const hitThenSolid = () => rigDice((m) => m.roll(100) <= 10 && m.roll(100) > RULES.phaseOut);
 
 test("only the Squamous One and Meow'thprrtep can phase out; every other kaiju and look cannot", () => {
-  assert.equal(RULES.phaseOut, 25);
+  assert.ok(RULES.phaseOut > 0 && RULES.phaseOut < 100, "one number in RULES, a percent");
   for (const [id, def] of Object.entries(KAIJU)) {
     assert.equal(def.passives.includes("phaseOut"), id === "squamous", id);
   }
@@ -97,7 +97,7 @@ test("a rival Squamous One phases the player's hits, and Meow'thprrtep as rival 
     assert.equal(e.phased, true, `rival ${rivalVariant || "squamous"}`);
     assert.equal(e.defender.side, "rival");
     if (rivalVariant) {
-      const names = Object.values(VARIANTS[rivalVariant].parts).map((p) => p.name.toLowerCase());
+      const names = Object.values(VARIANTS[rivalVariant].parts).map((p) => p.name.toLowerCase().replace(/^the /, ""));
       assert.ok(names.some((n) => e.text.toLowerCase().includes(n)), `"${e.text}" uses a part name of ${rivalVariant}`);
       assert.ok(e.text.includes(VARIANTS[rivalVariant].name), e.text);
     }

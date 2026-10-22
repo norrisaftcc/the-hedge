@@ -916,3 +916,21 @@ For each direction and for the code before any of them. These are bot numbers, a
 - **The voice:** every phase-out is a log line, chosen by a hash. An unravelling and a reform are log lines.
 - **The silhouette:** an unravelled part shows like a crippled one, with its own mark.
 - **Version:** 0.5.0, with a CHANGELOG entry.
+
+### 18.7 As built and measured
+
+**Phase-out at 25%, alone, was built.** The table of directions is in the PR (#24); the others are patches in `kaiju/docs/experiments/soft-body/`, with the commands. Bot numbers, simulated, so a floor and not a forecast. Seeds 21-60 unless said. The built numbers are from `node kaiju/tools/toughness.mjs 21-60 squamous`, `node kaiju/tools/sim.mjs 21-60 squamous` and `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous`, and the same commands on ba639f2 for the "before".
+- **It lasts longer by luck, which is not armor (§18.5 item 1).** It takes 6.20 damage a turn and lasts 4.3 turns, against 8.58 and 3.9 before. Armor 2 takes 4.12 and lasts 4.3, and it lets the bot win 99% of its games. The log says every phase-out (item 4).
+- **Item 2 is met on turns, not on damage a turn.** The turns match armor 2. The damage a turn is 6.20, not 4.12: it is softer than armor, and it must not stand and trade blows (KAI-12), which is what the card says.
+- **The rival stays a threat, not a wall (item 3).** Dai-Rengō wins 35% against a Squamous rival on the Coast, from 53%. Armor 2 leaves 5%, blow-through 0%.
+- **Why not the others.** Unravel and reform leave the damage a turn at 8.58, and only make the rival harder (25%). The mix takes 6.12 a turn, as phase-out alone does, with a harder rival (23%) and a second rule to learn. 40% takes 4.77 a turn and the bot wins 90%.
+- **The bot's Squamous One is now the strongest of the four,** 81% on `node kaiju/tools/sim.mjs 1-20`, against 57% to 65% for the others. The bot plays greedy, and its numbers are a floor for a careless player, not a forecast for a good one. If the owner finds it too strong, the rate below is the lever. Playtest it before judging it.
+- **Playtest 001's seed:** the bot's Squamous One now wins on turn 2 with 28 damage taken, where it fell on turn 3 with 40 (`node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`). One game, and not the human's.
+
+**The forecast keeps the hit chance and reports the phase beside it.** `forecast(...)` rows (targets, the slam, return fire) carry `hitChance`, the chance to land, and `phase`, the percent of landed hits that pass through. The sheet shows "75% to hit, and one in four of the hits pass through". The figure "About N damage" in the return fire counts the phase and says so. The bot's expected value scales by `1 − phase`. Folding the two into one hit chance was tried in the mix patch. It hides what the player is deciding: how often a blow lands, and how often a landed blow is wasted.
+
+**What the event carries.** A phased hit is `hit: true, phased: true, damage: 0`, with the part it crossed. Choosing that part is one more roll, so the log can name it from data and the voice rolls nothing. A kaiju with the passive rolls the phase die for every landed hit, so a seeded game moves even when no hit in it phased. The Coast replay is re-recorded for that (`replay.test.mjs`), and the playtest 001 blast test now pins what it meant: the bot takes no lethal blast (a survivable one on the objective is allowed by §16.3). A blast never phases.
+
+**The other monsters move only through the Coast.** Plain `coast` picks the rival by seed, and for Radiosaur it is the Squamous One in 5 of seeds 1-20 (the command is in the experiments README). Their Coast rows in `node kaiju/tools/sim.mjs 1-20` move for that reason, and no other row does. §18.5 item 5 holds for stats and rules, not for that row.
+
+**The rate is one number, for the owner to tune.** `RULES.phaseOut` (25) in `src/data/kaiju.js`. The card, the sheet, the bot, the forecast and the tests read it. The phase and rules tests pass at 10, 25, 40 and 60; the Coast replay is pinned at 25 and moves with it, as it should. 40 was measured (above); nothing between 25 and 40 was.

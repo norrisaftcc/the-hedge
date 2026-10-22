@@ -26,12 +26,12 @@ test("the forecast sheet keeps the hit chance and says one in four pass through;
   const html = forecastSheet(forecast(s, "bite", s.rival.at), { name: "Bite" });
   const hit = forecast(s, "bite", s.rival.at).targets[0].hitChance;
   assert.match(html, new RegExp(`<td class="num">${hit}%</td>`), "the hit cell is the chance to land");
-  assert.match(html, /one in four of the hits pass through/);
+  assert.match(html, new RegExp(`${oneIn(RULES.phaseOut)} of the hits pass through`));
   const sq = pair("squamous", "radiosaur");
   putUnit(sq, "tank", H.ray(sq.kaiju.at, 3, 2)[1]);
   const back = forecastSheet(forecast(sq, "grab", sq.rival.at), { name: "Tentacle grab" });
   assert.match(back, /\(55%, /, "the return-fire hit chance is not scaled");
-  assert.match(back, /one in four hits that pass through you/);
+  assert.match(back, new RegExp(`${oneIn(RULES.phaseOut)} hits that pass through you`));
   const plain = pair("radiosaur", "thalassor");
   assert.doesNotMatch(forecastSheet(forecast(plain, "bite", plain.rival.at), { name: "Bite" }), /pass through/);
 });
@@ -44,7 +44,7 @@ test("oneIn says a chance in plain words", () => {
 
 test("the setup card words for the passives are plain, and the phase-out one warns against trading blows", () => {
   const words = KAIJU.squamous.passives.map(passiveText).join(" ");
-  assert.match(words, /one in four of the hits that land pass through/);
+  assert.match(words, new RegExp(`${oneIn(RULES.phaseOut)} of the hits that land pass through`));
   assert.match(words, /must not stand and trade blows/);
   assert.doesNotMatch(words, /harder to hit/);
   assert.match(passiveText("eldritch"), new RegExp(`${RULES.eldritchAccuracy} points less likely to hit`));

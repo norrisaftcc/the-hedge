@@ -4,6 +4,15 @@ The version is in `src/version.js`. It shows on the setup page as the edition an
 
 - **0.1.x** for the spike and fixes, **0.2.x** after Hex and the City, and so on: the middle number moves with each feature PR, the last with each fix.
 
+## 0.5.0: soft body, hits may pass through the Squamous One (#24, from playtest 001)
+
+- **Phase-out**: about one in four of the hits that land on the Squamous One, and on Meow'thprrtep, pass through and do no damage. The rules roll it on the seeded dice after the hit roll. It covers the player's blows, the rival's and the army's. A power structure's blast never phases. The rate is one number, `RULES.phaseOut` (25), in `src/data/kaiju.js`.
+- Why: the Squamous One has armor 0, and the heavy guns did about twice to it what they do to the armored three (DESIGN §18.1). Phase-out lasts by luck, not by armor. In the bot's games it takes 6.20 damage a turn where it took 8.58 (`node kaiju/tools/toughness.mjs 21-60 squamous`), and it must not stand and trade blows. The directions not chosen are kept as patches in `docs/experiments/soft-body/`.
+- The page: the setup card says it in plain words, and "Eldritch: harder to hit." now says how much. The forecast sheet keeps the hit chance and adds "one in four of the hits pass through" when the target has the passive. Return fire says it too. The cutaway reads a phased hit as THROUGH, and the log tells it: "Bite passes through where The Squamous One's mantle was a moment ago."
+- The balance bot counts the phase chance in what a strike is worth.
+- Pinned results move. The Coast replay (Squamous One against Dai-Rengō, seed 7) is re-recorded: every landed hit on the Squamous One now rolls once more, so seeded games differ even where no hit phased. On playtest 001's seed the bot now wins on turn 2 after a survivable 9-damage blast (`node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`), and the blast test pins that the bot takes no lethal blast.
+- The other monsters' Coast rows move where the seed gives them a Squamous One as the rival (DESIGN §18.7).
+
 ## 0.4.0: rival reach, a body slam for every monster (#27, from playtest 002)
 
 - **Body slam**: any kaiju beside the other can throw its body at it. 2 AP, 2–4 damage, 80% to hit, to a part by roll. The body cannot be crippled, so with any one of arms, legs, head or aux crippled a living monster can still hurt an adjacent rival, at the AP the rules give (two cases are open, below). Dai-Rengō after its finisher, and the Squamous One with its feelers crippled, can still fight. The numbers and the name are in `RULES` (`src/data/kaiju.js`).
