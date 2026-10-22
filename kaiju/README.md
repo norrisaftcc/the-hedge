@@ -21,6 +21,10 @@ Then open `http://localhost:8000/`. Any static server will do; opening `index.ht
 
 The page works one-thumbed on a phone in portrait and with keys on a desktop: `1` move, `2`–`4` attacks, `5` stomp, `6` eat, `7` withdraw, `F` face, `R` roar, `E` end turn, `U` undo a move, arrow keys to step through targets, `Enter` to confirm, `Esc` to cancel. The theme follows the system unless you choose; the choice and the cutaway setting are remembered in that browser.
 
+## Versions and playtests
+
+The setup page shows the edition ("Edition 0.2.0"), and every copied review ends with a line naming the build and the setup. `CHANGELOG.md` says what each version changed. Games people have played are logged in [`playtests/`](playtests/README.md), one file per game: paste the copied review and say how it felt.
+
 ## Tests
 
 From the repository root:

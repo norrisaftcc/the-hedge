@@ -14,6 +14,7 @@ import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { UNITS } from "./data/units.js";
 import { MUTATIONS, BUDGET } from "./data/mutations.js";
 import { DIR_NAMES, distance } from "./hex.js";
+import { VERSION, TITLE } from "./version.js";
 
 // How the log names each unit type.
 export const NOUNS = {
@@ -848,6 +849,18 @@ function verdictParagraph(state, f, quote, ratingText, v) {
 }
 
 // The review of a finished game: a pure function of the final state and every event, in order.
+// One plain line under the copied review: the build and the setup, in the balance bot's own
+// terms, so a playtest can be set up again. Outside the fiction, after a rule.
+export function setupLine(state) {
+  const k = state.kaiju;
+  const build = k.mutations.length ? ` + ${k.mutations.join("+")}` : "";
+  let mission = state.mission;
+  if (state.target) mission += `:${state.target}`;
+  if (state.objective && state.objective.kind === "none" && state.objective.id) mission += `:${state.objective.id}`;
+  const rival = state.rival ? ` vs ${state.rival.id}` : "";
+  return `${TITLE} ${VERSION}. Setup: ${k.id}${build}, ${mission}${rival}, seed ${state.seed}.`;
+}
+
 export function review(state, events = []) {
   const f = gather(events);
   const k = state.kaiju;
@@ -884,6 +897,6 @@ export function review(state, events = []) {
     stoppedParagraph(state, f, v),
     verdictParagraph(state, f, quote, ratingText, v),
   ];
-  const text = [`${MAGAZINE.toUpperCase()}. ${issue}.`, "", title, dek, byline, "", paragraphs.join("\n\n")].join("\n");
+  const text = [`${MAGAZINE.toUpperCase()}. ${issue}.`, "", title, dek, byline, "", paragraphs.join("\n\n"), "", "---", setupLine(state)].join("\n");
   return { magazine: MAGAZINE, issue, title, dek, byline, paragraphs, quote, stars, ratingText, text };
 }

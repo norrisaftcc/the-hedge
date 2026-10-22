@@ -5,6 +5,7 @@
 import * as R from "../rules.js";
 import * as H from "../hex.js";
 import { say, review } from "../voice.js";
+import { VERSION } from "../version.js";
 import { MISSIONS, TARGETS, OBJECTIVES, resolveMission } from "../data/missions.js";
 import { KAIJU } from "../data/kaiju.js";
 import { MUTATIONS, BUDGET } from "../data/mutations.js";
@@ -965,6 +966,9 @@ function onKey(e) {
 // ---------- boot ----------
 
 function boot() {
+  // The edition is the build: a playtest names it.
+  const edition = document.querySelector(".mast-rule span:last-child");
+  if (edition) edition.textContent = `Edition ${VERSION}`;
   document.body.insertAdjacentHTML("afterbegin", DEFS);
   S.applyTheme();
   board = createBoard($("board"), { onHex, onFace });
