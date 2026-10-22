@@ -16,6 +16,11 @@ const ACTORS = ["kaiju", "rival"];
 // Stomp strikes like an attack that cannot miss: a damage roll for each thing in the hex.
 const STOMP = { id: "stomp", name: "Stomp", kind: "stomp", pattern: "single", range: 1, damage: RULES.stompDamage, accuracy: 100, effects: {} };
 
+// Slam: every kaiju has a body, so every kaiju can throw it at an adjacent kaiju. It is not an
+// attack of the kaiju's own list (the body cannot be crippled, so it is always there), and not
+// a melee blow, so crippled arms do not weaken it. Head damage and eldritch skin still count.
+const SLAM = { id: "slam", name: RULES.slamName, kind: "slam", uses: "body", pattern: "single", range: 1, ap: RULES.slamAp, energy: 0, damage: RULES.slamDamage, accuracy: RULES.slamAccuracy, effects: {} };
+
 // ---------- small helpers ----------
 
 const other = (actor) => (actor === "kaiju" ? "rival" : "kaiju");
@@ -177,7 +182,7 @@ function rawAp(k) {
   return ap;
 }
 
-function computeAp(k) {
+export function computeAp(k) {
   return Math.max(1, rawAp(k));
 }
 
@@ -954,6 +959,23 @@ function doStomp(s, actor, cmd, ev) {
   return null;
 }
 
+// The hex of the other kaiju when it is alive and next to the actor: the one place a slam can land.
+export function slamTargets(state, actor = "kaiju") {
+  const k = state[actor];
+  const o = state[other(actor)];
+  if (!alive(k) || !alive(o) || H.distance(k.at, o.at) !== 1) return [];
+  return [o.at];
+}
+
+function doSlam(s, actor, cmd, ev) {
+  const k = s[actor];
+  if (k.ap < RULES.slamAp) return "Not enough AP.";
+  if (!slamTargets(s, actor).includes(cmd.target)) return "Nothing to slam there.";
+  k.ap -= RULES.slamAp;
+  strikeKaiju(s, actor, SLAM, other(actor), marksUse(ev));
+  return null;
+}
+
 // What an eat on this hex would take: an edible unit first, then a structure. The page reads it,
 // so a warning never names a structure the eat would leave standing.
 export function food(state, actor, key) {
@@ -1023,7 +1045,7 @@ function doWithdraw(s, actor, cmd, ev) {
   return null;
 }
 
-const KAIJU_COMMANDS = { move: doMove, face: doFace, attack: doAttack, stomp: doStomp, eat: doEat, roar: doRoar, withdraw: doWithdraw };
+const KAIJU_COMMANDS = { move: doMove, face: doFace, attack: doAttack, stomp: doStomp, slam: doSlam, eat: doEat, roar: doRoar, withdraw: doWithdraw };
 
 // ---------- the units' commands ----------
 
@@ -1396,8 +1418,8 @@ function otherKaijuThreat(state, actor) {
   const home = o.at;
   const vs = { kind: "kaiju", actor };
   let best = null;
-  for (const base of kaijuDef(o.id, o.variant).attacks) {
-    const a = attackOf(ghost, other, base.id);
+  for (const base of [...kaijuDef(o.id, o.variant).attacks, SLAM]) {
+    const a = base === SLAM ? SLAM : attackOf(ghost, other, base.id);
     if (a.damage[1] === 0 || a.pattern === "teleport" || attackBlocked(ghost, other, a)) continue;
     for (const [spot, r] of Object.entries(spots)) {
       if (r.cost > o.ap - a.ap) continue;
@@ -1430,6 +1452,18 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
       for (const v of vs) targets.push({ ...victimInfo(state, v), hitChance: 100, damage: damageRange(lo, hi, kaijuDamageMod(state, actor, STOMP, v), false) });
     }
     return { apCost: RULES.stompAp, energyCost: 0, targets, returnFire: returnFire(state, actor) };
+  }
+  if (attackId === "slam") {
+    const targets = [];
+    if (slamTargets(state, actor).includes(target)) {
+      const v = { kind: "kaiju", actor: other(actor) };
+      targets.push({
+        ...victimInfo(state, v),
+        hitChance: kaijuAccuracy(state, actor, SLAM, v, 1),
+        damage: damageRange(SLAM.damage[0], SLAM.damage[1], kaijuDamageMod(state, actor, SLAM, v), false),
+      });
+    }
+    return { apCost: SLAM.ap, energyCost: 0, targets, returnFire: returnFire(state, actor) };
   }
   const a = attackOf(state, actor, attackId);
   if (!a) return { apCost: 0, energyCost: 0, targets: [], returnFire: [] };
@@ -1477,6 +1511,9 @@ export function actions(state) {
   why = over ? overWhy : k.used.roar ? "Already roared this turn." : k.ap < RULES.roarAp ? "Not enough AP." : null;
   add("roar", "Roar", "roar", RULES.roarAp, 0, why);
   add("withdraw", "Withdraw", "withdraw", 0, 0, over ? overWhy : state.retreat.includes(k.at) ? null : "Not on a retreat hex.");
+  // After the withdraw, so the digit keys read in order down the list (panels.js).
+  why = over ? overWhy : k.ap < RULES.slamAp ? "Not enough AP." : slamTargets(state).length ? null : "No kaiju adjacent to slam.";
+  add("slam", SLAM.name, "slam", RULES.slamAp, 0, why);
   add("end", "End turn", "end", 0, 0, over ? overWhy : null);
   return out;
 }

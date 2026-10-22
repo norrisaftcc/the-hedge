@@ -39,6 +39,7 @@ Serve the page, then run the smoke script in this folder:
 cd kaiju && python3 -m http.server 8000 &
 node .claude/skills/kaiju-check/smoke.cjs --out <scratch dir>
 node .claude/skills/kaiju-check/smoke.cjs --mission coast --kaiju thalassor --seed 7 --out <scratch dir>
+node .claude/skills/kaiju-check/smoke.cjs --mission coast --kaiju thalassor --seed 7 --cutaway on --out <scratch dir>   # the cutaway, as a player sees it
 ```
 
 It plays one game at 375×812 (touch) and 1280×800, in light and dark. It prints one JSON line per run and exits 1 on a console error, sideways scroll, or an end screen with no review. It leaves an end-screen screenshot per run. Look at the screenshots: the script cannot see text that overlaps or a button that is too small.

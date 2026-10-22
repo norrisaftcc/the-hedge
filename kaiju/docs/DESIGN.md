@@ -305,6 +305,7 @@ Player commands:
 | `{t: "face", dir}` | turn in place | 0 |
 | `{t: "attack", attack, target}` | use an attack on a target hex (or pattern, or teleport destination) | attack.ap |
 | `{t: "stomp", target}` | adjacent hex: 3–4 damage, no roll to hit, to the structure and every ground unit there; unit armor and cover apply as in 6.2. Stomping a power structure flat sets off its blast (6.1) | 1 |
+| `{t: "slam", target}` | the hex of the other kaiju, when it is alive and adjacent: `RULES.slamDamage` (2–4) at `RULES.slamAccuracy` (80) to a part by roll, like any kaiju attack. No facing, and arms crippled do not weaken it (§17.3 D) | `RULES.slamAp` (2) |
 | `{t: "eat", target}` | adjacent hex: an edible unit, or a populated structure; for a `reactorBelly` kaiju, also a power structure (6.4) | 1 |
 | `{t: "roar"}` | once a turn: panic test, pressure `roarPressure`, for every unit within `roarRadius` | 1 |
 | `{t: "withdraw"}` | on a retreat hex: leave the map; the mission ends | 0 |
@@ -371,7 +372,7 @@ export function reach(state, actor = "kaiju")              // {key: {cost, path}
 export function attackTargets(state, attackId, actor)     // [keys] legal targets
 export function affected(state, attackId, target, actor)  // [keys] hexes the pattern strikes
 export function forecast(state, attackId, target, actor)  // {apCost, energyCost, targets: [{key, kind, id, name, hp, max, hitChance, damage: [min, max]}], returnFire: [{unit, name, hitChance, damage: [min, max]}]}
-export function actions(state)                            // [{id, name, ap, energy, enabled, why}] for move, face, each attack, stomp, eat, roar, withdraw, end
+export function actions(state)                            // [{id, name, ap, energy, enabled, why}] for move, face, each attack, stomp, slam, eat, roar, withdraw, end
 export function describeHex(state, key)                   // {terrain, structure, units, kaiju, text}
 export function partState(part)                           // "intact" | "hurt" | "bad" | "crippled"
 export function replay(setup, commands)                   // final state; for tests [PLT-6]
@@ -498,7 +499,7 @@ desktop (≥ 900 px), landscape (≥ 640)   phone portrait (< 900 px)
 - **Top bar**: turn and limit, AP, the goal in a few words, settings button, theme button.
 - **Map**: one SVG from `board.js`. Hex size 24 in SVG units; the SVG scales to the tile's width. Terrain from `hexTile`, structures from `structure`, units from `units.token`, kaiju from `kaiju.token` with a facing notch. Highlights: reachable hexes (move), legal targets (attack), the affected pattern (preview), the rear arc (three faint edges behind the kaiju), the retreat hexes. Tap a hex: inspect it; with a mode active, choose it.
 - **Status**: `portrait` and `silhouette` side by side; bars for AP, energy, hunger (or battery for the robot); armor and lingering; a part list with hp. Under it, *Inspect*: the last tapped hex's `describeHex` text.
-- **Actions**: one button per `actions(state)` entry: name, AP cost, energy cost, disabled with its `why` as a title and a visible line. Modes: *Move* (default when nothing else is chosen: reachable hexes lit; tap a hex shows path and cost; tap again or *Confirm* to go), *Face* (six arrows around the kaiju), an attack (targets lit; tap a target opens the *Forecast* sheet with *Confirm* and *Cancel*), *Stomp*, *Eat* (adjacent targets lit), *Roar*, *Withdraw*, *End turn*. Every button ≥ 44 px; every action has a key, shown on the button (1–9 for attacks and actions, `F` face, `R` roar, `Enter` confirm, `Esc` cancel, `E` end turn).
+- **Actions**: one button per `actions(state)` entry: name, AP cost, energy cost, disabled with its `why` as a title and a visible line. Modes: *Move* (default when nothing else is chosen: reachable hexes lit; tap a hex shows path and cost; tap again or *Confirm* to go), *Face* (six arrows around the kaiju), an attack (targets lit; tap a target opens the *Forecast* sheet with *Confirm* and *Cancel*), *Stomp*, *Body slam* (the adjacent kaiju lit, with the forecast sheet), *Eat* (adjacent targets lit), *Roar*, *Withdraw*, *End turn*. Every button ≥ 44 px; every action has a key, shown on the button (1–9 for attacks and actions: `8` is Body slam; `F` face, `R` roar, `Enter` confirm, `Esc` cancel, `E` end turn).
 - **Log**: newest last, each event's `text`; `radio` lines in capitals and monospace; the kaiju's lines in the accent colour. The words come first (REQUIREMENTS section 0): on a phone the log sits directly under the map and shows the last four lines until opened; in two columns it takes the rest of the right column and never shows fewer than four lines. The status tile's portrait, silhouette and bars never scroll away; at laptop heights only its part list scrolls, under them [E1].
 - **Forecast sheet** [CMB-1]: target list with hit chance, damage range, and hp after (for a zero-damage panic attack: the pressure and the chance each unit breaks); AP and energy cost; "return fire next phase" summary. On a phone it rises from the bottom with its buttons always in view; in two columns it takes the Status tile's place while it is open. On a phone the portrait and silhouette also sit in the top bar, so they stay in view.
 
@@ -761,3 +762,105 @@ A new query in `rules.js`. For a hex holding a power structure it returns what s
 - **The page:** the forecast for a move or stomp onto a power hex reports the range, and the result then matches it.
 - **Balance, before and after:** `node kaiju/tools/sim.mjs 1-20` and `node kaiju/tools/sim.mjs 21-60 squamous swathe:plant`. The pinned replays use recorded commands, so they do not move. The bot's numbers do.
 - **Version** 0.3.1, with a CHANGELOG entry.
+
+## 17. Rival reach: no living monster is left unable to fight [KAI-11; issue #27]
+
+### 17.1 What playtest 002 showed
+
+Playtest 002 was Dai-Rengō against the Squamous One on the Coast, seed 39724. The player fought the rival and left the army alone. Dai-Rengō used Final formation on turn 3. Its arms were crippled after that, and it fell on turn 8 with nothing it could do to the rival.
+
+The cause is the data, not the dice. A crippled part's attacks are refused (`attackBlocked`), and `stompTargets` allows structures and ground units only. Damaging attacks by part (`src/data/kaiju.js`):
+
+| Kaiju | Damaging attacks |
+|---|---|
+| Radiosaur | head (Bite, Atomic breath), aux (Tail sweep) |
+| Thalassor | arms (Fist, Tidal surge), aux (Trident cast) |
+| The Squamous One | arms only (Tentacle grab) |
+| Dai-Rengō | arms (Rocket punch, Beam sword), body (Final formation, once a mission) |
+
+So the Squamous One with its feelers crippled, or Dai-Rengō with its arms crippled after its finisher, is alive and cannot hurt the rival. On the Coast the rival is the objective. KAI-3 says a crippled part is "at its worst", not that the monster stops playing.
+
+### 17.2 The test [KAI-11]
+
+For every kaiju and every variant (`kaijuDef(id, variant)`):
+- with any one of head, arms, legs or aux crippled (hp 0);
+- with its once-a-mission attacks spent;
+- with full energy, and the AP the rules give with that part crippled: the kaiju's AP less the legs' penalty (`RULES.legsAp`), never below 1, and no hunger or empty battery (§17.8 reads this);
+- with the rival in an adjacent hex, in any of the six directions;
+
+there is a legal command, or a free turn followed by one, that can damage the rival: a forecast with a hit chance above 0 and a top damage above 0. The body is not in the list, since a body at 0 ends the mission. The test is `kaiju/tests/reach.test.mjs`.
+
+**Narrowed in the build.** This section first said "with full AP and full energy". The slam costs 2 AP, and the AP rules can leave a kaiju with 1, so that reading was dropped for the one above: the AP the rules give with the one part crippled, and no hunger and no empty battery. That is a weaker test than the one first written. §17.8 says what it leaves open.
+
+### 17.3 Four directions, tried as data
+
+Each direction was built on its own copy of 87bad43 and measured with the bot. Only the one recommended goes into this PR. The other three are kept as patches in `kaiju/docs/experiments/rival-reach/`, whose README gives the commands, so the owner can check their numbers and choose another.
+
+- **A. Stomp a kaiju.** `stompTargets` also offers an adjacent kaiju. A stomp on a kaiju is a kick or body check: `RULES.stompDamage` (3–4), 1 AP, and `kaijuAccuracy` (head damage, eldritch and cover apply). Crippled legs cannot stomp a kaiju. A stomp on a unit or structure is unchanged, so the pinned replays hold.
+- **B. A crippled part still swings, badly.** `attackBlocked` no longer refuses a crippled part. Its attacks take `RULES.crippledAccuracy` (−30) and do half damage (`RULES.crippledDamage`, rounded down, at least 1). This is the plainest reading of KAI-3.
+- **C. A second damaging part for the two that lack one.** This is data only:
+  - Dai-Rengō gains a thruster ram (aux, melee, 2 AP, 1 energy, 2–4).
+  - The Squamous One's gaze does 1–2 damage as well as its panic.
+  - This changes each monster's character.
+- **D. A body slam for everyone.** A rules-level action like stomp, using the body: 2 AP, 2–4 damage, accuracy 80, an adjacent kaiju only. The body cannot be crippled, so the slam is always there.
+
+The rival plays by the same rules. For A and D, `planRival` (`src/ai.js`) learns the new action, so the change is not the player's alone.
+
+### 17.4 The bot: a hero mode
+
+The bot attacks whatever pays best, the army included. That is not how a person played playtest 002. So `tools/sim.mjs` gains a hero mode, set by the cell `coast:<rival>:hero`:
+- it strikes only what damages the rival;
+- it moves toward the rival;
+- it still eats when hungry, since hunger costs AP;
+- it never targets units or structures for their own sake.
+
+The bot also counts **stuck turns**: turns in which the player's monster was next to the rival with AP left and had no legal damaging action against it. Before this change, stuck turns are what playtest 002 felt like. After it, the KAI-11 test says they cannot happen, bar the two open cases in §17.8 (crippled legs with hunger, and crippled legs with an empty battery).
+
+### 17.5 Measuring
+
+For each direction, and for the code before any of them:
+- `node kaiju/tools/sim.mjs 1-20 all coast:<rival>` and `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`, for each of the four rivals;
+- the same on seeds 21–60, held out;
+- `node kaiju/tools/sim.mjs 1-20` for the other missions, which should barely move.
+
+These are the bot's numbers, a floor rather than a forecast.
+
+### 17.6 Choosing
+
+1. It passes the §17.2 test for every kaiju and variant.
+2. It changes the four characters least. A rule shared by all is better than new attacks for two.
+3. It moves the non-Coast numbers least.
+4. It brings the hero bot's stuck turns to 0.
+
+### 17.7 The page, motion and version
+
+- **The page:** a stomp on a kaiju (A) or a slam (D) shows in the forecast sheet like any attack. A crippled attack (B) is no longer greyed out. Its button says "crippled" and the sheet shows the penalty.
+- **Motion:** a slam on a kaiju plays the existing kaiju-against-kaiju cutaway (`src/ui/cutaway.js`), titled by `RULES.slamName`. It needs nothing new. `kaiju/tests/slam-page.test.mjs` checks that `planScenes` and `buildScene` give it a scene in the "all" and "kaiju" modes. Run the smoke script with the cutaway on (the default) as well as off.
+- **Version:** 0.4.0, since this is a balance change with a feature behind it. It gets a CHANGELOG entry.
+
+### 17.8 As built and measured
+
+**D was built**: a body slam for every kaiju. The four directions are compared in the PR (#27); this is the reason for the choice, by the §17.6 rules.
+- **It passes the test as narrowed in §17.2, and no more.** `node --test kaiju/tests/reach.test.mjs` runs §17.2 for every kaiju and look, in the six directions, with the AP the rules give, no hunger and no empty battery: no failing case there. It does not pass for crippled legs plus hunger or an empty battery (below): the same command reports 48 and 72 failing cases in two todo tests, 120 in all.
+- **It changes the four characters least.** No monster gains or loses an attack. The slam is one rule that all of them share, and it takes the body, which cannot be crippled.
+- **It moves the non-Coast numbers least.** The slam needs a rival, and only the Coast has one. The fortress, swathe and rampage cells and their replays do not move.
+- **The hero bot's stuck turns fall, but not to 0. Criterion 4 of §17.6 is not met.** `stuck0` is the column that counts the KAI-11 case: turns beside the rival with no damaging command even at the AP the rules gave. In the worst cell of `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero` it is 3.15 a game before the slam (at 87bad43) and 0.80 after (Thalassor against Thalassor). Across the sixteen cells it is 30 turns in 320 games after (26 Thalassor, 4 Dai-Rengō; the column is a mean over 20 games, so a mean of 0.30 is 6 turns). On the held-out seeds, `node kaiju/tools/sim.mjs 21-60 all coast:<rival>:hero`, it is 52 turns in 640 games (31 Thalassor, 21 Dai-Rengō), and 0.63 a game in the worst cell. These are the bot's numbers, simulated. `stuck` still counts turns that end with 1 AP left, which a slam (2 AP) cannot use; it is not the KAI-11 measure.
+- **The win rates are not evidence for the slam.** A move under about 15 points on 20 seeds is noise. The hero bot's mean win rate over the four monsters, by rival, at 87bad43 and now: the Squamous One 54% to 65%, Radiosaur 49% to 53%, Thalassor 35% to 35%, Dai-Rengō 29% to 34% (`node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`). Only `stuck0` supports the change. One classic cell does move beyond the band: the Squamous One as the player's monster on the Coast, rival left to chance, falls from 55% to 40% (`node kaiju/tools/sim.mjs 1-20 squamous coast`). The rival slams too.
+
+What is built:
+- `RULES.slamName` ("Body slam"), `slamAp` (2), `slamDamage` (2–4) and `slamAccuracy` (80) in `src/data/kaiju.js`. The rules code holds none of them.
+- `slamTargets`, the `{t: "slam", target}` command (§6), `forecast(state, "slam", hex)`, and a "Body slam" row in `actions(state)`.
+- It strikes a part of the other kaiju by roll, as any kaiju attack does. Head damage and eldritch skin change its accuracy; crippled arms do not weaken it, since it is not a melee attack of the arms.
+- The rival plans it (`planRival`), and `otherKaijuThreat`, which the forecast's return fire reads, counts it.
+- The page: a button on key 8, the adjacent kaiju lit, a forecast sheet like any attack's, and a log line in `voice.js`, chosen by turn and hex, never by a die.
+
+**The AP reading.** The KAI-11 test gives a kaiju the AP the rules give it with the one part crippled and the legs' penalty taken, with no hunger and no empty battery. A slam costs 2.
+
+**Open question for the owner: crippled legs and a second AP penalty.** The AP rules are not changed in this PR. Crippled legs take 3 AP (`RULES.legsAp`). One more penalty (hunger at 70% or more, `RULES.hungryAp`; an empty battery, `RULES.batteryEmptyAp`) leaves the 1 AP of the floor in `computeAp`, and a slam costs 2. So the monster can stand beside the rival and do nothing, as in playtest 002, one level down. Two todo tests in `kaiju/tests/reach.test.mjs` hold it open; `node --test kaiju/tests/reach.test.mjs` reports them:
+- "KAI-11 (open): crippled legs and hunger…": 48 failing cases, Thalassor and the Alien Colossus, each against four rivals in six directions;
+- "KAI-11 (open): crippled legs and an empty battery…": 72 failing cases, Dai-Rengō, Gekido-Oh and Mekkasaurus Prime, the same way.
+
+The hero bot meets both: the `stuck0` column of `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero` is above 0 only for Thalassor and Dai-Rengō. The choice is the owner's:
+- slam costs 1 when the kaiju has 1 AP left (a data change, `slamAp`, and a rule);
+- hunger never takes the last AP;
+- leave it, since a starving monster with crippled legs is meant to be in trouble, and say so in KAI-11.

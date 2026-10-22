@@ -7,10 +7,14 @@
 // e.g. node kaiju/tools/sim.mjs 20, or node kaiju/tools/sim.mjs 1-20 radiosaur swathe:lab
 // Rampage: node kaiju/tools/sim.mjs 1-20 all rampage plays every objective to the end (never
 // withdrawing; a guard stops a run after turn 60) and prints the median total and turns lasted.
+// Coast against a fixed rival: coast:squamous. Add :hero (coast:squamous:hero) and the bot fights
+// only the rival (DESIGN 17.4). Both print a stuck column: the mean number of the player's turns
+// per game in which the kaiju stood next to the rival with AP left and could not hurt it. stuck0
+// counts the same turns but with full AP and energy given: stuck by parts and spent attacks alone.
 
 import { pathToFileURL } from "node:url";
 import * as H from "../src/hex.js";
-import { create, step, reach, blastRisk, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
+import { create, step, reach, blastRisk, attackTargets, forecast, stompTargets, slamTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
 import { KAIJU, RULES } from "../src/data/kaiju.js";
 import { kaijuDef } from "../src/data/variants.js";
 import { UNITS } from "../src/data/units.js";
@@ -136,10 +140,24 @@ function blastAllowed(state, key) {
   return !risk.lethal && key === state.objective.at;
 }
 
-// Every strike open to the kaiju now: [{cmds, value, goal, ap}], turning first where that helps.
-// Single attacks ignore facing; area attacks are tried in every facing. A stomp that would set
-// off a power structure is left out unless blastAllowed.
-export function strikes(state) {
+// What a forecast does to the rival kaiju: whether it can hurt it (a hit chance above 0 and a top
+// damage above 0), and the expected damage, capped at the rival's hit points in the part struck.
+function rivalEffect(f) {
+  let hurts = false;
+  let expected = 0;
+  for (const t of f.targets) {
+    if (t.kind !== "kaiju" || t.hitChance <= 0 || t.damage[1] <= 0) continue;
+    hurts = true;
+    expected += (t.hitChance / 100) * Math.min(t.hp, (t.damage[0] + t.damage[1]) / 2);
+  }
+  return { hurts, expected };
+}
+
+// Every strike open to the kaiju now: [{cmds, value, goal, ap, hurts, expected}], turning first
+// where that helps. hurts and expected say what the strike does to the rival kaiju alone.
+// Single attacks ignore facing; area attacks are tried in every facing. A stomp is listed even
+// if it would set off a power structure; strikes() filters those.
+function allStrikes(state) {
   const k = state.kaiju;
   const out = [];
   for (const d of [k.facing, 0, 1, 2, 3, 4, 5].filter((x, i, all) => all.indexOf(x) === i)) {
@@ -150,18 +168,46 @@ export function strikes(state) {
       if (a.pattern === "single" && d !== k.facing) continue;
       const targets = attackTargets(turned, a.id);
       for (const target of a.pattern === "single" ? targets : targets.slice(0, 1)) {
-        const w = worth(state, { ...forecast(turned, a.id, target), panic: a.effects.panic });
-        out.push({ cmds: [...face, { t: "attack", attack: a.id, target }], ...w, ap: a.ap });
+        const f = forecast(turned, a.id, target);
+        const w = worth(state, { ...f, panic: a.effects.panic });
+        out.push({ cmds: [...face, { t: "attack", attack: a.id, target }], ...w, ap: a.ap, ...rivalEffect(f) });
       }
     }
     if (d === k.facing && k.ap >= RULES.stompAp) {
       for (const target of stompTargets(state)) {
-        const w = worth(state, forecast(state, "stomp", target));
-        out.push({ cmds: [{ t: "stomp", target }], ...w, ap: RULES.stompAp, stomp: target });
+        const f = forecast(state, "stomp", target);
+        out.push({ cmds: [{ t: "stomp", target }], ...worth(state, f), ap: RULES.stompAp, stomp: target, ...rivalEffect(f) });
+      }
+    }
+    // The body slam (DESIGN 17.3 D): a kaiju next to the other. It needs no facing.
+    if (d === k.facing && k.ap >= RULES.slamAp) {
+      for (const target of slamTargets(state)) {
+        const f = forecast(state, "slam", target);
+        out.push({ cmds: [{ t: "slam", target }], ...worth(state, f), ap: RULES.slamAp, ...rivalEffect(f) });
       }
     }
   }
-  return out.filter((s) => !s.stomp || blastAllowed(state, s.stomp));
+  return out;
+}
+
+// Every strike open to the kaiju now, less any stomp that would set off a power structure
+// unless blastAllowed.
+export function strikes(state) {
+  return allStrikes(state).filter((s) => !s.stomp || blastAllowed(state, s.stomp));
+}
+
+// Whether the kaiju, next to a living rival, has a legal command that can damage it: an attack,
+// a stomp or a body slam, after a free change of facing, whose forecast has a hit chance above 0
+// and a top damage above 0. False when there is no living rival, none adjacent, or no AP or energy for it.
+// With fresh set, the kaiju is first given full AP and full energy, so the answer depends only on
+// its parts and its spent once-a-mission attacks, as the KAI-11 test asks (DESIGN 17.2).
+// A stomp that sets off a power structure is still legal, so it counts. (DESIGN 17.4)
+export function canHurtRival(state, { fresh = false } = {}) {
+  const k = state.kaiju;
+  const r = state.rival;
+  if (state.result || !alive(k) || !r || !alive(r) || H.distance(k.at, r.at) !== 1) return false;
+  const from = fresh ? { ...state, kaiju: { ...k, ap: k.apMax, energy: kaijuDef(k.id, k.variant).energy.max } } : state;
+  return allStrikes(from).some((s) => s.hurts);
 }
 
 const perAp = (list) => list.reduce((a, b) => (b.value / b.ap > a.value / a.ap ? b : a));
@@ -234,10 +280,20 @@ function moveCommand(state) {
 // The bot's next commands for the current state: one action, with a turn first if it needs one.
 // Eat when hungry; strike the goal when it can; roar into a crowd; take a rich strike; walk
 // toward the goal; spend what AP is left on lesser strikes; end the turn.
-export function plan(state) {
+// With hero set (DESIGN 17.4), the bot fights only the rival: it eats when hungry, strikes with
+// whatever can damage the rival (most expected damage first, turning first), walks toward the
+// rival, else ends the turn. It never roars at a crowd, and never strikes a unit or structure
+// except as the other victim of a blow that also hurts the rival.
+export function plan(state, { hero = false } = {}) {
   if (state.result) return [];
   const eat = eatCommand(state);
   if (eat) return [eat];
+  if (hero) {
+    const blows = strikes(state).filter((s) => s.hurts);
+    if (blows.length) return blows.reduce((a, b) => (b.expected > a.expected ? b : a)).cmds;
+    const move = state.kaiju.ap > 0 ? moveCommand(state) : null;
+    return move ? [move] : [{ t: "end" }];
+  }
   const all = strikes(state);
   const goal = all.filter((s) => s.goal);
   if (goal.length) return goal.reduce((a, b) => (b.value > a.value ? b : a)).cmds;
@@ -254,11 +310,22 @@ export function plan(state) {
 
 // Play a whole mission. Returns the final state and every command sent. A rampage has no turn
 // limit, so maxTurn stops it.
-export function playBot(setup, { maxSteps = 5000, maxTurn = TURN_GUARD } = {}) {
+// stuck is the number of the player's turns in which, at some point, the kaiju stood next to a
+// living rival with AP left and canHurtRival was false. It is checked where the bot decides.
+// stuckFresh counts the same turns with canHurtRival(state, {fresh: true}): stuck even with full
+// AP and energy, so by its parts and spent attacks alone.
+export function playBot(setup, { maxSteps = 5000, maxTurn = TURN_GUARD, hero = false } = {}) {
   let state = create(setup);
   const commands = [];
+  const stuckTurns = new Set();
+  const freshTurns = new Set();
   for (let i = 0; i < maxSteps && !state.result && state.turn <= maxTurn; i++) {
-    for (const cmd of plan(state)) {
+    const k = state.kaiju;
+    if (state.phase === "kaiju" && k.ap > 0 && state.rival && alive(state.rival) && H.distance(k.at, state.rival.at) === 1) {
+      if (!canHurtRival(state)) stuckTurns.add(state.turn);
+      if (!canHurtRival(state, { fresh: true })) freshTurns.add(state.turn);
+    }
+    for (const cmd of plan(state, { hero })) {
       const out = step(state, cmd);
       // A refused order should not happen; if it does, the bot ends its turn rather than stall.
       const refused = out.events.length === 1 && out.events[0].k === "refuse";
@@ -268,7 +335,7 @@ export function playBot(setup, { maxSteps = 5000, maxTurn = TURN_GUARD } = {}) {
       if (refused || state.result) break;
     }
   }
-  return { state, commands };
+  return { state, commands, stuck: stuckTurns.size, stuckFresh: freshTurns.size };
 }
 
 export const CELLS = [
@@ -341,8 +408,12 @@ export function runCell(kaiju, cell, seeds) {
   let wins = 0;
   let turns = 0;
   let score = 0;
+  let stuck = 0;
+  let stuckFresh = 0;
   for (const seed of seeds) {
-    const { state } = playBot(setupFor(kaiju, cell, seed));
+    const { state, stuck: s, stuckFresh: f } = playBot(setupFor(kaiju, cell, seed), { hero: !!cell.hero });
+    stuck += s;
+    stuckFresh += f;
     const r = state.result || { grade: "draw", score: { total: 0 } };
     grades[r.grade] += 1;
     if (r.grade === "victory" || r.grade === "total victory") wins += 1;
@@ -350,7 +421,7 @@ export function runCell(kaiju, cell, seeds) {
     score += r.score.total;
   }
   const n = seeds.length;
-  return { wins: wins / n, turns: turns / n, score: score / n, grades };
+  return { wins: wins / n, turns: turns / n, score: score / n, stuck: stuck / n, stuckFresh: stuckFresh / n, grades };
 }
 
 function parseSeeds(arg) {
@@ -373,24 +444,29 @@ function main() {
     return;
   }
   // coast:<rival> fixes the rival; plain coast leaves it to the seed, as the page does.
-  const rivalArg = /^coast:(\w+)$/.exec(cellArg || "");
+  // coast:<rival>:hero also plays the hero bot. Only these cells print the stuck column.
+  const rivalArg = /^coast:(\w+)(:hero)?$/.exec(cellArg || "");
   if (rivalArg && !Object.hasOwn(KAIJU, rivalArg[1])) throw new Error(`Unknown rival: ${rivalArg[1]}`);
-  const cells = rivalArg ? [{ mission: "coast", rival: rivalArg[1] }]
+  const cells = rivalArg ? [{ mission: "coast", rival: rivalArg[1], hero: !!rivalArg[2] }]
     : cellArg ? CELLS.filter((c) => (c.target ? `${c.mission}:${c.target}` : c.mission) === cellArg) : CELLS;
   const pad = (s, n) => String(s).padEnd(n);
   console.log(`seeds ${seeds[0]}..${seeds[seeds.length - 1]}`);
-  console.log(`${pad("kaiju", 22)} ${pad("mission", 15)} ${pad("win", 5)} ${pad("turns", 6)} ${pad("score", 7)} TV/V/D/L`);
+  const nameWidth = rivalArg ? 20 : 15;
+  console.log(`${pad("kaiju", 22)} ${pad("mission", nameWidth)} ${pad("win", 5)} ${pad("turns", 6)} ${pad("score", 7)} ${pad("TV/V/D/L", rivalArg ? 9 : 0)}${rivalArg ? " stuck stuck0" : ""}`.trimEnd());
   const byKaiju = {};
   const byCell = {};
   for (const id of kaijus) {
     for (const cell of cells) {
-      const name = cell.target ? `swathe:${cell.target}` : cell.rival ? `coast:${cell.rival}` : cell.mission;
+      const name = cell.target ? `swathe:${cell.target}` : cell.rival ? `coast:${cell.rival}${cell.hero ? ":hero" : ""}` : cell.mission;
       const r = runCell(id, cell, seeds);
       byKaiju[id] = (byKaiju[id] || 0) + r.wins / cells.length;
       byCell[name] = (byCell[name] || 0) + r.wins / kaijus.length;
       const g = r.grades;
       console.log(
-        `${pad(id, 22)} ${pad(name, 15)} ${pad(Math.round(r.wins * 100) + "%", 5)} ${pad(r.turns.toFixed(1), 6)} ${pad(Math.round(r.score), 7)} ${g["total victory"]}/${g.victory}/${g.draw}/${g.defeat}`,
+        `${pad(id, 22)} ${pad(name, nameWidth)} ${pad(Math.round(r.wins * 100) + "%", 5)} ${pad(r.turns.toFixed(1), 6)} ${pad(Math.round(r.score), 7)} ` +
+          (rivalArg
+            ? `${pad(`${g["total victory"]}/${g.victory}/${g.draw}/${g.defeat}`, 9)} ${pad(r.stuck.toFixed(2), 5)} ${r.stuckFresh.toFixed(2)}`
+            : `${g["total victory"]}/${g.victory}/${g.draw}/${g.defeat}`),
       );
     }
   }
