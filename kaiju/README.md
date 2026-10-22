@@ -1,4 +1,4 @@
-# Kaiju
+# Kaiju Dashboard
 
 *They will get you in the end. The question is what it cost them.*
 
@@ -6,7 +6,7 @@ A turn-based tactical game for one giant monster. Choose one of four, spend thre
 
 It is *Crush, Crumble and Chomp!* (Epyx, 1981) as imagined from a magazine review that had no screenshots, with OGRE's damage by system, Car Wars's facing and build budget, and Advance Wars's forecast and combat scene. The streets of the city are grown by MazeBuilder's Sidewinder, so the city has the same tell as the hedge.
 
-**Rampage** is the fourth mission and the old way to play: the Swathe's city with lighter forces, no goal and no clock, and waves of the army from the north, east and west that grow every third turn. Before play you choose what counts: Balanced, Killer Monster, Combat Machine, Destruction or Survival. It ends only when the monster falls or walks off the south edge, and the end names the death: a thousand cuts, the sudden death or the lingering death. Every game, Rampage or not, ends with **the review**: a column from *Cassette & Disk Monthly*, an invented 1981 magazine, written from the game's own events, with a quoted line from the log and a star rating. *Copy as text* puts it on the clipboard.
+**Hex and the City** is the fourth mission and the old way to play: eat and smash what you like, until the hangover hits. It is the Swathe's city with lighter forces, no goal and no clock, and waves of the army from the north, east and west that grow every third turn. Before play you choose what counts: Balanced, Killer Monster, Combat Machine, Destruction or Survival. It ends only when the monster falls or walks off the south edge, and the end names the death: a thousand cuts, the sudden death or the lingering death. Every game, Hex and the City or not, ends with **the review**: a column from *Cassette & Disk Monthly*, an invented 1981 magazine, written from the game's own events, with a quoted line from the log and a star rating. *Copy as text* puts it on the clipboard.
 
 **Looks.** Each monster has up to four looks: its own and variants, as a fighting game has alternate colours. A variant is new art, names and a blurb over the same rules, and sometimes a few changed numbers. On the setup screen the looks of the chosen monster sit in a row of swatches under the cards; pick one and the card, the status tile, the map token, the log, the paper and the review all use its names. The four so far are Meow'thprrtep (the Squamous One as first drawn, when its head read as a cat), Mekkasaurus Prime (Radiosaur rebuilt as a robot on a battery), the Alien Colossus and Gekido-Oh (Dai-Rengō's enemy, which starts with a preset build). They live in `src/data/variants.js` and `src/art/variants.js`. The bot plays them: `node kaiju/tools/sim.mjs 1-20 radiosaur:mekkasaurus`.
 

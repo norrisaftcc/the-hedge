@@ -534,7 +534,9 @@ The page itself is checked in a browser (Playwright, at 375 × 812 and 1280 × 8
 
 ## 14. Rampage and the review [MIS-8, MIS-9]
 
-The game the 1981 review described, and the review the game writes back. Everything here keeps the rules in section 6; Rampage only changes how a game ends, what it scores, and how the army comes.
+The game the 1981 review described, and the review the game writes back.
+
+**Name.** The mode is called **Hex and the City** on the page: eat and smash what you like, until the hangover hits. It was first called Rampage, which is also the name of a 1986 arcade game. Its id stays `rampage` in data, setups, tests and pinned replays, so this section still says Rampage. The end stamp reads "Last call". Everything here keeps the rules in section 6; Rampage only changes how a game ends, what it scores, and how the army comes.
 
 ### 14.1 The mission: `rampage` in `data/missions.js`
 
@@ -608,7 +610,7 @@ export function review(state, events) // -> {magazine, issue, title, dek, byline
 
 ### 14.6 The page, the bot and the tests
 
-- **Setup.** A fourth mission card, *Rampage*. Its question is the objective: five choices, each with a one-line description.
+- **Setup.** A fourth mission card, *Hex and the City* (id `rampage`). Its question is the objective: five choices, each with a one-line description.
 - **Top bar.** "Turn 7" with no limit. The goal reads "No goal but the score: Destruction", naming the objective.
 - **End screen.** The front page as now, with the death named in the deck line. Below it, *The review*: the column set as a magazine page, with **Copy as text**. The copy uses `navigator.clipboard.writeText` inside `try`/`catch`, and falls back to selecting a read-only `<textarea>`. Every mission gets the review.
 - **The event record.** The page keeps every event of the game in order, cleared on Deploy, Again or New seed. `review` reads it.

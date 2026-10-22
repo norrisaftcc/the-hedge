@@ -702,7 +702,7 @@ function setupParagraph(state, v) {
   ];
   const o = state.objective;
   if (state.mission === "rampage") {
-    out.push("The mission was Rampage: Port Halloran, no target, no clock, and an army that keeps coming.");
+    out.push("The mission was Hex and the City: Port Halloran, no target, no clock, and an army that keeps coming.");
     out.push(`I played it under the ${o.name} rules. ${o.text}`);
   } else if (state.mission === "swathe") {
     out.push(`The mission was The Swathe: ashore at Port Halloran and across the city to the ${targetWord(state)}.`);
