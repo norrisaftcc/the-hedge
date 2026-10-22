@@ -627,3 +627,89 @@ export function review(state, events) // -> {magazine, issue, title, dek, byline
   - The `text` holds every paragraph.
   - A rampage replay pins its score and death.
   - NFR-1's weight test still passes.
+
+## 15. Variants [VAR-1..7]
+
+### 15.1 Data: `src/data/variants.js`
+
+```js
+export const VARIANTS = {
+  meowthprrtep: {
+    id: "meowthprrtep", of: "squamous",
+    name, epithet, blurb,                   // shown on the card, in the log, the paper and the review
+    parts: { head: { name: "Ears" }, … },   // names only; a part not listed keeps its base name
+    attacks: { grab: { name: "Paw grab" }, … },  // names, and numbers if VAR-4 (see below)
+    change: { … },                          // optional: the numbers this variant changes (15.2)
+    preset: ["hide"],                       // optional: the mutation build it starts with (VAR-5)
+  },
+  …
+};
+export const LOOKS = { radiosaur: ["radiosaur", "mekkasaurus"], … };  // per kaiju, base first, at most four
+export function kaijuDef(id, variant = null)  // the base def, or the base with the variant laid over it
+```
+
+- `kaijuDef` returns a frozen object with the same shape as `KAIJU[id]`, plus `look` (the art id: the variant id, or the base id) and `variant` (or `null`). It caches by `id:variant`.
+- It throws for an unknown variant, an inherited name (`Object.hasOwn`), or a variant that is not `of` this kaiju.
+- `kaijuDef(id)` with no variant returns a def deep-equal to `KAIJU[id]`, plus `look: id, variant: null`.
+
+### 15.2 What a variant may change
+
+`change` lays over the base, field by field:
+
+- `ap`, `armor`;
+- `parts.<slot>.hp`;
+- `energy` (whole object: `max`, `start`, `rule`), `hunger` (an object, or `null` for no hunger);
+- `attacks.<id>`: any of `ap`, `energy`, `range`, `damage`, `accuracy`, `effects`. Attack ids, patterns, kinds and the parts they use do not change, so the AI and the page need no new cases;
+- `passives`, `forbid` (whole arrays).
+
+It may not add or remove a part or an attack. The rules already key the battery, the tide and panic from `energy.rule`, so a robot tyrannosaurus is a data change.
+
+### 15.3 The rules
+
+- `create(setup)` reads `setup.variant` (optional, default `null`) and `setup.rivalVariant` (optional). It stores `variant` on the kaiju and the rival.
+- Every read of `KAIJU[x.id]` in `rules.js`, `ai.js`, `voice.js`, `ui/` and `tools/sim.mjs` goes through `kaijuDef(x.id, x.variant)`. A grep for `KAIJU[` outside `data/` finds none afterwards.
+- A variant's `preset` is used when `setup.mutations` is absent. The budget and `forbid` apply to it as to any build.
+- Events keep carrying the base `id` (so the AI and tests stay simple) and gain `variant` where they carry `id`. Text uses the variant's names.
+
+### 15.4 The first four [VAR-6]
+
+| Look | Of | Names | Numbers |
+|---|---|---|---|
+| **Meow'thprrtep**, *the first drawing* | squamous | Ears (head), Paws (arms), Coat (body), Footing (legs), The Eye (aux). Paw grab, The stare, Wrong angle. | None. |
+| **Mekkasaurus Prime**, *the atomic tyrannosaurus, rebuilt* | radiosaur | Sensor head, Grapples, Hull, Legs, Tail. Steel jaw, Tail flail, Reactor beam. | Armor 3, AP 5. Energy on a battery: `{max: 12, start: 12, rule: "battery"}`, no hunger. Passives `reactorBelly`, `noHunger`. Forbid `regen`, `gut`. |
+| **The Alien Colossus**, *from the stars* | thalassor | Crowned dome, Arms, Shell, Legs, Energy flail. Fist, Flail cast, Ion surge. | None. It still draws its energy from water: coolant, as the blurb says. |
+| **Gekido-Oh**, *the empire's iron general* | dairengo | Helm, Arms, Chassis, Legs, Thrusters. Iron fist, Dark blade, Total conquest. | Preset build `hide`, `bulk` (or the nearest two allowed mutations that cost 3 points between them; the engine builder checks). |
+
+- **Meow'thprrtep's blurb** quotes the art department's note, which is true: the first Squamous head was drawn, and the agent drawing it wrote *"The Squamous head reads as a cat (two ear spikes)."* It was redrawn. This look restores it, with paws at the ends of the feelers.
+- Nothing copies a known film monster or robot. Mekkasaurus Prime is a machine copy of *our* tyrannosaurus, and its art says so: the same stance and plates, in riveted steel.
+
+### 15.5 Art
+
+- `src/art/kaiju.js`'s exported functions take a **look** id as well as a kaiju id: `portrait(look, {parts})`, `silhouette`, `figure`, `token`. `KAIJU_IDS` is unchanged; `LOOK_IDS` lists all eight.
+- The variants' drawings live in `src/art/variants.js`, built with the same helpers (export what is shared from `kaiju.js`). Each has its own palette that reads on both themes.
+- **Meow'thprrtep** starts from the first Squamous drawing, recovered from the art agent's work: the head with two ear spikes. Add paws at the feelers' tips. Keep the eyes that do not agree.
+- **Mekkasaurus Prime**: Radiosaur's outline in steel plates, rivets, a visor where the eyes were, the dorsal plates as vents with a glow.
+- **The Alien Colossus**: Thalassor's stance; a domed head, a shell in place of bronze armour, a flail on a chain of light in place of the trident; a chrome and violet palette.
+- **Gekido-Oh**: a sentai robot of the other side: a horned helm, a red visor slit, black and gunmetal with gold trim.
+- Silhouettes keep the base's part layout (`data-part` paths in the same places), so the damage patterns read the same way.
+- `art.html` shows every look in every state.
+
+### 15.6 The page
+
+- **Look swatches.** Under the chosen kaiju's card: a row of up to four buttons, each a small portrait, with `aria-pressed` and the look's name as its label. Arrow keys move between them. Choosing one redraws the card and fills a preset build, if the look has one, when the player has not yet chosen mutations.
+- The summary line names the look. Deploy passes `variant` in the setup. The choice is remembered with the kaiju for Again and New seed.
+- The status tile, the board token, the cutaway, the paper and the review all draw and name the look.
+- The rival in the Coast mission keeps its base look in this change.
+
+### 15.7 The bot and the tests
+
+- `tools/sim.mjs` takes `kaiju:variant` wherever it takes a kaiju id: `node kaiju/tools/sim.mjs 1-20 radiosaur:mekkasaurus`.
+- `tests/variants.test.mjs`:
+  - `kaijuDef` with no variant equals the base; with each variant it has the base's shape, ids and patterns.
+  - Unknown, inherited and wrong-kaiju variants throw.
+  - **VAR-3:** for each variant with no `change`, a bot game on seeds 1–5 gives the same event kinds and numbers as its base; only text differs.
+  - Mekkasaurus Prime has no hunger, drains its battery and charges beside power.
+  - A preset build is used when `mutations` is absent, and obeys the budget and `forbid`.
+  - The log, the paper's headline and the review name the variant, and never the base, for a variant game.
+  - Every look draws: portrait, silhouette (with five `data-part` paths), figure and token, as well-formed SVG.
+- The pinned replays do not move. NFR-1's weight test still passes.

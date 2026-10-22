@@ -3,6 +3,7 @@
 // toward the objective or the rival (in a rampage, toward whatever the objective values), else
 // end the turn.
 // Run from the repo root: node kaiju/tools/sim.mjs [seeds] [kaiju] [mission]
+// A kaiju may take a variant after a colon: radiosaur:mekkasaurus.
 // e.g. node kaiju/tools/sim.mjs 20, or node kaiju/tools/sim.mjs 1-20 radiosaur swathe:lab
 // Rampage: node kaiju/tools/sim.mjs 1-20 all rampage plays every objective to the end (never
 // withdrawing; a guard stops a run after turn 60) and prints the median total and turns lasted.
@@ -11,6 +12,7 @@ import { pathToFileURL } from "node:url";
 import * as H from "../src/hex.js";
 import { create, step, reach, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
 import { KAIJU, RULES } from "../src/data/kaiju.js";
+import { kaijuDef } from "../src/data/variants.js";
 import { UNITS } from "../src/data/units.js";
 import { TERRAIN, STRUCTURES } from "../src/data/terrain.js";
 import { resolveMission, TARGETS, OBJECTIVES } from "../src/data/missions.js";
@@ -131,7 +133,7 @@ export function strikes(state) {
   for (const d of [k.facing, 0, 1, 2, 3, 4, 5].filter((x, i, all) => all.indexOf(x) === i)) {
     const turned = d === k.facing ? state : { ...state, kaiju: { ...k, facing: d } };
     const face = d === k.facing ? [] : [{ t: "face", dir: d }];
-    for (const a of KAIJU[k.id].attacks) {
+    for (const a of kaijuDef(k.id, k.variant).attacks) {
       if (a.pattern === "teleport") continue;
       if (a.pattern === "single" && d !== k.facing) continue;
       const targets = attackTargets(turned, a.id);
@@ -181,7 +183,7 @@ function roarCommand(state) {
 // and stays there until the next phase start charges it.
 function chargeHexes(state) {
   const k = state.kaiju;
-  if (KAIJU[k.id].energy.rule !== "battery" || k.energy > LOW_BATTERY) return null;
+  if (kaijuDef(k.id, k.variant).energy.rule !== "battery" || k.energy > LOW_BATTERY) return null;
   const power = Object.keys(state.map.hexes).filter((h) => {
     const st = state.map.hexes[h].structure;
     return st && STRUCTURES[st.type].power;
@@ -203,7 +205,7 @@ function moveCommand(state) {
       return st && STRUCTURES[st.type].power && h !== state.objective.at;
     });
   // A kaiju that drinks the sea likes to stand in it, as the rival does.
-  const wet = (h) => (KAIJU[k.id].energy.rule === "water" && TERRAIN[state.map.hexes[h].terrain].water ? 0.5 : 0);
+  const wet = (h) => (kaijuDef(k.id, k.variant).energy.rule === "water" && TERRAIN[state.map.hexes[h].terrain].water ? 0.5 : 0);
   let bestKey = null;
   let bestScore = far(k.at) - wet(k.at);
   for (const [h, r] of Object.entries(options).sort(([a], [b]) => (a < b ? -1 : 1))) {
@@ -215,7 +217,7 @@ function moveCommand(state) {
     }
   }
   // A teleport, when it gains more ground than walking would.
-  const jump = KAIJU[k.id].attacks.find((a) => a.pattern === "teleport");
+  const jump = kaijuDef(k.id, k.variant).attacks.find((a) => a.pattern === "teleport");
   if (jump) {
     let hop = null;
     for (const h of attackTargets(state, jump.id).sort()) {
@@ -272,10 +274,15 @@ export const CELLS = [
   { mission: "coast" },
 ];
 
-export function setupFor(kaiju, cell, seed) {
+// "radiosaur" or "radiosaur:mekkasaurus": the kaiju id, and its variant or null.
+export function splitKaiju(spec) {
+  const [kaiju, variant = null] = String(spec).split(":");
+  return { kaiju, variant: variant || null };
+}
+
+export function setupFor(spec, cell, seed) {
   return {
-    kaiju,
-    mutations: [],
+    ...splitKaiju(spec), // no mutations: a variant's preset applies, a plain kaiju takes none
     mission: resolveMission(cell.mission, { seed, target: cell.target }),
     target: cell.target || null,
     rival: cell.rival || "",
@@ -283,8 +290,8 @@ export function setupFor(kaiju, cell, seed) {
   };
 }
 
-export function rampageSetup(kaiju, objective, seed) {
-  return { kaiju, mutations: [], mission: resolveMission("rampage", { seed }), objective, seed };
+export function rampageSetup(spec, objective, seed) {
+  return { ...splitKaiju(spec), mission: resolveMission("rampage", { seed }), objective, seed };
 }
 
 const median = (xs) => {
@@ -354,6 +361,10 @@ function main() {
   const [seedArg, kaijuArg, cellArg] = process.argv.slice(2);
   const seeds = parseSeeds(seedArg);
   const kaijus = kaijuArg && kaijuArg !== "all" ? [kaijuArg] : Object.keys(KAIJU);
+  for (const spec of kaijus) {
+    const { kaiju, variant } = splitKaiju(spec);
+    kaijuDef(kaiju, variant); // throws on an unknown kaiju or variant
+  }
   if (cellArg === "rampage") {
     rampageTable(seeds, kaijus);
     return;
@@ -365,7 +376,7 @@ function main() {
     : cellArg ? CELLS.filter((c) => (c.target ? `${c.mission}:${c.target}` : c.mission) === cellArg) : CELLS;
   const pad = (s, n) => String(s).padEnd(n);
   console.log(`seeds ${seeds[0]}..${seeds[seeds.length - 1]}`);
-  console.log(`${pad("kaiju", 10)} ${pad("mission", 15)} ${pad("win", 5)} ${pad("turns", 6)} ${pad("score", 7)} TV/V/D/L`);
+  console.log(`${pad("kaiju", 22)} ${pad("mission", 15)} ${pad("win", 5)} ${pad("turns", 6)} ${pad("score", 7)} TV/V/D/L`);
   const byKaiju = {};
   const byCell = {};
   for (const id of kaijus) {
@@ -376,7 +387,7 @@ function main() {
       byCell[name] = (byCell[name] || 0) + r.wins / kaijus.length;
       const g = r.grades;
       console.log(
-        `${pad(id, 10)} ${pad(name, 15)} ${pad(Math.round(r.wins * 100) + "%", 5)} ${pad(r.turns.toFixed(1), 6)} ${pad(Math.round(r.score), 7)} ${g["total victory"]}/${g.victory}/${g.draw}/${g.defeat}`,
+        `${pad(id, 22)} ${pad(name, 15)} ${pad(Math.round(r.wins * 100) + "%", 5)} ${pad(r.turns.toFixed(1), 6)} ${pad(Math.round(r.score), 7)} ${g["total victory"]}/${g.victory}/${g.draw}/${g.defeat}`,
       );
     }
   }

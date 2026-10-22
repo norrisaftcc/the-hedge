@@ -1,17 +1,19 @@
 // One bot game, and where the monster's damage came from, turn by turn. For reading a playtest
 // against the bot, and for balance work on toughness (#24).
-// Run from the repo root: node kaiju/tools/damage.mjs <seed> <kaiju>[+mutation...] <mission>
+// Run from the repo root: node kaiju/tools/damage.mjs <seed> <kaiju>[:variant][+mutation...] <mission>
 // mission is as sim.mjs takes it: fortress, swathe:plant, coast, coast:squamous, rampage:killer.
 // e.g. node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant
 import { pathToFileURL } from "node:url";
 import { replayEvents } from "../src/rules.js";
 import { resolveMission } from "../src/data/missions.js";
-import { playBot } from "./sim.mjs";
+import { playBot, splitKaiju } from "./sim.mjs";
 
 export function damageTable(seed, kaijuArg, missionArg) {
-  const [kaiju, ...mutations] = kaijuArg.split("+");
+  // kaiju[:variant][+mutation...]; with no mutations named, a variant's preset applies, as in sim.mjs.
+  const [spec, ...mutations] = kaijuArg.split("+");
   const [mission, extra] = missionArg.split(":");
-  const setup = { kaiju, mutations, seed, mission: resolveMission(mission, { seed, target: mission === "swathe" ? extra : undefined }) };
+  const setup = { ...splitKaiju(spec), seed, mission: resolveMission(mission, { seed, target: mission === "swathe" ? extra : undefined }) };
+  if (mutations.length) setup.mutations = mutations;
   if (mission === "swathe") setup.target = extra;
   if (mission === "coast" && extra) setup.rival = extra;
   if (mission === "rampage") setup.objective = extra || "balanced";

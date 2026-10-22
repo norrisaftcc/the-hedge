@@ -51,3 +51,8 @@ test("a rival left to chance and the same rival chosen are different games, and 
   assert.notEqual(chance.rng, chosen.rng, "the dice differ");
   assert.notEqual(setupLine(chance), setupLine(chosen));
 });
+
+test("the setup line names a look as the bot does", () => {
+  const s = create({ kaiju: "squamous", variant: "meowthprrtep", mutations: [], mission: resolveMission("fortress", { seed: 4 }), seed: 4 });
+  assert.equal(setupLine(s), `${TITLE} ${VERSION}. Setup: squamous:meowthprrtep, fortress, seed 4.`);
+});

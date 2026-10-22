@@ -156,6 +156,22 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | UI-9 | M | The page respects `prefers-reduced-motion`: cutaways become still frames. |
 | UI-10 | S | An "undo move" for the last move, if no dice were rolled since. |
 
+### 5.9 Variants (issue #19)
+
+A variant is another look for a kaiju: new art and new names over the same rules, and sometimes changed numbers. It separates how a monster looks from how it plays, so later monsters can reuse a body of rules.
+
+| ID | Pri | Requirement |
+|----|-----|-------------|
+| VAR-1 | M | Each kaiju has up to four looks: its own and up to three variants. A variant changes the art, the name, the epithet, the blurb and the names of parts and attacks. |
+| VAR-2 | M | Setup shows the looks of the chosen kaiju as a row of swatches, as a fighting game shows alternate colours. Choosing one updates the card's portrait, silhouette, names and stats. It works by touch and by keys. |
+| VAR-3 | M | A variant with no changed numbers plays exactly as its base: the same seed and commands give the same events, apart from the names in the text. |
+| VAR-4 | S | A variant may change numbers, from data only: AP, armor, part hit points, the energy and hunger rules, attack numbers, passives and forbidden mutations. |
+| VAR-5 | S | A variant may carry a preset mutation build. It fills the mutation picker; the player may change it. |
+| VAR-6 | M | The first four variants: **Meow'thprrtep** (the Squamous One, as first drawn, when its head read as a cat); **Mekkasaurus Prime** (Radiosaur rebuilt as a robot, on a battery); **the Alien Colossus** (Thalassor from the stars, with an energy flail); **Gekido-Oh** (Dai-Rengō's enemy, with a preset build). |
+| VAR-7 | S | The log, the newspaper and the review use the variant's names. The balance bot plays a variant: `node kaiju/tools/sim.mjs 1-20 squamous:meowthprrtep`. |
+
+The numbers from before the balance pass were not kept: the first engine commit already holds the tuned ones. A variant's changed numbers are new, and the bot tests them against the base.
+
 ### 5.8 Platform
 
 | ID | Pri | Requirement |

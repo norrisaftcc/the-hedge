@@ -6,6 +6,7 @@ import { Mulberry32, seedFromText } from "./rng.js";
 import * as H from "./hex.js";
 import { TERRAIN, STRUCTURES, TERRAIN_BY_GLYPH, STRUCTURE_BY_GLYPH } from "./data/terrain.js";
 import { KAIJU, PART_SLOTS, RULES, SCORE } from "./data/kaiju.js";
+import { kaijuDef } from "./data/variants.js";
 import { UNITS } from "./data/units.js";
 import { MUTATIONS, BUDGET } from "./data/mutations.js";
 import { planUnit, planRival, planBerserk } from "./ai.js";
@@ -50,6 +51,7 @@ const byId = (a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1));
 function emitter(s, events) {
   return (k, data = {}) => {
     const full = { turn: s.turn, ...data };
+    if (!full.variant) delete full.variant; // only a variant game carries the key
     const e = { k, text: say(k, full), ...full };
     events.push(e);
     return e;
@@ -103,9 +105,9 @@ function buildMap(map) {
 
 const toKey = (at) => H.offsetToKey(at[0], at[1]);
 
-function makeKaiju(id, actor, start, mutations = []) {
-  const def = KAIJU[id];
-  if (!Object.hasOwn(KAIJU, id)) throw new Error(`Unknown kaiju: ${id}`);
+function makeKaiju(id, actor, start, mutations = null, variant = null) {
+  const def = kaijuDef(id, variant);
+  if (mutations === null) mutations = def.preset || [];
   let spent = 0;
   const seen = new Set();
   for (const m of mutations) {
@@ -118,6 +120,7 @@ function makeKaiju(id, actor, start, mutations = []) {
   if (spent > BUDGET) throw new Error(`Mutations cost ${spent}; the budget is ${BUDGET}`);
   const k = {
     id,
+    variant: def.variant,
     actor,
     at: toKey(start.at),
     facing: start.facing || 0,
@@ -163,7 +166,7 @@ function makeKaiju(id, actor, start, mutations = []) {
 
 // AP before the floor of 1. Lingering may push it below.
 function rawAp(k) {
-  const def = KAIJU[k.id];
+  const def = kaijuDef(k.id, k.variant);
   let ap = def.ap;
   for (const m of k.mutations) ap += MUTATIONS[m].apply.ap || 0;
   if (k.passives.includes("thrusters") && k.parts.aux.hp > 0) ap += 1;
@@ -195,8 +198,9 @@ function rampageObjective(mission, name) {
   };
 }
 
-// setup: {kaiju, mutations, mission, target, rival, seed, objective}. mission is resolved: map
-// filled. objective names one of a rampage's objectives (mission.objectives).
+// setup: {kaiju, variant, mutations, mission, target, rival, rivalVariant, seed, objective}. A variant
+// with a preset build uses it when mutations is absent. The rival takes no mutations. mission is
+// resolved: map filled. objective names one of a rampage's objectives (mission.objectives).
 export function create(setup) {
   const mission = setup.mission;
   if (!mission || !mission.map || !mission.map.terrain) throw new Error("create needs a resolved mission with a map");
@@ -230,7 +234,7 @@ export function create(setup) {
     retreat: (mission.retreat || []).map(toKey),
     rivalRetreat: (mission.rivalRetreat || []).map(toKey),
     objective,
-    kaiju: makeKaiju(setup.kaiju, "kaiju", mission.kaijuStart, setup.mutations || []),
+    kaiju: makeKaiju(setup.kaiju, "kaiju", mission.kaijuStart, setup.mutations || null, setup.variant || null),
     rival: null,
     units: [],
     nextUnit: 1,
@@ -246,7 +250,7 @@ export function create(setup) {
       const others = Object.keys(KAIJU).filter((id) => id !== setup.kaiju);
       rivalId = others[randint(s, 0, others.length - 1)];
     }
-    s.rival = makeKaiju(rivalId, "rival", mission.rivalStart, []);
+    s.rival = makeKaiju(rivalId, "rival", mission.rivalStart, [], setup.rivalVariant || null);
     // Left to chance, the pick draws a die; chosen, it does not. A setup line must say which.
     s.rivalByChance = !setup.rival;
     s.rival.apMax = computeAp(s.rival);
@@ -272,7 +276,7 @@ function changeEnergy(s, actor, change, why, ev) {
   const before = k.energy;
   k.energy = clamp(k.energy + change, 0, k.energyMax);
   const delta = k.energy - before;
-  if (delta !== 0) ev("energy", { actor, who: k.id, energy: k.energy, change: delta, why });
+  if (delta !== 0) ev("energy", { actor, who: k.id, variant: k.variant, energy: k.energy, change: delta, why });
 }
 
 function nearPower(s, key) {
@@ -295,18 +299,18 @@ function heal(s, actor, ev) {
   const part = k.parts[best.p];
   const before = partState(part);
   part.hp = Math.min(part.max, part.hp + RULES.heal);
-  ev("heal", { actor, who: k.id, part: best.p, hp: part.hp, max: part.max });
+  ev("heal", { actor, who: k.id, variant: k.variant, part: best.p, hp: part.hp, max: part.max });
   const after = partState(part);
-  if (after !== before) ev("part", { actor, who: k.id, part: best.p, state: after });
+  if (after !== before) ev("part", { actor, who: k.id, variant: k.variant, part: best.p, state: after });
 }
 
 function phaseStart(s, actor, ev) {
   const k = s[actor];
-  const def = KAIJU[k.id];
+  const def = kaijuDef(k.id, k.variant);
   if (actor === "kaiju") ev("phase", { phase: "kaiju" });
   if (k.hunger !== null && (k.hungerEvery <= 1 || s.turn % k.hungerEvery === 0)) {
     k.hunger = Math.min(k.hungerMax, k.hunger + 1);
-    ev("hunger", { actor, who: k.id, hunger: k.hunger, max: k.hungerMax });
+    ev("hunger", { actor, who: k.id, variant: k.variant, hunger: k.hunger, max: k.hungerMax });
     if (k.hunger >= k.hungerMax) k.berserk = true;
   }
   const rule = def.energy.rule;
@@ -331,11 +335,11 @@ function phaseStart(s, actor, ev) {
 function lingeringGrows(s, actor, ev) {
   const k = s[actor];
   k.lingering += 1;
-  ev("lingering", { actor, who: k.id, lingering: k.lingering });
+  ev("lingering", { actor, who: k.id, variant: k.variant, lingering: k.lingering });
   const excess = Math.min(k.lingering, 1 - rawAp(k));
   if (excess <= 0) return;
   const res = damageKaiju(s, actor, "body", excess, ev, "lingering");
-  ev("hurt", { actor, who: k.id, why: "lingering", damage: excess, part: "body", before: res.before, after: res.after });
+  ev("hurt", { actor, who: k.id, variant: k.variant, why: "lingering", damage: excess, part: "body", before: res.before, after: res.after });
   res.report();
 }
 
@@ -466,7 +470,7 @@ export function unitReach(state, unitId) {
 
 export function attackOf(state, actor, attackId) {
   const k = state[actor];
-  const base = KAIJU[k.id].attacks.find((a) => a.id === attackId);
+  const base = kaijuDef(k.id, k.variant).attacks.find((a) => a.id === attackId);
   if (!base) return null;
   const extra = (base.kind === "ranged" || base.kind === "special") && base.range > 1 ? k.range : 0;
   return { ...base, range: base.range + extra };
@@ -474,7 +478,7 @@ export function attackOf(state, actor, attackId) {
 
 function attackBlocked(state, actor, a) {
   const k = state[actor];
-  if (k.parts[a.uses].hp <= 0) return `The ${KAIJU[k.id].parts[a.uses].name.toLowerCase()} is crippled.`;
+  if (k.parts[a.uses].hp <= 0) return `The ${kaijuDef(k.id, k.variant).parts[a.uses].name.toLowerCase()} is crippled.`;
   if (a.effects.oncePerMission && k.used[a.id]) return "Already used this mission.";
   if (k.ap < a.ap) return "Not enough AP.";
   if (k.energy < a.energy) return "Not enough energy.";
@@ -598,7 +602,7 @@ function damageRange(min, max, mod, zero) {
 // ---------- damage ----------
 
 function hitLocation(s, k) {
-  const table = KAIJU[k.id].hitTable;
+  const table = kaijuDef(k.id, k.variant).hitTable;
   const total = table.reduce((n, [, w]) => n + w, 0);
   let r = randint(s, 1, total);
   for (const [part, w] of table) {
@@ -633,11 +637,11 @@ function damageKaiju(s, actor, part, dmg, ev, why = "attack") {
     after,
     spill,
     report: () => {
-      if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, part: hitPart, state: partState(p) });
+      if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, variant: k.variant, part: hitPart, state: partState(p) });
       if (hitPart !== "body" && partState(k.parts.body) !== bodyBefore) {
-        ev("part", { actor, who: k.id, part: "body", state: partState(k.parts.body) });
+        ev("part", { actor, who: k.id, variant: k.variant, part: "body", state: partState(k.parts.body) });
       }
-      if (k.parts.body.hp <= 0) ev("destroyed", { what: "kaiju", type: k.id, at: k.at, points: 0 });
+      if (k.parts.body.hp <= 0) ev("destroyed", { what: "kaiju", type: k.id, variant: k.variant, at: k.at, points: 0 });
     },
   };
 }
@@ -669,14 +673,14 @@ function destroyStructure(s, key, byActor, ev) {
 function blast(s, actor, key, type, ev) {
   const k = s[actor];
   if (k.passives.includes("reactorBelly")) {
-    ev("blast", { actor, who: k.id, at: key, type, energy: RULES.reactorBlastEnergy });
+    ev("blast", { actor, who: k.id, variant: k.variant, at: key, type, energy: RULES.reactorBlastEnergy });
     changeEnergy(s, actor, RULES.reactorBlastEnergy, "reactor", ev);
     return;
   }
   const [lo, hi] = STRUCTURES[type].blast;
   const dmg = randint(s, lo, hi);
   const res = damageKaiju(s, actor, hitLocation(s, k), dmg, ev, "blast");
-  ev("blast", { actor, who: k.id, at: key, type, damage: dmg, part: res.part, before: res.before, after: res.after, spill: res.spill });
+  ev("blast", { actor, who: k.id, variant: k.variant, at: key, type, damage: dmg, part: res.part, before: res.before, after: res.after, spill: res.spill });
   res.report();
 }
 
@@ -698,12 +702,13 @@ function panicTest(s, u, pressure, ev) {
   ev("radio", { callsign: def.radio, about: "break", at: u.at });
   for (const a of ACTORS) {
     const k = s[a];
-    if (alive(k) && KAIJU[k.id].energy.rule === "panic") changeEnergy(s, a, RULES.panicEnergy, "panic", ev);
+    if (alive(k) && kaijuDef(k.id, k.variant).energy.rule === "panic") changeEnergy(s, a, RULES.panicEnergy, "panic", ev);
   }
 }
 
 function side(state, actor) {
-  return { side: actor, id: actor, type: state[actor].id };
+  const v = state[actor].variant;
+  return v ? { side: actor, id: actor, type: state[actor].id, variant: v } : { side: actor, id: actor, type: state[actor].id };
 }
 
 // ---------- the kaiju's commands ----------
@@ -712,12 +717,12 @@ function enterHex(s, actor, key, ev) {
   const k = s[actor];
   const u = unitAt(s, key);
   if (u && !UNITS[u.type].air) {
-    ev("crush", { actor, who: k.id, at: key, what: "unit", type: u.type });
+    ev("crush", { actor, who: k.id, variant: k.variant, at: key, what: "unit", type: u.type });
     destroyUnit(s, u, actor, ev);
   }
   const hex = s.map.hexes[key];
   if (hex.structure) {
-    ev("crush", { actor, who: k.id, at: key, what: "structure", type: hex.structure.type });
+    ev("crush", { actor, who: k.id, variant: k.variant, at: key, what: "structure", type: hex.structure.type });
     breakStructure(s, actor, key, ev);
   }
 }
@@ -730,7 +735,7 @@ function doMove(s, actor, cmd, ev) {
   const from = k.at;
   k.ap -= r.cost;
   k.facing = H.directionTo(r.path.length > 1 ? r.path[r.path.length - 2] : from, cmd.to);
-  const move = ev("move", { actor, who: k.id, from, to: cmd.to, path: r.path, cost: r.cost });
+  const move = ev("move", { actor, who: k.id, variant: k.variant, from, to: cmd.to, path: r.path, cost: r.cost });
   let walked = 0;
   for (const step of r.path) {
     k.at = step;
@@ -752,7 +757,7 @@ function doFace(s, actor, cmd, ev) {
   if (!Number.isInteger(dir) || dir < 0 || dir > 5) return "Face which way?";
   const k = s[actor];
   k.facing = dir;
-  ev("face", { actor, who: k.id, dir });
+  ev("face", { actor, who: k.id, variant: k.variant, dir });
   return null;
 }
 
@@ -794,7 +799,7 @@ function strikeUnit(s, actor, a, u, ev) {
     if (unitCanStand(s, u.type, mid, u.id)) {
       const from = u.at;
       u.at = mid;
-      ev("umove", { unit: u.id, type: u.type, from, to: mid, path: [mid], pulled: true, who: k.id });
+      ev("umove", { unit: u.id, type: u.type, from, to: mid, path: [mid], pulled: true, who: k.id, variant: k.variant });
     }
   }
   if (hit && a.effects.panic) panicTest(s, u, a.effects.panic, ev);
@@ -884,9 +889,9 @@ function doAttack(s, actor, cmd, ev) {
   if (a.pattern === "teleport") {
     const from = k.at;
     k.at = cmd.target;
-    ev("move", { actor, who: k.id, from, to: cmd.target, path: [cmd.target], cost: a.ap, teleport: true, attack: a.id });
+    ev("move", { actor, who: k.id, variant: k.variant, from, to: cmd.target, path: [cmd.target], cost: a.ap, teleport: true, attack: a.id });
     if (s.map.hexes[cmd.target].structure) {
-      ev("crush", { actor, who: k.id, at: cmd.target, what: "structure", type: s.map.hexes[cmd.target].structure.type });
+      ev("crush", { actor, who: k.id, variant: k.variant, at: cmd.target, what: "structure", type: s.map.hexes[cmd.target].structure.type });
       breakStructure(s, actor, cmd.target, ev);
     }
     return null;
@@ -952,28 +957,28 @@ export function eatTargets(state, actor = "kaiju") {
 
 function doEat(s, actor, cmd, ev) {
   const k = s[actor];
-  if (k.hunger === null) return `${KAIJU[k.id].name} does not eat.`;
+  if (k.hunger === null) return `${kaijuDef(k.id, k.variant).name} does not eat.`;
   if (k.ap < RULES.eatAp) return "Not enough AP.";
   if (!adjacent(s, actor, cmd.target)) return "Too far to eat.";
   const f = food(s, actor, cmd.target);
   if (!f) return "Nothing to eat there.";
   k.ap -= RULES.eatAp;
-  const rule = KAIJU[k.id].energy.rule;
+  const rule = kaijuDef(k.id, k.variant).energy.rule;
   if (f.what === "unit") {
     k.hunger = Math.max(0, k.hunger - UNITS[f.unit.type].edible);
-    ev("eat", { actor, who: k.id, at: cmd.target, what: "unit", type: f.unit.type, hunger: k.hunger });
+    ev("eat", { actor, who: k.id, variant: k.variant, at: cmd.target, what: "unit", type: f.unit.type, hunger: k.hunger });
     destroyUnit(s, f.unit, actor, ev);
     if (rule === "eat") changeEnergy(s, actor, RULES.eatEnergy, "eat", ev);
     return null;
   }
   if (f.power) {
-    ev("eat", { actor, who: k.id, at: cmd.target, what: "structure", type: f.type, hunger: k.hunger });
+    ev("eat", { actor, who: k.id, variant: k.variant, at: cmd.target, what: "structure", type: f.type, hunger: k.hunger });
     destroyStructure(s, cmd.target, actor, ev);
     changeEnergy(s, actor, RULES.reactorEatEnergy, "reactor", ev);
     return null;
   }
   k.hunger = Math.max(0, k.hunger - RULES.eatStructureHunger);
-  ev("eat", { actor, who: k.id, at: cmd.target, what: "structure", type: f.type, hunger: k.hunger });
+  ev("eat", { actor, who: k.id, variant: k.variant, at: cmd.target, what: "structure", type: f.type, hunger: k.hunger });
   destroyStructure(s, cmd.target, actor, ev);
   if (rule === "eat") changeEnergy(s, actor, RULES.eatEnergy, "eat", ev);
   return null;
@@ -985,7 +990,7 @@ function doRoar(s, actor, cmd, ev) {
   if (k.ap < RULES.roarAp) return "Not enough AP.";
   k.ap -= RULES.roarAp;
   k.used.roar = true;
-  ev("roar", { actor, who: k.id, at: k.at, radius: k.roarRadius });
+  ev("roar", { actor, who: k.id, variant: k.variant, at: k.at, radius: k.roarRadius });
   const near = s.units.filter((u) => H.distance(u.at, k.at) <= k.roarRadius).sort(byId);
   for (const u of near) panicTest(s, u, k.roarPressure, ev);
   return null;
@@ -996,7 +1001,7 @@ function doWithdraw(s, actor, cmd, ev) {
   const hexes = actor === "kaiju" ? s.retreat : s.rivalRetreat;
   if (!hexes.includes(k.at)) return "Not on a retreat hex.";
   k.withdrawn = true;
-  ev("withdraw", { actor, who: k.id, at: k.at });
+  ev("withdraw", { actor, who: k.id, variant: k.variant, at: k.at });
   if (actor === "kaiju") finish(s, "withdrawn", ev);
   return null;
 }
@@ -1086,12 +1091,12 @@ function runPlan(s, actor, planner, ev, stopAfterMeal = false) {
 
 function playBerserk(s, actor, ev) {
   const k = s[actor];
-  ev("berserk", { actor, who: k.id });
+  ev("berserk", { actor, who: k.id, variant: k.variant });
   runPlan(s, actor, planBerserk, ev, true);
   if (s.result) return;
   k.hunger = Math.min(k.hunger, k.hungerMax - RULES.berserkDrop);
   k.berserk = false;
-  ev("hunger", { actor, who: k.id, hunger: k.hunger, max: k.hungerMax });
+  ev("hunger", { actor, who: k.id, variant: k.variant, hunger: k.hunger, max: k.hungerMax });
 }
 
 function nearestFree(s, type, key) {
@@ -1334,7 +1339,7 @@ function victimInfo(state, v) {
   }
   if (v.kind === "kaiju") {
     const k = state[v.actor];
-    return { key: k.at, kind: "kaiju", id: v.actor, type: k.id, name: KAIJU[k.id].name, hp: k.parts.body.hp, max: k.parts.body.max };
+    return { key: k.at, kind: "kaiju", id: v.actor, type: k.id, variant: k.variant, name: kaijuDef(k.id, k.variant).name, hp: k.parts.body.hp, max: k.parts.body.max };
   }
   const st = state.map.hexes[v.key].structure;
   return { key: v.key, kind: "structure", id: v.key, type: st.type, name: STRUCTURES[st.type].name, hp: st.hp, max: st.maxHp };
@@ -1374,7 +1379,7 @@ function otherKaijuThreat(state, actor) {
   const home = o.at;
   const vs = { kind: "kaiju", actor };
   let best = null;
-  for (const base of KAIJU[o.id].attacks) {
+  for (const base of kaijuDef(o.id, o.variant).attacks) {
     const a = attackOf(ghost, other, base.id);
     if (a.damage[1] === 0 || a.pattern === "teleport" || attackBlocked(ghost, other, a)) continue;
     for (const [spot, r] of Object.entries(spots)) {
@@ -1387,7 +1392,7 @@ function otherKaijuThreat(state, actor) {
       const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
       const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
       const value = hitChance * (damage[0] + damage[1]);
-      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, name: `${KAIJU[o.id].name}: ${a.name}`, hitChance, damage } };
+      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, damage } };
     }
     o.at = home;
   }
@@ -1439,7 +1444,7 @@ export function actions(state) {
   const overWhy = "The mission is over.";
   add("move", "Move", "move", null, 0, over ? overWhy : k.ap <= 0 ? "No AP left." : Object.keys(reach(state)).length ? null : "Nowhere to go.");
   add("face", "Face", "face", 0, 0, over ? overWhy : null);
-  for (const base of KAIJU[k.id].attacks) {
+  for (const base of kaijuDef(k.id, k.variant).attacks) {
     const a = attackOf(state, "kaiju", base.id);
     let why = over ? overWhy : attackBlocked(state, "kaiju", a);
     if (!why && !attackTargets(state, a.id, "kaiju").length) why = "No target in reach.";
@@ -1448,7 +1453,7 @@ export function actions(state) {
   let why = over ? overWhy : k.ap < RULES.stompAp ? "Not enough AP." : stompTargets(state).length ? null : "Nothing adjacent to stomp.";
   add("stomp", "Stomp", "stomp", RULES.stompAp, 0, why);
   if (over) why = overWhy;
-  else if (k.hunger === null) why = `${KAIJU[k.id].name} does not eat.`;
+  else if (k.hunger === null) why = `${kaijuDef(k.id, k.variant).name} does not eat.`;
   else if (k.ap < RULES.eatAp) why = "Not enough AP.";
   else why = eatTargets(state).length ? null : "Nothing adjacent to eat.";
   add("eat", "Eat", "eat", RULES.eatAp, 0, why);
@@ -1472,7 +1477,7 @@ export function describeHex(state, key) {
     .filter((u) => u.at === key)
     .map((u) => ({ id: u.id, type: u.type, name: UNITS[u.type].name, hp: u.hp, max: UNITS[u.type].hp, panicked: u.panicked }));
   const who = kaijuAt(state, key);
-  const kaiju = who ? { actor: who, id: state[who].id, name: KAIJU[state[who].id].name } : null;
+  const kaiju = who ? { actor: who, id: state[who].id, variant: state[who].variant, name: kaijuDef(state[who].id, state[who].variant).name } : null;
   const bits = [];
   if (kaiju) bits.push(`${kaiju.name}${who === "rival" ? ", the rival" : ""}.`);
   if (structure) bits.push(`${structure.name}, ${structure.hp} of ${structure.max}, height ${structure.height}.`);

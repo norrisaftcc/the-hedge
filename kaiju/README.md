@@ -8,6 +8,8 @@ It is *Crush, Crumble and Chomp!* (Epyx, 1981) as imagined from a magazine revie
 
 **Hex and the City** is the fourth mission and the old way to play: eat and smash what you like, until the hangover hits. It is the Swathe's city with lighter forces, no goal and no clock, and waves of the army from the north, east and west that grow every third turn. Before play you choose what counts: Balanced, Killer Monster, Combat Machine, Destruction or Survival. It ends only when the monster falls or walks off the south edge, and the end names the death: a thousand cuts, the sudden death or the lingering death. Every game, Hex and the City or not, ends with **the review**: a column from *Cassette & Disk Monthly*, an invented 1981 magazine, written from the game's own events, with a quoted line from the log and a star rating. *Copy as text* puts it on the clipboard.
 
+**Looks.** Each monster has up to four looks: its own and variants, as a fighting game has alternate colours. A variant is new art, names and a blurb over the same rules, and sometimes a few changed numbers. On the setup screen the looks of the chosen monster sit in a row of swatches under the cards; pick one and the card, the status tile, the map token, the log, the paper and the review all use its names. The four so far are Meow'thprrtep (the Squamous One as first drawn, when its head read as a cat), Mekkasaurus Prime (Radiosaur rebuilt as a robot on a battery), the Alien Colossus and Gekido-Oh (Dai-Rengō's enemy, which starts with a preset build). They live in `src/data/variants.js` and `src/art/variants.js`. The bot plays them: `node kaiju/tools/sim.mjs 1-20 radiosaur:mekkasaurus`.
+
 ## Run it
 
 Static files, no build, nothing to install. From the repository root:
@@ -23,7 +25,7 @@ The page works one-thumbed on a phone in portrait and with keys on a desktop: `1
 
 ## Versions and playtests
 
-The setup page shows the edition ("Edition 0.2.0"), and every copied review ends with a line naming the build and the setup. `CHANGELOG.md` says what each version changed. Games people have played are logged in [`playtests/`](playtests/README.md), one file per game: paste the copied review and say how it felt.
+The setup page shows the edition (the version in `src/version.js`), and every copied review ends with a line naming the build and the setup. `CHANGELOG.md` says what each version changed. Games people have played are logged in [`playtests/`](playtests/README.md), one file per game: paste the copied review and say how it felt.
 
 ## Tests
 
@@ -43,7 +45,7 @@ Layers, bottom up, as in the hedge. Nothing below `ui` touches the page; the rul
 index.html, style.css   the page: setup, play and end screens as framed tiles; theme tokens
 src/rng.js              the dice: mulberry32, a port of hedge/rng.py (same seed, same numbers)
 src/hex.js              axial hex arithmetic: distance, lines, cones, arcs
-src/data/               terrain, structures, kaiju, units, mutations, missions: numbers, not code
+src/data/               terrain, structures, kaiju, variants, units, mutations, missions: numbers, not code
 src/city.js             grows the city for The Swathe with MazeBuilder's Sidewinder, braided
 src/rules.js            create(setup), step(state, command) -> {state, events}, and the queries
 src/ai.js               plans for the defense units, the rival kaiju and a berserk kaiju

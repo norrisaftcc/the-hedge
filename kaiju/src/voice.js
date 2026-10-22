@@ -9,7 +9,7 @@
 // agree with the part, {unit} a unit noun, {aUnit} with its article, {thing} a unit or structure
 // noun, {aThing} with its article, {ground} the terrain struck, {weapon} a unit's weapon.
 
-import { KAIJU } from "./data/kaiju.js";
+import { kaijuDef, LOOKS } from "./data/variants.js";
 import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { UNITS } from "./data/units.js";
 import { MUTATIONS, BUDGET } from "./data/mutations.js";
@@ -81,9 +81,15 @@ export const LINES = {
       "Atomic breath. The {thing} is briefly the brightest thing in the state. {damage} damage.",
       "Atomic breath across the {ground}. The {thing} takes {damage}.",
     ],
+    "kaijuHitsUnit.breath.alt": [
+      "{Attack}. The {thing} is briefly the brightest thing in the state. {damage} damage.",
+      "{Attack} across the {ground}. The {thing} takes {damage}.",
+    ],
     "kaijuHitsUnit.surge": ["The sea comes in over the {ground}. The {thing} takes {damage}.", "Tidal surge. The {thing} is under water, then under {damage} damage."],
+    "kaijuHitsUnit.surge.alt": ["The surge comes in over the {ground}. The {thing} takes {damage}.", "{Attack}. The {thing} takes {damage}, all at once."],
     "kaijuHitsUnit.stomp": ["{Name} stamps on the {thing}. {damage} damage.", "Stomp. The {thing} takes {damage}."],
     "kaijuHitsUnit.finish": ["Final formation. The {thing} takes {damage}. It was not the intended audience."],
+    "kaijuHitsUnit.finish.alt": ["{Attack}. The {thing} takes {damage}. It was not the intended audience."],
     kaijuMissesUnit: ["{Attack} misses the {thing}.", "{Attack}. The {thing} is not where it was.", "{Attack} goes wide of the {thing}."],
     kaijuHitsStructure: ["{Attack} into the {thing}. {damage} damage.", "{Attack}. The {thing} takes {damage}.", "{Name} sets about the {thing}. {Attack}, {damage} damage."],
     kaijuHitsBuilding: [
@@ -92,8 +98,11 @@ export const LINES = {
       "{Attack} on the {thing}. Plaster falls. {damage} damage.",
     ],
     "kaijuHitsBuilding.breath": ["Atomic breath. Every window in the {thing} goes at once. {damage} damage.", "Atomic breath. The {thing} glows, then smokes. {damage} damage."],
+    "kaijuHitsBuilding.breath.alt": ["{Attack}. Every window in the {thing} goes at once. {damage} damage.", "{Attack}. The {thing} glows, then smokes. {damage} damage."],
     "kaijuHitsStructure.breath": ["Atomic breath. The {thing} glows, then smokes. {damage} damage.", "Atomic breath across the {thing}. {damage} damage."],
+    "kaijuHitsStructure.breath.alt": ["{Attack}. The {thing} glows, then smokes. {damage} damage.", "{Attack} across the {thing}. {damage} damage."],
     "kaijuHitsStructure.surge": ["The sea goes through the {thing}. {damage} damage.", "Tidal surge. The {thing} takes {damage} and a great deal of water."],
+    "kaijuHitsStructure.surge.alt": ["The surge goes through the {thing}. {damage} damage.", "{Attack}. The {thing} takes {damage} and a great deal of noise."],
     "kaijuHitsStructure.stomp": ["{Name} stamps on the {thing}. {damage} damage.", "Stomp. The {thing} takes {damage}."],
     kaijuHitsKaiju: [
       "{Attack} lands on {Target}'s {part}. {damage} damage{rear}.",
@@ -101,8 +110,11 @@ export const LINES = {
       "{Name} reaches {Target}. {Attack}, {damage} on the {part}{rear}.",
     ],
     "kaijuHitsKaiju.breath": ["Atomic breath full on {Target}. {damage} on the {part}{rear}.", "Atomic breath. {Target}'s {part} {takes} {damage}{rear}."],
+    "kaijuHitsKaiju.breath.alt": ["{Attack} full on {Target}. {damage} on the {part}{rear}.", "{Attack}. {Target}'s {part} {takes} {damage}{rear}."],
     "kaijuHitsKaiju.finish": ["Final formation. Five machines become one blow. {Target} takes {damage} on the {part}{rear}."],
+    "kaijuHitsKaiju.finish.alt": ["{Attack}. All of it in one blow. {Target} takes {damage} on the {part}{rear}."],
     "kaijuHitsKaiju.grab": ["Tentacles find {Target}'s {part}. {damage} damage{rear}.", "Tentacle grab. {Target}'s {part} is held, and hurt. {damage} damage{rear}."],
+    "kaijuHitsKaiju.grab.alt": ["{Attack} finds {Target}'s {part}. {damage} damage{rear}.", "{Attack}. {Target}'s {part} is held, and hurt. {damage} damage{rear}."],
     kaijuMissesKaiju: ["{Attack} misses {Target}.", "{Target} sways clear of the {attack}.", "{Attack}. {Target} is not there to receive it."],
     gaze: ["{Name} looks at the {thing}.", "The {thing} meets {Name}'s gaze.", "{Name}'s gaze rests on the {thing}."],
     unitHitsKaiju: [
@@ -347,13 +359,16 @@ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const lower = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
 const article = (noun) => `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`;
 const hexes = (n) => `${n} ${n === 1 ? "hex" : "hexes"}`;
-const kaijuName = (id) => (KAIJU[id] ? KAIJU[id].name : "the monster");
+// The def for a kaiju id and variant, or null for an id the voice does not know.
+const defOf = (id, variant = null) => (typeof id === "string" && Object.hasOwn(LOOKS, id) ? kaijuDef(id, variant) : null);
+const kaijuName = (id, variant = null) => (defOf(id, variant) ? defOf(id, variant).name : "the monster");
 const unitNoun = (type) => NOUNS[type] || type;
 const structureNoun = (type) => (STRUCTURES[type] ? STRUCTURES[type].name.toLowerCase() : type);
 const groundName = (id) => (TERRAIN[id] ? TERRAIN[id].name.toLowerCase() : "ground");
 
-function partVars(id, part) {
-  const p = KAIJU[id] && KAIJU[id].parts[part];
+function partVars(id, variant, part) {
+  const def = defOf(id, variant);
+  const p = def && def.parts[part];
   const plural = !!(p && p.plural);
   return {
     part: p ? p.name.toLowerCase().replace(/^the /, "") : part,
@@ -367,8 +382,8 @@ function partVars(id, part) {
   };
 }
 
-function thingVars(what, type) {
-  const thing = what === "unit" ? unitNoun(type) : what === "kaiju" ? kaijuName(type) : structureNoun(type);
+function thingVars(what, type, variant = null) {
+  const thing = what === "unit" ? unitNoun(type) : what === "kaiju" ? kaijuName(type, variant) : structureNoun(type);
   return { thing, aThing: article(thing), ATHING: cap(article(thing)) };
 }
 
@@ -379,8 +394,8 @@ function unitVars(type) {
 
 const isPower = (d) => d.what === "structure" && !!STRUCTURES[d.type] && STRUCTURES[d.type].power;
 
-function bodyName(id) {
-  return KAIJU[id] ? KAIJU[id].parts.body.name.toLowerCase() : "body";
+function bodyName(id, variant = null) {
+  return defOf(id, variant) ? defOf(id, variant).parts.body.name.toLowerCase() : "body";
 }
 
 const VARS = {
@@ -388,10 +403,10 @@ const VARS = {
   phase: (d) => ({ variant: d.phase, vars: { turn: d.turn } }),
   move: (d) => ({
     variant: d.teleport ? "teleport" : d.path && d.path.length === 1 ? "step" : "walk",
-    vars: { Name: kaijuName(d.who), walked: hexes(d.path ? d.path.length : 0), cost: d.cost, hexes: hexes(d.from && d.to ? distance(d.from, d.to) : 0) },
+    vars: { Name: kaijuName(d.who, d.variant), walked: hexes(d.path ? d.path.length : 0), cost: d.cost, hexes: hexes(d.from && d.to ? distance(d.from, d.to) : 0) },
   }),
-  face: (d) => ({ vars: { Name: kaijuName(d.who), dir: DIR_NAMES[d.dir] } }),
-  crush: (d) => ({ variant: isPower(d) ? "power" : d.what, vars: { Name: kaijuName(d.who), ground: "ground", ...thingVars(d.what, d.type) } }),
+  face: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), dir: DIR_NAMES[d.dir] } }),
+  crush: (d) => ({ variant: isPower(d) ? "power" : d.what, vars: { Name: kaijuName(d.who, d.variant), ground: "ground", ...thingVars(d.what, d.type, d.variant) } }),
   attack: (d) => {
     const a = d.attacker;
     const t = d.defender;
@@ -405,9 +420,9 @@ const VARS = {
       damage: d.damage,
       rear: d.rear ? ", from behind" : "",
       ground: groundName(d.terrain),
-      Target: onKaiju ? kaijuName(t.type) : "",
-      Name: a.side === "unit" ? "" : kaijuName(a.type),
-      ...(onKaiju ? partVars(t.type, d.part) : thingVars(t.side, t.type)),
+      Target: onKaiju ? kaijuName(t.type, t.variant) : "",
+      Name: a.side === "unit" ? "" : kaijuName(a.type, a.variant),
+      ...(onKaiju ? partVars(t.type, t.variant, d.part) : thingVars(t.side, t.type)),
       ...(a.side === "unit" ? unitVars(a.type) : {}),
     };
     let kinds;
@@ -416,41 +431,43 @@ const VARS = {
     else if (t.side === "unit") kinds = [d.zero ? "gaze" : d.hit ? "kaijuHitsUnit" : "kaijuMissesUnit"];
     else kinds = [d.hit ? "kaijuHitsKaiju" : "kaijuMissesKaiju"];
     const id = a.side === "unit" ? a.type : d.attack.id;
-    const tail = onKaiju && d.hit && d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(t.type)}.` : "";
-    return { variants: kinds.flatMap((v) => [`${v}.${id}`, v]), vars, tail };
+    const tail = onKaiju && d.hit && d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(t.type, t.variant)}.` : "";
+    // A look gets the ".alt" lines first: they name the blow by its attack, not the base kaiju's word for it.
+    const alt = a.side !== "unit" && !!a.variant;
+    return { variants: kinds.flatMap((v) => [...(alt ? [`${v}.${id}.alt`] : []), `${v}.${id}`, v]), vars, tail };
   },
-  destroyed: (d) => ({ variant: d.what, vars: { Name: kaijuName(d.type), ...thingVars(d.what, d.type) } }),
+  destroyed: (d) => ({ variant: d.what, vars: { Name: kaijuName(d.type, d.variant), ...thingVars(d.what, d.type, d.variant) } }),
   blast: (d) => ({
     variant: d.energy ? "energy" : "damage",
-    vars: { Name: kaijuName(d.who), ...thingVars("structure", d.type), damage: d.damage, ...partVars(d.who, d.part) },
-    tail: d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(d.who)}.` : "",
+    vars: { Name: kaijuName(d.who, d.variant), ...thingVars("structure", d.type), damage: d.damage, ...partVars(d.who, d.variant, d.part) },
+    tail: d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(d.who, d.variant)}.` : "",
   }),
   panic: (d) => ({ variant: d.broke ? "broke" : "held", vars: unitVars(d.type) }),
   eat: (d) => ({
     variant: isPower(d) ? "power" : d.what,
-    vars: { Name: kaijuName(d.who), ...thingVars(d.what, d.type), hunger: d.hunger },
+    vars: { Name: kaijuName(d.who, d.variant), ...thingVars(d.what, d.type, d.variant), hunger: d.hunger },
   }),
   energy: (d) => {
     const why = ENERGY_WHY[d.why] || d.why;
     return {
       variant: d.change >= 0 ? "gain" : d.why === "drain" ? "drain" : "loss",
-      vars: { Name: kaijuName(d.who), change: Math.abs(d.change), energy: d.energy, why, Why: cap(why) },
+      vars: { Name: kaijuName(d.who, d.variant), change: Math.abs(d.change), energy: d.energy, why, Why: cap(why) },
     };
   },
-  hunger: (d) => ({ variant: d.hunger >= 0.7 * d.max ? "high" : "normal", vars: { Name: kaijuName(d.who), hunger: d.hunger, max: d.max } }),
-  part: (d) => ({ variant: d.state, vars: { Name: kaijuName(d.who), ...partVars(d.who, d.part) } }),
-  heal: (d) => ({ vars: { Name: kaijuName(d.who), ...partVars(d.who, d.part), hp: d.hp, max: d.max } }),
-  roar: (d) => ({ vars: { Name: kaijuName(d.who), radius: d.radius } }),
-  berserk: (d) => ({ vars: { Name: kaijuName(d.who) } }),
+  hunger: (d) => ({ variant: d.hunger >= 0.7 * d.max ? "high" : "normal", vars: { Name: kaijuName(d.who, d.variant), hunger: d.hunger, max: d.max } }),
+  part: (d) => ({ variant: d.state, vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part) } }),
+  heal: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part), hp: d.hp, max: d.max } }),
+  roar: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), radius: d.radius } }),
+  berserk: (d) => ({ vars: { Name: kaijuName(d.who, d.variant) } }),
   reinforce: (d) => ({ vars: unitVars(d.type) }),
   umove: (d) => ({
     variant: d.pulled ? "pulled" : d.path && d.path.length === 1 ? "one" : "many",
-    vars: { ...unitVars(d.type), walked: hexes(d.path ? d.path.length : 0), Name: kaijuName(d.who) },
+    vars: { ...unitVars(d.type), walked: hexes(d.path ? d.path.length : 0), Name: kaijuName(d.who, d.variant) },
   }),
-  withdraw: (d) => ({ vars: { Name: kaijuName(d.who) } }),
+  withdraw: (d) => ({ vars: { Name: kaijuName(d.who, d.variant) } }),
   radio: (d) => ({ variant: d.about === "wave" && d.edge === null ? "wave-wide" : d.about || "fire", vars: { CALLSIGN: d.callsign, EDGE: String(d.edge || "north").toUpperCase() } }),
-  lingering: (d) => ({ vars: { Name: kaijuName(d.who), lingering: d.lingering } }),
-  hurt: (d) => ({ variant: d.why, vars: { Name: kaijuName(d.who), damage: d.damage, ...partVars(d.who, d.part) } }),
+  lingering: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), lingering: d.lingering } }),
+  hurt: (d) => ({ variant: d.why, vars: { Name: kaijuName(d.who, d.variant), damage: d.damage, ...partVars(d.who, d.variant, d.part) } }),
   over: (d) => {
     const r = d.result;
     const vars = { grade: cap(r.grade), total: r.score.total, turns: count(d.turn, "turn"), Objective: d.objective || "", stars: count(r.stars, "star") };
@@ -489,14 +506,16 @@ export function headline(result, state) {
   let target = "THE TARGET";
   const rivalGoal = !!(state && state.objective && state.objective.kind === "rival");
   if (state && state.objective) {
-    if (rivalGoal && state.rival) target = kaijuName(state.rival.id).toUpperCase();
+    if (rivalGoal && state.rival) target = kaijuName(state.rival.id, state.rival.variant).toUpperCase();
     else if (state.objective.type && STRUCTURES[state.objective.type]) target = STRUCTURES[state.objective.type].name.toUpperCase();
   }
   const id = state && state.kaiju ? state.kaiju.id : null;
+  const variant = state && state.kaiju ? state.kaiju.variant : null;
+  const def = defOf(id, variant);
   const vars = {
     TARGET: target,
-    NAME: id ? kaijuName(id).toUpperCase() : "CREATURE",
-    NOUN: PRESS[id] || "CREATURE",
+    NAME: def ? def.name.toUpperCase() : "CREATURE",
+    NOUN: (def && def.press) || (Object.hasOwn(PRESS, id) ? PRESS[id] : "CREATURE"),
     PLACE: (state && PLACES[state.mission]) || (state && placeFromTerrain(state)) || "TOWN",
   };
   vars.TURNS = state ? state.turn : 0;
@@ -607,7 +626,7 @@ function gather(events) {
     else if (e.k === "eat" && e.actor === "kaiju" && e.what === "unit") f.eaten += 1;
     else if (e.k === "move" && e.teleport && e.actor === "kaiju") {
       // A teleport attack raises a move, not an attack, but it is still a use.
-      const a = own(KAIJU, e.who, null)?.attacks.find((x) => x.id === e.attack);
+      const a = defOf(e.who, e.variant)?.attacks.find((x) => x.id === e.attack);
       if (a) tally(f.uses, a.name);
     }
     else if (e.k === "attack" && e.attacker.side === "kaiju") {
@@ -665,7 +684,7 @@ function targetWord(state) {
 
 function setupParagraph(state, v) {
   const k = state.kaiju;
-  const def = KAIJU[k.id];
+  const def = kaijuDef(k.id, k.variant);
   const body = def.parts.body.name.toLowerCase();
   const spent = k.mutations.reduce((n, m) => n + MUTATIONS[m].cost, 0);
   const spare = BUDGET - spent;
@@ -692,7 +711,7 @@ function setupParagraph(state, v) {
   } else if (state.mission === "fortress") {
     out.push("The mission was The Mountain Fortress: up a valley in the Kessel range to a command bunker behind a wall.");
   } else if (state.mission === "coast" && state.rival) {
-    const r = KAIJU[state.rival.id];
+    const r = kaijuDef(state.rival.id, state.rival.variant);
     out.push(`The mission was The Coast: Gull Point, one beach, and ${r.name}, ${r.epithet}, coming the other way.`);
   } else if (state.goal) {
     out.push(`The brief: ${lower(state.goal)}`);
@@ -706,7 +725,7 @@ function blowTarget(e) {
   const d = e.defender;
   if (d.side === "unit") return article(unitNoun(d.type));
   if (d.side === "structure") return words(1, structureWords(d.type), unique(d.type));
-  return `${kaijuName(d.type)}'s ${partVars(d.type, e.part).part}`;
+  return `${kaijuName(d.type, d.variant)}'s ${partVars(d.type, d.variant, e.part).part}`;
 }
 
 function didParagraph(state, f, v) {
@@ -769,7 +788,7 @@ function didParagraph(state, f, v) {
 function stoppedParagraph(state, f, v) {
   const t = state.turn;
   const where = own(SETTINGS, state.mission, SOMEWHERE);
-  const rival = state.rival ? kaijuName(state.rival.id) : "the rival";
+  const rival = state.rival ? kaijuName(state.rival.id, state.rival.variant) : "the rival";
   const out = [];
   const ending = endingOf(state);
   if (ending === "cuts") {
@@ -861,13 +880,14 @@ export function setupLine(state) {
   // A chosen rival is part of the setup; one left to chance is not, since choosing it skips a die.
   if (state.rival && !state.rivalByChance) mission += `:${state.rival.id}`;
   const chance = state.rival && state.rivalByChance ? ` (rival left to chance: ${state.rival.id})` : "";
-  return `${TITLE} ${VERSION}. Setup: ${k.id}${build}, ${mission}, seed ${state.seed}${chance}.`;
+  const who = k.variant ? `${k.id}:${k.variant}` : k.id;
+  return `${TITLE} ${VERSION}. Setup: ${who}${build}, ${mission}, seed ${state.seed}${chance}.`;
 }
 
 export function review(state, events = []) {
   const f = gather(events);
   const k = state.kaiju;
-  const name = kaijuName(k.id);
+  const name = kaijuName(k.id, k.variant);
   const where = own(SETTINGS, state.mission, SOMEWHERE);
   const ending = endingOf(state);
   const n = smallHash(`${state.seed}:${state.turn}:${events.length}:${f.dealt}:${f.crushed}:${f.eaten}:${f.harmTotal}`);
@@ -888,9 +908,9 @@ export function review(state, events = []) {
     unfinished: `is still going on turn ${state.turn}`,
   };
   const idle = !f.structures.size && where.idle;
-  const does = state.mission === "coast" && state.rival ? `meets ${kaijuName(state.rival.id)} at Gull Point` : idle || where.does;
+  const does = state.mission === "coast" && state.rival ? `meets ${kaijuName(state.rival.id, state.rival.variant)} at Gull Point` : idle || where.does;
   const rules = state.objective && state.objective.kind === "none" ? ` under the ${state.objective.name} rules` : "";
-  const dek = `${name}, ${KAIJU[k.id].epithet}, ${does}${rules}, and ${own(ends, ending, ends.unfinished)}.`;
+  const dek = `${name}, ${kaijuDef(k.id, k.variant).epithet}, ${does}${rules}, and ${own(ends, ending, ends.unfinished)}.`;
   const byline = `By ${v(WRITERS, 14)}`;
   const issue = `Issue ${20 + (state.seed % 40)}, ${MONTHS[(state.seed + state.turn) % 12]} ${1981 + (state.seed % 2)}`;
 

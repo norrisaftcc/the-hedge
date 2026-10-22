@@ -1,46 +1,18 @@
-// Kaiju art: portrait, silhouette, figure and map token for each of the four starters.
-// Each kaiju has a body plan in a 100 x 160 box (one outline per part); the silhouette
-// is that plan, the figure is the plan dressed in colour and detail.
+// Kaiju art: portrait, silhouette, figure and map token for each of the four starters,
+// and for the variants' looks (their drawings are in variants.js; every function here
+// takes a look id). Each look has a body plan in a 100 x 160 box (one outline per part);
+// the silhouette is that plan, the figure is the plan dressed in colour and detail.
 
 import { STATE_FILL, PARTS, smooth, poly, limb, pt, damageLayer, stateOf, rimFilter } from "./defs.js";
+import { LINE, uid, path, inked, strokeOnly, shift, clipped, spines, eyeball, scaleRows, suckers, facetsOf, star } from "./kit.js";
+import { VARIANT_ART, VARIANT_IDS } from "./variants.js";
 
 export const KAIJU_IDS = ["radiosaur", "thalassor", "squamous", "dairengo"];
+// Every look: the four base kaiju, then the variants' drawings (src/art/variants.js).
+export const LOOK_IDS = [...KAIJU_IDS, ...VARIANT_IDS];
 
-const LINE = "#1b1712";
-let seq = 0;
-const uid = (p) => `${p}${(++seq).toString(36)}`;
 
-const path = (d, fill, extra = "") => `<path d="${d}" fill="${fill}"${extra}/>`;
-const inked = (d, fill, w = 1.4) => `<path d="${d}" fill="${fill}" stroke="${LINE}" stroke-width="${w}" stroke-linejoin="round"/>`;
-const strokeOnly = (d, color, w, extra = "") => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"${extra}/>`;
-const shift = (pts, dx, dy) => pts.map(([x, y, s]) => (s ? [x + dx, y + dy, s] : [x + dx, y + dy]));
-const clipped = (id, d, inner) => `<clipPath id="${id}"><path d="${d}"/></clipPath><g clip-path="url(#${id})">${inner}</g>`;
 
-// Plates or spines along a back line: leaf shapes whose tips lean along the line.
-function spines(line, count, h0, h1, w, side = -1, lean = 0.35) {
-  const out = [];
-  for (let i = 0; i < count; i++) {
-    const t = (i + 0.5) / count;
-    const f = t * (line.length - 1);
-    const k = Math.min(line.length - 2, Math.floor(f));
-    const u = f - k;
-    const a = line[k], b = line[k + 1];
-    const c = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
-    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const tx = (b[0] - a[0]) / len, ty = (b[1] - a[1]) / len;
-    const nx = side * -ty, ny = side * tx;
-    const h = h0 + (h1 - h0) * t;
-    const tip = [c[0] + nx * h + tx * h * lean, c[1] + ny * h + ty * h * lean, 1];
-    out.push([
-      [c[0] - tx * w, c[1] - ty * w, 1],
-      [c[0] - tx * w * 0.6 + nx * h * 0.6, c[1] - ty * w * 0.6 + ny * h * 0.6],
-      tip,
-      [c[0] + tx * w * 0.7 + nx * h * 0.35, c[1] + ty * w * 0.7 + ny * h * 0.35],
-      [c[0] + tx * w, c[1] + ty * w, 1],
-    ]);
-  }
-  return out;
-}
 
 /* ------------------------------------------------------------------ */
 /* Radiosaur: the atomic tyrannosaurus. Umber hide, uranium-glass plates. */
@@ -324,35 +296,12 @@ const SQU = {
   bg: "#8a9440", bg2: "#6b7430", frame: "#22101f",
 };
 
-function eyeball(x, y, r, slit = true, col = SQU.eye) {
-  const pupil = slit
-    ? `<ellipse cx="${x}" cy="${y}" rx="${(r * 0.22).toFixed(2)}" ry="${(r * 0.8).toFixed(2)}" fill="${SQU.pupil}"/>`
-    : `<circle cx="${x}" cy="${y}" r="${(r * 0.45).toFixed(2)}" fill="${SQU.pupil}"/>`;
-  return `<circle cx="${x}" cy="${y}" r="${r}" fill="${col}" stroke="${LINE}" stroke-width="${Math.max(0.6, r / 5).toFixed(2)}"/>${pupil}`
-    + `<circle cx="${(x - r * 0.35).toFixed(2)}" cy="${(y - r * 0.35).toFixed(2)}" r="${(r * 0.18).toFixed(2)}" fill="#fff"/>`;
-}
 
-function scaleRows(x0, y0, x1, y1, s, color, w = 0.9) {
-  let d = "";
-  for (let y = y0, row = 0; y < y1; y += s * 0.7, row++) {
-    for (let x = x0 + (row % 2) * s / 2; x < x1; x += s) d += `M${(x - s / 2).toFixed(1)} ${y.toFixed(1)}q${s / 2} ${(s * 0.7).toFixed(1)} ${s} 0`;
-  }
-  return strokeOnly(d, color, w);
-}
-
-function suckers(centre, every, r, color) {
-  let out = "";
-  for (let i = 1; i < centre.length - 1; i += every) out += `<circle cx="${centre[i][0]}" cy="${centre[i][1]}" r="${r}" fill="${color}" stroke="${LINE}" stroke-width="0.5"/>`;
-  return out;
-}
 
 // The head: a wedge whose facets are lit from three directions at once, and a crown of spurs.
 const SQ_WEDGE = [[56, 38], [60, 26], [68, 20], [90, 22], [99, 36], [94, 48], [80, 54], [66, 58], [60, 50]];
 const SQ_SPURS = [[[59, 28], [63, 23], [52, 9]], [[66, 21], [71, 20], [65, 4]], [[76, 21], [81, 21], [84, 6]], [[85, 22], [89, 23], [100, 11]], [[95, 30], [97, 34], [106, 27]]];
 
-function facetsOf(ring, centre, colors) {
-  return ring.map((a, i) => path(poly([a, ring[(i + 1) % ring.length], centre]), colors[i % colors.length])).join("");
-}
 
 const squ = {
   pal: SQU,
@@ -472,14 +421,6 @@ const DAI = {
   bg: "#86bde0", bg2: "#64a2cc", frame: "#16336f",
 };
 
-function star(x, y, r, color, w = 0.8) {
-  const pts = [];
-  for (let i = 0; i < 10; i++) {
-    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r;
-    pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]);
-  }
-  return `<path d="${poly(pts)}" fill="${color}" stroke="${LINE}" stroke-width="${w}" stroke-linejoin="round"/>`;
-}
 
 const dai = {
   pal: DAI,
@@ -586,12 +527,14 @@ const dai = {
   },
 };
 
-const KAIJU = { radiosaur, thalassor: tha, squamous: squ, dairengo: dai };
+const BASE_ART = { radiosaur, thalassor: tha, squamous: squ, dairengo: dai };
 
+// A look id is a base kaiju id or a variant id. Names are looked up with hasOwn, so
+// "constructor" is not a look.
 function art(id) {
-  const k = KAIJU[id];
-  if (!k) throw new Error(`no art for kaiju ${id}`);
-  return k;
+  if (Object.hasOwn(BASE_ART, id)) return BASE_ART[id];
+  if (Object.hasOwn(VARIANT_ART, id)) return VARIANT_ART[id];
+  throw new Error(`no art for kaiju ${id}`);
 }
 
 const planCache = new Map();
@@ -647,3 +590,6 @@ export function facingNotch(r = 18) {
 }
 
 export { PARTS };
+// The helpers the variants' drawings share, so one module can draw with the other's tools.
+export { LINE, uid, path, inked, strokeOnly, shift, clipped, spines, eyeball, scaleRows, suckers, facetsOf, star };
+export { smooth, poly, limb, pt, rimFilter } from "./defs.js";

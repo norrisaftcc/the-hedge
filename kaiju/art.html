@@ -65,7 +65,8 @@
   import * as U from "./src/art/units.js";
   import * as T from "./src/art/terrain.js";
 
-  const KAIJU = ["radiosaur", "thalassor", "squamous", "dairengo"];
+  // The four base kaiju, then the variants' looks, each in every state.
+  const KAIJU = K.LOOK_IDS;
   const UNITS = ["infantry", "tank", "artillery", "helicopter", "jet", "missile", "gun", "maser", "scientist"];
   const TERRAIN = ["open", "road", "park", "forest", "shore", "water", "mountain", "rubble"];
   const STRUCTURES = { low: 1, mid: 2, tower: 3, pylon: 1, plant: 2, lab: 2, leyline: 1, bunker: 2, wall: 3 };
@@ -76,9 +77,9 @@
   const safe = (f) => { try { return f(); } catch (e) { return `<p>${e.message}</p>`; } };
 
   let html = DEFS;
-  html += `<h2>Kaiju</h2>`;
+  html += `<h2>Kaiju and their variants</h2>`;
   for (const id of KAIJU) {
-    html += `<h3>${id}</h3>` + safe(() => {
+    html += `<h3>${id}${K.KAIJU_IDS.includes(id) ? "" : " (variant)"}</h3>` + safe(() => {
       let out = `<div class="row">`;
       for (const s of STATES) out += fig(K.portrait(id, { parts: all(s) }), s);
       out += fig(K.portrait(id, { parts: mixed }), "mixed");
@@ -158,6 +159,12 @@
     out += scene(T.backdrop("shore"), K.figure("thalassor", { parts: mixed }), K.figure("squamous", { flip: true }));
     out += scene(T.backdrop("mountain", { structure: "wall" }), K.figure("dairengo"), U.figure("maser", { flip: true, count: 1 }));
     out += scene(T.backdrop("park", { structure: "leyline" }), U.figure("scientist", { count: 2 }), K.figure("squamous", { flip: true, parts: all("hurt") }));
+    // Each variant against the kaiju it replaces.
+    const pairs = [["radiosaur", "mekkasaurus"], ["thalassor", "colossus"], ["squamous", "meowthprrtep"], ["dairengo", "gekido"]];
+    const bds = ["road", "shore", "park", "mountain"];
+    pairs.forEach(([base, look], i) => {
+      if (K.LOOK_IDS.includes(look)) out += scene(T.backdrop(bds[i]), K.figure(base), K.figure(look, { flip: true }));
+    });
     return out + `</div>`;
   });
 

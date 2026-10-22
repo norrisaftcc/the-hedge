@@ -2,7 +2,8 @@
 // over a state that return commands; the rules apply them. Ties break the same way every time.
 
 import * as H from "./hex.js";
-import { KAIJU, RULES } from "./data/kaiju.js";
+import { RULES } from "./data/kaiju.js";
+import { kaijuDef } from "./data/variants.js";
 import { UNITS } from "./data/units.js";
 import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { alive, reach, unitReach, canFire, attackOf, attackReady, attackTargets, affected, forecast, unitAt, stompTargets } from "./rules.js";
@@ -73,7 +74,7 @@ function strikes(state, actor) {
   const k = state[actor];
   const foe = state[actor === "kaiju" ? "rival" : "kaiju"];
   const out = [];
-  for (const base of KAIJU[k.id].attacks) {
+  for (const base of kaijuDef(k.id, k.variant).attacks) {
     if (base.pattern === "teleport" || base.damage[1] === 0) continue;
     const a = attackOf(state, actor, base.id);
     if (attackReady(state, a.id, actor)) continue;
@@ -137,7 +138,7 @@ export function planRival(state) {
   const r = state.rival;
   const foe = state.kaiju;
   if (!alive(r) || !alive(foe) || state.result) return [];
-  const def = KAIJU[r.id];
+  const def = kaijuDef(r.id, r.variant);
 
   if (r.parts.body.hp <= RULES.retreatBelow * r.parts.body.max && state.rivalRetreat.length) {
     if (state.rivalRetreat.includes(r.at)) return [{ t: "withdraw", actor }];
