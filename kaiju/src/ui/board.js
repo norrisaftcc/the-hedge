@@ -61,6 +61,14 @@ function unitPiece(u) {
   return `<g class="piece unit${u.panicked > 0 ? " panicked" : ""}${def.air ? " air" : ""}" transform="translate(${f1(x)},${f1(y)})">${unitToken(u.type)}${bar}${flee}</g>`;
 }
 
+function blastMark(key, good) {
+  const { x, y } = center(key);
+  const glyph = good
+    ? `<circle r="7.5"/><path d="M0 -4v8M-4 0h8" fill="none"/>`
+    : `<path d="M0 -8.5L9 7H-9Z" stroke-linejoin="round"/><path d="M0 -3v5M0 4v.6" fill="none"/>`;
+  return `<g class="blast-mark ${good ? "good" : "bad"}" transform="translate(${f1(x - 13)},${f1(y + 11)})" style="fill: var(--paper); stroke: var(--ink)" stroke-width="1.6" stroke-linecap="round">${glyph}</g>`;
+}
+
 function kaijuPiece(k, actor) {
   const { x, y } = center(k.at);
   const ring = actor === "rival"
@@ -157,6 +165,11 @@ export function createBoard(host, { onHex, onFace }) {
     if (m.selected && state.map.hexes[m.selected]) {
       out += `<polygon points="${points(m.selected, SIZE - 1.5)}" fill="none" style="stroke: var(--ink)" stroke-width="2.6"/>`;
       out += `<polygon points="${points(m.selected, SIZE - 4.5)}" fill="none" style="stroke: var(--paper)" stroke-width="1.2"/>`;
+    }
+    if (m.blast) {
+      // A triangle on a hex that would set off power and hurt, a circle on one that would feed the monster. Shapes, not colour, tell them apart (UI-4).
+      for (const key of m.blast.danger) out += blastMark(key, false);
+      for (const key of m.blast.good) out += blastMark(key, true);
     }
     layers.marks.innerHTML = out;
 

@@ -684,6 +684,21 @@ function blast(s, actor, key, type, ev) {
   res.report();
 }
 
+// What setting off the power structure on this hex would do to this actor, or null when the hex
+// holds none. The numbers are the ones blast() uses. lethal: the top of the range could finish
+// the body, the cautious reading, since a blast hits a rolled part and can spill to the body.
+export function blastRisk(state, key, actor = "kaiju") {
+  const hex = state.map.hexes[key];
+  const st = hex && hex.structure;
+  if (!st || !Object.hasOwn(STRUCTURES, st.type) || !STRUCTURES[st.type].power) return null;
+  const def = STRUCTURES[st.type];
+  const k = state[actor];
+  const risk = { type: st.type, name: def.name };
+  if (k.passives.includes("reactorBelly")) return { ...risk, energy: RULES.reactorBlastEnergy };
+  const [, hi] = def.blast;
+  return { ...risk, damage: [...def.blast], ...(hi >= k.parts.body.hp ? { lethal: true } : {}) };
+}
+
 function breakStructure(s, actor, key, ev) {
   const type = destroyStructure(s, key, actor, ev);
   if (STRUCTURES[type].power) blast(s, actor, key, type, ev);
@@ -939,7 +954,9 @@ function doStomp(s, actor, cmd, ev) {
   return null;
 }
 
-function food(state, actor, key) {
+// What an eat on this hex would take: an edible unit first, then a structure. The page reads it,
+// so a warning never names a structure the eat would leave standing.
+export function food(state, actor, key) {
   const k = state[actor];
   const u = unitAt(state, key);
   if (u && !UNITS[u.type].air && UNITS[u.type].edible) return { what: "unit", unit: u };

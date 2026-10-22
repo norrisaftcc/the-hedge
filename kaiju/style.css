@@ -479,7 +479,7 @@ kbd {
   .log-tile { order: 0; flex: 1 1 220px; }
   .log { flex: 1 1 0px; min-height: calc(4 * 1.45em + 8px); max-height: none; overflow-y: auto; }
   .log-toggle { display: none; }
-  .sheet { position: relative; inset: auto; z-index: auto; flex: 0 1 auto; min-height: 0; max-width: none; max-height: none; margin: 14px 0 0; box-shadow: none; }
+  .sheet { position: relative; inset: auto; z-index: auto; flex: none; min-height: 0; max-width: none; max-height: none; margin: 14px 0 0; box-shadow: none; }
   body.sheet-open .status-tile { display: none; }
   .end-body { grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); }
 }
@@ -508,3 +508,14 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- blast risk (DESIGN §16.4): a triangle for a risk, a circle for news; the words carry it without colour ---------- */
+
+.blast-note { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 4px 8px; font-size: 14px; font-weight: 600; background: var(--paper); border-left: 5px double var(--danger); }
+.hint-blast { order: 3; flex: 1 0 100%; margin: 0; }
+.fc-blast { flex: none; margin: 4px 0 0; }
+.blast-note.good { border-left: 5px dotted var(--good); }
+.blast-note.lethal { border: 2px solid var(--danger); border-left: 5px double var(--danger); }
+.blast-note.bad .blast-badge { color: var(--danger); }
+.blast-note.good .blast-badge { color: var(--good); }
+.blast-badge { flex: none; width: 18px; height: 18px; margin-top: 1px; }

@@ -10,7 +10,7 @@
 
 import { pathToFileURL } from "node:url";
 import * as H from "../src/hex.js";
-import { create, step, reach, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
+import { create, step, reach, blastRisk, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
 import { KAIJU, RULES } from "../src/data/kaiju.js";
 import { kaijuDef } from "../src/data/variants.js";
 import { UNITS } from "../src/data/units.js";
@@ -125,8 +125,20 @@ function worth(state, f) {
   return { value, goal };
 }
 
+// Whether the bot may set off the power structure on this hex (§16.3). A lethal blast, never.
+// A survivable one only on the objective. A monster with reactorBelly wants the blast.
+// "A safe attack first" needs no test here: plan() takes the goal strike of most value, and an
+// attack on the objective is never valued below a stomp on it. A move or an eat is only planned
+// when no goal strike is open.
+function blastAllowed(state, key) {
+  const risk = blastRisk(state, key);
+  if (!risk || risk.energy !== undefined) return true;
+  return !risk.lethal && key === state.objective.at;
+}
+
 // Every strike open to the kaiju now: [{cmds, value, goal, ap}], turning first where that helps.
-// Single attacks ignore facing; area attacks are tried in every facing.
+// Single attacks ignore facing; area attacks are tried in every facing. A stomp that would set
+// off a power structure is left out unless blastAllowed.
 export function strikes(state) {
   const k = state.kaiju;
   const out = [];
@@ -144,14 +156,12 @@ export function strikes(state) {
     }
     if (d === k.facing && k.ap >= RULES.stompAp) {
       for (const target of stompTargets(state)) {
-        const st = state.map.hexes[target].structure;
-        if (st && STRUCTURES[st.type].power && !k.passives.includes("reactorBelly") && target !== state.objective.at) continue;
         const w = worth(state, forecast(state, "stomp", target));
-        out.push({ cmds: [{ t: "stomp", target }], ...w, ap: RULES.stompAp });
+        out.push({ cmds: [{ t: "stomp", target }], ...w, ap: RULES.stompAp, stomp: target });
       }
     }
   }
-  return out;
+  return out.filter((s) => !s.stomp || blastAllowed(state, s.stomp));
 }
 
 const perAp = (list) => list.reduce((a, b) => (b.value / b.ap > a.value / a.ap ? b : a));
@@ -163,10 +173,7 @@ function hungry(k) {
 function eatCommand(state) {
   const k = state.kaiju;
   if (!hungry(k) || k.ap < RULES.eatAp) return null;
-  const safe = eatTargets(state).filter((h) => {
-    const st = state.map.hexes[h].structure;
-    return !(st && STRUCTURES[st.type].power && !k.passives.includes("reactorBelly"));
-  });
+  const safe = eatTargets(state).filter((h) => blastAllowed(state, h));
   if (!safe.length) return null;
   const objective = safe.find((h) => h === state.objective.at);
   return { t: "eat", target: objective || safe.sort()[0] };
@@ -192,18 +199,14 @@ function chargeHexes(state) {
   return power.flatMap((h) => H.neighbors(h)).filter((h) => state.map.hexes[h] && !state.map.hexes[h].structure);
 }
 
-// A move toward the goal. Avoid stepping onto power structures unless the kaiju feeds on them.
+// A move toward the goal. Avoid stepping onto power structures unless the kaiju feeds on them,
+// or the objective is one and the blast would not kill (blastAllowed).
 function moveCommand(state) {
   const k = state.kaiju;
   const options = reach(state);
   const costs = goalCosts(state, chargeHexes(state) || goalHexes(state));
   const far = (h) => (costs.has(h) ? costs.get(h) : 999);
-  const blasts = (path) =>
-    !k.passives.includes("reactorBelly") &&
-    path.some((h) => {
-      const st = state.map.hexes[h].structure;
-      return st && STRUCTURES[st.type].power && h !== state.objective.at;
-    });
+  const blasts = (path) => path.some((h) => !blastAllowed(state, h));
   // A kaiju that drinks the sea likes to stand in it, as the rival does.
   const wet = (h) => (kaijuDef(k.id, k.variant).energy.rule === "water" && TERRAIN[state.map.hexes[h].terrain].water ? 0.5 : 0);
   let bestKey = null;

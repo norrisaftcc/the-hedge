@@ -12,6 +12,7 @@
 import { kaijuDef, LOOKS } from "./data/variants.js";
 import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { UNITS } from "./data/units.js";
+import { RULES } from "./data/kaiju.js";
 import { MUTATIONS, BUDGET } from "./data/mutations.js";
 import { DIR_NAMES, distance } from "./hex.js";
 import { VERSION, TITLE } from "./version.js";
@@ -866,6 +867,44 @@ function verdictParagraph(state, f, quote, ratingText, v) {
   else if (r) out.push(`It scored ${thousands(r.score.total)}, ${article(r.grade)}.`);
   out.push(`Rating: ${ratingText}`);
   return out.join(" ");
+}
+
+// The warning the page shows before a move, Wrong angle, stomp or eat that would set off a power
+// structure (DESIGN §16.4). risks: the blastRisk results in the order they go off, none of them
+// null. verb: "move" or "teleport" (landing on it), "cross" (walking through it on the way),
+// "stomp" or "eat". maybe: a stomp that may leave the structure standing. hp: the body's hit
+// points, so several small blasts together can be called lethal. room: the energy the battery
+// can still take, since the rules stop at the top. It reads the risks and rolls nothing. Returns { text, good, lethal }; good is the reactorBelly news, which is not a warning.
+const rangeText = (d) => (d[0] === d[1] ? `${d[0]}` : `${d[0]}–${d[1]}`);
+
+function blastSubject(verb) {
+  if (verb === "stomp") return "Stomping it";
+  if (verb === "eat") return "Eating it";
+  if (verb === "cross") return "Walking there";
+  return "Landing here";
+}
+
+export function blastWords(risks, verb, { maybe = false, hp = Infinity, room = Infinity } = {}) {
+  // Two of a kind are counted: "two pylons and the power plant", not "the pylon and the pylon".
+  const kinds = new Map();
+  for (const r of risks) tally(kinds, r.type);
+  const names = listing([...kinds].map(([type, n]) => words(n, structureWords(type), true)));
+  const setsOff = maybe ? "may set off" : "sets off";
+  if (risks.every((r) => r.energy !== undefined)) {
+    // Eating a power structure is not a blast: the belly takes the charge, and the rules pay the eat figure.
+    // The rules clamp energy at the top, so the figure is what the battery can take.
+    const gain = (n) => (Math.min(n, Math.max(0, room)) > 0 ? `+${Math.min(n, Math.max(0, room))} energy` : "the battery is already full");
+    if (verb === "eat") return { text: `Eating it takes the ${structureWords(risks[0].type)[0]}'s charge: ${gain(RULES.reactorEatEnergy)}.`, good: true, lethal: false };
+    const total = risks.reduce((n, r) => n + r.energy, 0);
+    return { text: `${blastSubject(verb)} ${setsOff} ${names}: ${gain(total)}.`, good: true, lethal: false };
+  }
+  const lo = risks.reduce((n, r) => n + r.damage[0], 0);
+  const hi = risks.reduce((n, r) => n + r.damage[1], 0);
+  const lethal = risks.some((r) => r.lethal) || hi >= hp;
+  const range = `${rangeText([lo, hi])} damage${risks.length > 1 ? " in all" : ""}`;
+  let text = `${blastSubject(verb)} ${setsOff} ${names}: ${range}.`;
+  if (lethal) text += " It could be the last thing the monster does.";
+  return { text, good: false, lethal };
 }
 
 // The review of a finished game: a pure function of the final state and every event, in order.

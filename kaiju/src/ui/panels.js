@@ -7,7 +7,8 @@ import { STRUCTURES } from "../data/terrain.js";
 import { UNITS } from "../data/units.js";
 import { portrait, silhouette } from "../art/kaiju.js";
 import { STATE_FILL } from "../art/defs.js";
-import { partState } from "../rules.js";
+import { partState, reach, forecast, blastRisk, food } from "../rules.js";
+import { blastWords } from "../voice.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -154,12 +155,66 @@ export function logClass(e, playerId) {
   return "";
 }
 
-export function hint({ text, confirm, cancel, extra }) {
+// What a move, Wrong angle, stomp or eat onto this hex would set off (DESIGN §16.4): the words
+// from voice.js, or null when nothing goes up. kind: "move", "teleport", "stomp" or "eat".
+// Every number comes from blastRisk and forecast, so the words cannot differ from the result.
+export function blastPreview(state, kind, key, reachable = null) {
+  const hp = state.kaiju.parts.body.hp;
+  const room = state.kaiju.energyMax - state.kaiju.energy;
+  if (kind === "move") {
+    const all = reachable || reach(state);
+    const r = Object.hasOwn(all, key) ? all[key] : null;
+    const risks = r ? r.path.map((h) => blastRisk(state, h)).filter(Boolean) : [];
+    if (!risks.length) return null;
+    return blastWords(risks, risks.length === 1 && blastRisk(state, key) ? "move" : "cross", { hp, room });
+  }
+  const risk = blastRisk(state, key);
+  if (!risk) return null;
+  if (kind === "stomp") {
+    // A stomp only sets it off if it brings the structure down: 3 or 4 damage will not fell a whole plant.
+    const t = forecast(state, "stomp", key).targets.find((x) => x.kind === "structure");
+    if (!t || t.damage[1] < t.hp) return null;
+    return blastWords([risk], "stomp", { maybe: t.damage[0] < t.hp, hp, room });
+  }
+  // An edible unit on the hex is eaten first, and the structure stays (food in rules.js).
+  if (kind === "eat") {
+    const f = food(state, "kaiju", key);
+    if (!f || f.what !== "structure") return null;
+  }
+  return blastWords([risk], kind, { hp, room });
+}
+
+// The lit hexes that carry a mark: { danger: [keys], good: [keys] }. The board draws a triangle
+// on the first and a circle on the second, so neither depends on colour.
+export function blastHexes(state, kind, keys) {
+  const out = { danger: [], good: [] };
+  const all = kind === "move" ? reach(state) : null;
+  for (const key of keys) {
+    const w = blastPreview(state, kind, key, all);
+    if (w) (w.good ? out.good : out.danger).push(key);
+  }
+  return out;
+}
+
+export function hint({ text, confirm, cancel, extra, blast }) {
   let out = `<p class="hint-text">${esc(text)}</p><div class="hint-buttons">`;
   if (extra) out += extra;
   if (confirm) out += `<button type="button" class="btn primary" data-ui="confirm">${esc(confirm)} <kbd>Enter</kbd></button>`;
   if (cancel) out += `<button type="button" class="btn" data-ui="cancel">${esc(cancel)} <kbd>Esc</kbd></button>`;
-  return out + `</div>`;
+  out += `</div>`;
+  if (blast) out += blastNote(blast, "hint-blast");
+  return out;
+}
+
+function blastNote(b, cls) {
+  return `<p class="${cls} blast-note ${b.good ? "good" : "bad"}${b.lethal ? " lethal" : ""}">${blastBadge(b.good)}<span>${esc(b.text)}</span></p>`;
+}
+
+// The same shapes the board marks a hex with: a triangle for a risk, a circle for news worth having.
+function blastBadge(good) {
+  return good
+    ? `<svg class="blast-badge" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5v7M4.5 8h7" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>`
+    : `<svg class="blast-badge" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5L15 14H1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v4M8 11.6v.8" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>`;
 }
 
 function after(t) {
@@ -181,7 +236,7 @@ function range(d) {
   return d[0] === d[1] ? `${d[0]}` : `${d[0]}–${d[1]}`;
 }
 
-export function forecastSheet(fc, { name, note, panic = 0 }) {
+export function forecastSheet(fc, { name, note, panic = 0, blast = null }) {
   const costs = [`${fc.apCost} AP`];
   if (fc.energyCost) costs.push(`${fc.energyCost} energy`);
   const row = (t) => {
@@ -212,6 +267,8 @@ export function forecastSheet(fc, { name, note, panic = 0 }) {
   }
   return `<h2 class="tile-title">Forecast</h2><div class="sheet-body"><div class="fc-head"><b>${esc(name)}</b><span class="fc-cost">${costs.join(" · ")}</span></div>`
     + (note ? `<p class="fc-note">${esc(note)}</p>` : "") + table + `<p class="fc-return">${esc(back)}</p></div>`
+    // Outside the scrolling body, so a short sheet never pushes the warning out of sight.
+    + (blast ? blastNote(blast, "fc-blast") : "")
     + `<div class="sheet-buttons"><button type="button" class="btn primary" data-ui="confirm"${fc.targets.length ? "" : " disabled"}>Confirm <kbd>Enter</kbd></button>`
     + `<button type="button" class="btn" data-ui="cancel">Cancel <kbd>Esc</kbd></button></div>`;
 }
