@@ -278,6 +278,7 @@ export function setupFor(kaiju, cell, seed) {
     mutations: [],
     mission: resolveMission(cell.mission, { seed, target: cell.target }),
     target: cell.target || null,
+    rival: cell.rival || "",
     seed,
   };
 }
@@ -357,7 +358,11 @@ function main() {
     rampageTable(seeds, kaijus);
     return;
   }
-  const cells = cellArg ? CELLS.filter((c) => (c.target ? `${c.mission}:${c.target}` : c.mission) === cellArg) : CELLS;
+  // coast:<rival> fixes the rival; plain coast leaves it to the seed, as the page does.
+  const rivalArg = /^coast:(\w+)$/.exec(cellArg || "");
+  if (rivalArg && !Object.hasOwn(KAIJU, rivalArg[1])) throw new Error(`Unknown rival: ${rivalArg[1]}`);
+  const cells = rivalArg ? [{ mission: "coast", rival: rivalArg[1] }]
+    : cellArg ? CELLS.filter((c) => (c.target ? `${c.mission}:${c.target}` : c.mission) === cellArg) : CELLS;
   const pad = (s, n) => String(s).padEnd(n);
   console.log(`seeds ${seeds[0]}..${seeds[seeds.length - 1]}`);
   console.log(`${pad("kaiju", 10)} ${pad("mission", 15)} ${pad("win", 5)} ${pad("turns", 6)} ${pad("score", 7)} TV/V/D/L`);
@@ -365,7 +370,7 @@ function main() {
   const byCell = {};
   for (const id of kaijus) {
     for (const cell of cells) {
-      const name = cell.target ? `swathe:${cell.target}` : cell.mission;
+      const name = cell.target ? `swathe:${cell.target}` : cell.rival ? `coast:${cell.rival}` : cell.mission;
       const r = runCell(id, cell, seeds);
       byKaiju[id] = (byKaiju[id] || 0) + r.wins / cells.length;
       byCell[name] = (byCell[name] || 0) + r.wins / kaijus.length;
