@@ -8,7 +8,8 @@ The version is in `src/version.js`. It shows on the setup page ("Edition 0.2.0")
 
 - The fourth mission (id `rampage`): no goal and no clock, waves that grow, five objectives, the Three Deaths.
 - Every game ends with a review from *Cassette & Disk Monthly*, with **Copy as text**.
-- The version on the setup page and at the foot of the copied review (this PR, so later playtests name their build).
+- The version on the setup page and at the foot of the copied review (#26, so later playtests name their build).
+- The review counts only units as kills; a building walked through or eaten is not one (#26, from playtest 002).
 
 ## 0.1.0: the spike (#8 to #12, merged 10/21)
 

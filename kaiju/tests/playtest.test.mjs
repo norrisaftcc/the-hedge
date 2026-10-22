@@ -28,3 +28,15 @@ test("playtest 1's masthead follows from its seed: Issue 24, July 1981, on turn 
   s.turn = 2;
   assert.equal(review(s, []).issue, "Issue 24, July 1981");
 });
+
+// Playtest 002: "A low building came down. Of its kills, one went under its feet." The rules raise
+// crush and eat for structures as well as units; only units are kills.
+test("playtest 002: a building walked through or eaten is not a kill", () => {
+  const s = create({ kaiju: "dairengo", mutations: ["reserves", "bulk"], mission: resolveMission("coast", { seed: 39724 }), seed: 39724 });
+  const at = s.kaiju.at;
+  const ev = (k, what, type) => ({ k, actor: "kaiju", who: s.kaiju.id, at, what, type, turn: 1, text: "" });
+  const buildings = review(s, [ev("crush", "structure", "low"), ev("eat", "structure", "low")]).paragraphs[1];
+  assert.doesNotMatch(buildings, /kills/, buildings);
+  const units = review(s, [ev("crush", "unit", "infantry"), ev("eat", "unit", "tank")]).paragraphs[1];
+  assert.match(units, /kills|walked over one/, units);
+});

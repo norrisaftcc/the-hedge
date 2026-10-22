@@ -602,8 +602,9 @@ function gather(events) {
   for (const e of events) {
     if (e.k !== "refuse" && e.text) f.last = e;
     if (e.k === "destroyed" && e.points > 0) tally(e.what === "structure" ? f.structures : f.units, e.type);
-    else if (e.k === "crush" && e.actor === "kaiju") f.crushed += 1;
-    else if (e.k === "eat" && e.actor === "kaiju") f.eaten += 1;
+    // Only units are kills; the rules also raise crush and eat for structures.
+    else if (e.k === "crush" && e.actor === "kaiju" && e.what === "unit") f.crushed += 1;
+    else if (e.k === "eat" && e.actor === "kaiju" && e.what === "unit") f.eaten += 1;
     else if (e.k === "move" && e.teleport && e.actor === "kaiju") {
       // A teleport attack raises a move, not an attack, but it is still a use.
       const a = own(KAIJU, e.who, null)?.attacks.find((x) => x.id === e.attack);

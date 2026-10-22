@@ -38,3 +38,4 @@ Issues or findings this game led to. Leave empty; a maintainer fills it in.
 | # | Build | Monster | Mission | Result |
 |---|---|---|---|---|
 | [001](001-squamous-swathe.md) | before 0.2.0 | The Squamous One + gut, reserves, bulk | The Swathe (plant) | defeat, a thousand cuts, turn 2 of 15 |
+| [002](002-dairengo-coast.md) | before 0.2.0 | Dai-Rengō + reserves, bulk | The Coast vs the Squamous One | defeat, a thousand cuts, turn 8 of 16 |
