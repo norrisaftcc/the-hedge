@@ -424,6 +424,8 @@ function marks() {
   if (m.kind === "withdraw") return { ...out, tag: "Exit", tagAt: s.kaiju.at };
   out.lit = candidates();
   out.litKind = m.kind === "move" ? "move" : m.kind === "teleport" ? "teleport" : "target";
+  // A mark on each lit hex that would set off a power structure (DESIGN §16.4). Attacks other than a teleport break one safely.
+  if (m.kind === "move" || m.kind === "teleport" || m.kind === "stomp" || m.kind === "eat") out.blast = P.blastHexes(s, m.kind, out.lit);
   if (!p) return out;
   if (m.kind === "move") {
     const r = R.reach(s)[p];
@@ -498,6 +500,13 @@ function targetName(key) {
   return d.terrain ? d.terrain.name.toLowerCase() : "that";
 }
 
+// The words for the previewed hex, if the move, Wrong angle, stomp or eat would set off power.
+function blastNow() {
+  const m = game.mode;
+  if (!game.preview || !["move", "teleport", "stomp", "eat"].includes(m.kind)) return null;
+  return P.blastPreview(game.state, m.kind, game.preview);
+}
+
 function renderHint() {
   const el = $("hint");
   const s = game.state;
@@ -536,7 +545,7 @@ function renderHint() {
   } else if (m.kind === "withdraw") {
     h = { text: "Leave the map here? The mission ends, and the goal with it.", confirm: "Withdraw", cancel: "Stay" };
   }
-  el.innerHTML = P.hint(h);
+  el.innerHTML = P.hint({ ...h, blast: blastNow() });
 }
 
 function sheetWanted() {
@@ -568,7 +577,7 @@ function renderSheet() {
   }
   const opening = sheet.hidden;
   const focused = sheet.contains(document.activeElement) ? focusKey(document.activeElement) : null;
-  sheet.innerHTML = P.forecastSheet(fc, { name, note, panic });
+  sheet.innerHTML = P.forecastSheet(fc, { name, note, panic, blast: blastNow() });
   sheet.hidden = false;
   document.body.classList.add("sheet-open");
   if (opening) {

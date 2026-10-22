@@ -749,6 +749,7 @@ A new query in `rules.js`. For a hex holding a power structure it returns what s
   - most monsters: "Landing here sets off the power plant: 6–9 damage.", or "Stomping it sets off…" and "Eating it sets off…" for the other verbs;
   - lethal: the same, plus "It could be the last thing the monster does.";
   - `reactorBelly`: "Landing here sets off the power plant: +5 energy." This is good news, so it is not styled as a warning.
+- As built, from reading `rules.js`: a stomp sets off a power structure only when it brings the structure down (§6.1), so the page says nothing for a stomp on a whole plant (3–4 damage against 6 hp), and says "may set off" when only the top of the forecast fells it. A walk sets off every power hex on its path, so the words name all of them ("Walking there sets off the pylon and the power plant: 8–12 damage in all."). Eating a power structure is not a blast: a `reactorBelly` monster is told "+6 energy" (`RULES.reactorEatEnergy`), and no other monster can eat one.
 - Lit target hexes that would blast carry a small mark, so a player sees the risk before tapping.
 - The words and marks also read with no colour (UI-4).
 

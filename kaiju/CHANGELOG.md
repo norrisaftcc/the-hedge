@@ -4,6 +4,13 @@ The version is in `src/version.js`. It shows on the setup page as the edition an
 
 - **0.1.x** for the spike and fixes, **0.2.x** after Hex and the City, and so on: the middle number moves with each feature PR, the last with each fix.
 
+## 0.3.1: blast risk (#25, from playtest 001)
+
+- `blastRisk(state, key, actor)` in the rules: what setting off a power structure on a hex would do to the monster (the damage range, or energy for a reactorBelly monster), and whether it could be lethal.
+- The bot no longer treats the objective as safe to blast. It never takes a lethal blast, and takes a survivable one on the objective only when no attack could break the objective that turn. Radiosaur and Mekkasaurus Prime are unchanged.
+- The page warns before a move, Wrong angle, stomp or eat that would set off power: the hint bar and the forecast sheet say what it would do ("Landing here sets off the power plant: 6–9 damage."), and the lit hexes that would do it carry a triangle. For Radiosaur and Mekkasaurus Prime it is news, not a warning, and carries a circle. A stomp is flagged only when it can bring the structure down, and a walk names every power hex on its path.
+- The bot's win rate on swathe:plant moves; the rules and the pinned replays do not.
+
 ## 0.3.0: variants, other looks for the same rules (#20)
 
 - Four looks over the four monsters: Meow'thprrtep (the first, cat-headed Squamous drawing), Mekkasaurus Prime (Radiosaur in steel, on a battery), the Alien Colossus and Gekido-Oh (with a preset build).
