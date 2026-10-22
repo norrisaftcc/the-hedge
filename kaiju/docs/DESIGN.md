@@ -794,7 +794,7 @@ there is a legal command, or a free turn followed by one, that can damage the ri
 
 ### 17.3 Four directions, tried as data
 
-Each direction is built on a scratch branch and measured with the bot. Only the one recommended goes into this PR. Their numbers are in the PR, so the owner can choose another.
+Each direction was built on its own copy of 87bad43 and measured with the bot. Only the one recommended goes into this PR. The other three are kept as patches in `kaiju/docs/experiments/rival-reach/`, whose README gives the commands, so the owner can check their numbers and choose another.
 
 - **A. Stomp a kaiju.** `stompTargets` also offers an adjacent kaiju. A stomp on a kaiju is a kick or body check: `RULES.stompDamage` (3–4), 1 AP, and `kaijuAccuracy` (head damage, eldritch and cover apply). Crippled legs cannot stomp a kaiju. A stomp on a unit or structure is unchanged, so the pinned replays hold.
 - **B. A crippled part still swings, badly.** `attackBlocked` no longer refuses a crippled part. Its attacks take `RULES.crippledAccuracy` (−30) and do half damage (`RULES.crippledDamage`, rounded down, at least 1). This is the plainest reading of KAI-3.
