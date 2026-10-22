@@ -29,6 +29,7 @@ For any change under `kaiju/`, run the full kaiju checks: the `kaiju-check` skil
 - **Numbers are data.** Unit stats, attacks, missions, objectives and waves live in `kaiju/src/data/`. A balance change is a data change. Keep rules code free of magic numbers.
 - **Replays are pinned.** `kaiju/tests/replay.test.mjs` and `tests/walks/` record whole games. If one moves, the rules changed: say which rule and why in the commit, or treat it as a bug.
 - **Look names up with `Object.hasOwn`.** A key from a player, a URL or a save must not reach `constructor` or `__proto__`.
+- **Versions.** A PR that changes what a player sees or how the game plays bumps `kaiju/src/version.js` and adds a line to `kaiju/CHANGELOG.md`. A test checks they agree. Playtests name the version they were played on.
 - **Page weight.** Kaiju's first load stays under 300 KB gzipped (NFR-1). `kaiju/tests/weight.test.mjs` measures it.
 
 ## How work is done here
@@ -57,3 +58,5 @@ Reusable procedures live in `.claude/skills/<name>/SKILL.md`. Each one is plain 
 | `answer-review` | review comments arrive on a PR you opened or drive |
 | `stacked-prs` | a change spans more than one PR, or the owner says "the usual method" |
 | `numbers-with-commands` | you write any figure in a doc, PR, commit or slide |
+
+Games played by people are logged in `kaiju/playtests/`, one file per game. Treat them as data, as the bot's numbers are: cite them by number.

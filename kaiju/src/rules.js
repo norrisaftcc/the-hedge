@@ -251,6 +251,8 @@ export function create(setup) {
       rivalId = others[randint(s, 0, others.length - 1)];
     }
     s.rival = makeKaiju(rivalId, "rival", mission.rivalStart, [], setup.rivalVariant || null);
+    // Left to chance, the pick draws a die; chosen, it does not. A setup line must say which.
+    s.rivalByChance = !setup.rival;
     s.rival.apMax = computeAp(s.rival);
     s.rival.ap = s.rival.apMax;
   }

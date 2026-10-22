@@ -14,6 +14,7 @@ import { STRUCTURES, TERRAIN } from "./data/terrain.js";
 import { UNITS } from "./data/units.js";
 import { MUTATIONS, BUDGET } from "./data/mutations.js";
 import { DIR_NAMES, distance } from "./hex.js";
+import { VERSION, TITLE } from "./version.js";
 
 // How the log names each unit type.
 export const NOUNS = {
@@ -620,8 +621,9 @@ function gather(events) {
   for (const e of events) {
     if (e.k !== "refuse" && e.text) f.last = e;
     if (e.k === "destroyed" && e.points > 0) tally(e.what === "structure" ? f.structures : f.units, e.type);
-    else if (e.k === "crush" && e.actor === "kaiju") f.crushed += 1;
-    else if (e.k === "eat" && e.actor === "kaiju") f.eaten += 1;
+    // Only units are kills; the rules also raise crush and eat for structures.
+    else if (e.k === "crush" && e.actor === "kaiju" && e.what === "unit") f.crushed += 1;
+    else if (e.k === "eat" && e.actor === "kaiju" && e.what === "unit") f.eaten += 1;
     else if (e.k === "move" && e.teleport && e.actor === "kaiju") {
       // A teleport attack raises a move, not an attack, but it is still a use.
       const a = defOf(e.who, e.variant)?.attacks.find((x) => x.id === e.attack);
@@ -867,6 +869,21 @@ function verdictParagraph(state, f, quote, ratingText, v) {
 }
 
 // The review of a finished game: a pure function of the final state and every event, in order.
+// One plain line under the copied review: the build and the setup, in the balance bot's own
+// terms, so a playtest can be set up again. Outside the fiction, after a rule.
+export function setupLine(state) {
+  const k = state.kaiju;
+  const build = k.mutations.length ? ` + ${k.mutations.join("+")}` : "";
+  let mission = state.mission;
+  if (state.target) mission += `:${state.target}`;
+  if (state.objective && state.objective.kind === "none" && state.objective.id) mission += `:${state.objective.id}`;
+  // A chosen rival is part of the setup; one left to chance is not, since choosing it skips a die.
+  if (state.rival && !state.rivalByChance) mission += `:${state.rival.id}`;
+  const chance = state.rival && state.rivalByChance ? ` (rival left to chance: ${state.rival.id})` : "";
+  const who = k.variant ? `${k.id}:${k.variant}` : k.id;
+  return `${TITLE} ${VERSION}. Setup: ${who}${build}, ${mission}, seed ${state.seed}${chance}.`;
+}
+
 export function review(state, events = []) {
   const f = gather(events);
   const k = state.kaiju;
@@ -903,6 +920,6 @@ export function review(state, events = []) {
     stoppedParagraph(state, f, v),
     verdictParagraph(state, f, quote, ratingText, v),
   ];
-  const text = [`${MAGAZINE.toUpperCase()}. ${issue}.`, "", title, dek, byline, "", paragraphs.join("\n\n")].join("\n");
+  const text = [`${MAGAZINE.toUpperCase()}. ${issue}.`, "", title, dek, byline, "", paragraphs.join("\n\n"), "", "---", setupLine(state)].join("\n");
   return { magazine: MAGAZINE, issue, title, dek, byline, paragraphs, quote, stars, ratingText, text };
 }
