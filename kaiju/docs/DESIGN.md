@@ -610,7 +610,7 @@ export function review(state, events) // -> {magazine, issue, title, dek, byline
 
 ### 14.6 The page, the bot and the tests
 
-- **Setup.** A fourth mission card, *Rampage*. Its question is the objective: five choices, each with a one-line description.
+- **Setup.** A fourth mission card, *Hex and the City* (id `rampage`). Its question is the objective: five choices, each with a one-line description.
 - **Top bar.** "Turn 7" with no limit. The goal reads "No goal but the score: Destruction", naming the objective.
 - **End screen.** The front page as now, with the death named in the deck line. Below it, *The review*: the column set as a magazine page, with **Copy as text**. The copy uses `navigator.clipboard.writeText` inside `try`/`catch`, and falls back to selecting a read-only `<textarea>`. Every mission gets the review.
 - **The event record.** The page keeps every event of the game in order, cleared on Deploy, Again or New seed. `review` reads it.

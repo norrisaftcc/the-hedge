@@ -443,7 +443,7 @@ function renderHint() {
   }
   if (s.result) {
     const r = s.result;
-    const text = r.grade === "rampage" ? `The rampage is over. ${r.stars} ${r.stars === 1 ? "star" : "stars"}.` : `The mission is over. ${GRADE_LINE[r.grade]}.`;
+    const text = r.grade === "rampage" ? `Last call. ${r.stars} ${r.stars === 1 ? "star" : "stars"}.` : `The mission is over. ${GRADE_LINE[r.grade]}.`;
     el.innerHTML = P.hint({ text, confirm: "Read the papers" });
     return;
   }
