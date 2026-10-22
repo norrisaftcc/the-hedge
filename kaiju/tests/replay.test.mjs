@@ -2,7 +2,7 @@
 // gives a fixed final score, grade and death [PLT-6]. If the rules or the data change on purpose, record
 // again with the bot and change the numbers here in the same commit.
 // Commands are written one turn to a line: "m q,r" move, "a attack q,r" attack, "f dir" face,
-// "s q,r" stomp, "e q,r" eat, "r" roar, "w" withdraw, "end" end the turn.
+// "s q,r" stomp, "sl q,r" body slam, "e q,r" eat, "r" roar, "w" withdraw, "end" end the turn.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -42,20 +42,9 @@ const GAMES = [
       "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
-      "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
-      "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
-      "f 2 | a gaze 5,6 | end",
-      "end",
-      "r | f 3 | a gaze 4,7 | a gaze 4,7 | end",
-      "a gaze 4,7 | end",
-      "e 4,7 | a gaze 4,7 | end",
-      "end",
-      "e 4,7 | a gaze 4,7 | end",
-      "f 2 | a gaze 5,6 | a gaze 5,6 | end",
-      "end",
-      "a grab 6,6 | a grab 6,6 | end",
+      "sl 6,6 | sl 6,6 | sl 6,6 | end",
     ],
-    result: { grade: "draw", outcome: "time", turn: 16, death: null, score: { destruction: 20, units: 30, objective: 0, time: 0, parts: 200, total: 250 } },
+    result: { grade: "defeat", outcome: "fallen", turn: 5, death: "cuts", score: { destruction: 10, units: 10, objective: 0, time: 0, parts: 0, total: 20 } },
   },
   {
     // The bot never withdraws; the mad scientist arrives on turn 5 and the paralysis does the rest.
@@ -84,6 +73,7 @@ function decode(text) {
   if (op === "a") return { t: "attack", attack: a, target: b };
   if (op === "f") return { t: "face", dir: Number(a) };
   if (op === "s") return { t: "stomp", target: a };
+  if (op === "sl") return { t: "slam", target: a };
   if (op === "e") return { t: "eat", target: a };
   if (op === "r") return { t: "roar" };
   if (op === "w") return { t: "withdraw" };

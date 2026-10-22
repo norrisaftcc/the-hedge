@@ -14,7 +14,7 @@
 
 import { pathToFileURL } from "node:url";
 import * as H from "../src/hex.js";
-import { create, step, reach, blastRisk, attackTargets, forecast, stompTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
+import { create, step, reach, blastRisk, attackTargets, forecast, stompTargets, slamTargets, eatTargets, alive, rampageScore, starsFor, structureWeight, unitWeight } from "../src/rules.js";
 import { KAIJU, RULES } from "../src/data/kaiju.js";
 import { kaijuDef } from "../src/data/variants.js";
 import { UNITS } from "../src/data/units.js";
@@ -179,6 +179,13 @@ function allStrikes(state) {
         out.push({ cmds: [{ t: "stomp", target }], ...worth(state, f), ap: RULES.stompAp, stomp: target, ...rivalEffect(f) });
       }
     }
+    // The body slam (DESIGN 17.3 D): a kaiju next to the other. It needs no facing.
+    if (d === k.facing && k.ap >= RULES.slamAp) {
+      for (const target of slamTargets(state)) {
+        const f = forecast(state, "slam", target);
+        out.push({ cmds: [{ t: "slam", target }], ...worth(state, f), ap: RULES.slamAp, ...rivalEffect(f) });
+      }
+    }
   }
   return out;
 }
@@ -189,9 +196,9 @@ export function strikes(state) {
   return allStrikes(state).filter((s) => !s.stomp || blastAllowed(state, s.stomp));
 }
 
-// Whether the kaiju, next to a living rival, has a legal command that can damage it: an attack
-// or a stomp, after a free change of facing, whose forecast has a hit chance above 0 and a top
-// damage above 0. False when there is no living rival, none adjacent, or no AP or energy for it.
+// Whether the kaiju, next to a living rival, has a legal command that can damage it: an attack,
+// a stomp or a body slam, after a free change of facing, whose forecast has a hit chance above 0
+// and a top damage above 0. False when there is no living rival, none adjacent, or no AP or energy for it.
 // With fresh set, the kaiju is first given full AP and full energy, so the answer depends only on
 // its parts and its spent once-a-mission attacks, as the KAI-11 test asks (DESIGN 17.2).
 // A stomp that sets off a power structure is still legal, so it counts. (DESIGN 17.4)
