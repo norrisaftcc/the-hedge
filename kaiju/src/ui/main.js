@@ -34,7 +34,7 @@ const GRADE_LINE = {
   victory: "Victory",
   draw: "Draw",
   defeat: "Defeat",
-  rampage: "Rampage over",
+  rampage: "Last call",
 };
 const OUTCOME_LINE = {
   goal: "The objective fell.",
@@ -444,7 +444,7 @@ function renderHint() {
   }
   if (s.result) {
     const r = s.result;
-    const text = r.grade === "rampage" ? `The rampage is over. ${r.stars} ${r.stars === 1 ? "star" : "stars"}.` : `The mission is over. ${GRADE_LINE[r.grade]}.`;
+    const text = r.grade === "rampage" ? `Last call. ${r.stars} ${r.stars === 1 ? "star" : "stars"}.` : `The mission is over. ${GRADE_LINE[r.grade]}.`;
     el.innerHTML = P.hint({ text, confirm: "Read the papers" });
     return;
   }
