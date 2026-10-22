@@ -32,8 +32,9 @@ The monster fought: two Guard squads destroyed, two eaten. It fell on turn 2.
 - **The review identifies the game.** "Issue 24, July 1981" follows from seed 39724 on turn 2, and `tests/playtest.test.mjs` checks it.
 - **The Squamous One is fragile in a fight.**
   - It has armor 0. "Eldritch" is −10 accuracy for anything shooting at it, not damage reduction, and regen heals 1 a turn.
-  - Against tanks and artillery it takes about 1.7–1.9× the damage of an armor-2 monster, per shot.
-  - The bot replay of this setup took 20 damage on turn 1. Radiosaur took 11 on the same seed.
+  - Against tanks and artillery it takes about 1.7–1.9× the damage of an armor-2 monster, per shot. This is computed in #24 from `src/data/units.js`: hit chance × mean damage.
+  - The bot's game on this setup took 20 on turn 1 and fell on turn 3: `node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`.
+  - Radiosaur with no mutations took 11 on turn 1 on the same seed: `node kaiju/tools/damage.mjs 39724 radiosaur swathe:plant`.
   - Issue #24.
 - **The bot and a person disagree.**
   - The bot wins this matchup 60% of the time in 2.9 turns on average (`node kaiju/tools/sim.mjs 21-60 squamous swathe:plant`), by sprinting and teleporting. Radiosaur gets 65% in 4.0 turns.

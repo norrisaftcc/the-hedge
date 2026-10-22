@@ -56,6 +56,7 @@ src/ui/cutaway.js       the combat scene
 src/ui/settings.js      theme and cutaway mode, remembered
 tests/                  node --test; *.test.mjs
 tools/sim.mjs           a greedy bot that plays every monster and mission over a run of seeds: node kaiju/tools/sim.mjs
+tools/damage.mjs        one bot game: where the monster's damage came from, turn by turn
 ```
 
 **The events are the source of truth.** `rules.step` returns the new state and a list of events, each with its text and the data behind it. The page plays them in order: the board is patched from their data so the army can be seen moving, a run of fire from one unit type becomes one cutaway, and the log prints the text. Then the page settles on the state `step` returned. A seed and a list of commands replay a game exactly.

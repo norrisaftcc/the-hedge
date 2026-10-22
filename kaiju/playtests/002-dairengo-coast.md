@@ -1,7 +1,7 @@
 # 002: Dai-Rengō against the Squamous One, The Coast, defeat
 
 - **Build:** before 0.2.0. Main after #17, before the version was shown. The setup below is read from the review.
-- **Setup:** dairengo + reserves+bulk (one point unspent), coast vs squamous, seed 39724.
+- **Setup:** dairengo + reserves+bulk (one point unspent), coast:squamous (the rival chosen), seed 39724.
 - **Played:** 10/21
 - **By:** the maintainer
 
@@ -34,8 +34,8 @@ The second game on the same seed, this time with the Squamous One as the rival. 
 - **The masthead follows from the seed.** "Issue 24, January 1981" is seed 39724 on turn 8.
 - **The Squamous One is strong as a rival and weak as the player's monster.** Compare 001, same seed. The AI rival keeps its distance with Tentacle grab (range 2) and feeds on the army's panic. A person playing it walks in and trades blows.
 - **The bot disagrees again, in the other direction.**
-  - On this setup the bot's Dai-Rengō wins in 5 turns, taking 16 damage, 6 of it from the rival.
-  - Over seeds 21–60 with no mutations, Dai-Rengō against a Squamous rival wins 20 of 40. The median game lasts 7 turns, and the rival deals a median 59% of the damage taken.
-  - The script was a one-off and is not kept. These are bot numbers, for comparison only.
+  - On this setup the bot's Dai-Rengō wins on turn 5, taking 16 damage, 6 of it from the rival: `node kaiju/tools/damage.mjs 39724 dairengo+reserves+bulk coast:squamous`.
+  - Over seeds 21–60 with no mutations, Dai-Rengō against a Squamous rival wins 50% (20 of 40) in 6.9 turns on average: `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous`.
+  - These are bot numbers, for comparison only.
   - **The bot played a different game.** It attacks whatever pays best, the army included. The player spared the army and fought only the monster. That is why the results differ, and why #27 asks for a "hero" mode in the bot.
 - **Related issues.** #24 (a squishy, regenerating monster) covers the Squamous One's toughness as the player's monster. A change there also changes it as a rival, so this game is a case to keep: the rival should stay a threat. Also #16 (the Squamous One on the Coast).

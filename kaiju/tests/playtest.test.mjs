@@ -12,8 +12,10 @@ test("the setup line names the build, the monster, the mission and the seed", ()
   assert.equal(setupLine(swathe()), `${TITLE} ${VERSION}. Setup: squamous + gut+reserves+bulk, swathe:plant, seed 39724.`);
   const r = create({ kaiju: "radiosaur", mutations: [], mission: resolveMission("rampage", { seed: 5 }), objective: "killer", seed: 5 });
   assert.equal(setupLine(r), `${TITLE} ${VERSION}. Setup: radiosaur, rampage:killer, seed 5.`);
-  const c = create({ kaiju: "thalassor", mutations: [], mission: resolveMission("coast", { seed: 7 }), seed: 7 });
-  assert.match(setupLine(c), new RegExp(`^${TITLE} ${VERSION.replace(/\./g, "\\.")}\\. Setup: thalassor, coast vs (radiosaur|squamous|dairengo), seed 7\\.$`));
+  const chance = create({ kaiju: "thalassor", mutations: [], mission: resolveMission("coast", { seed: 7 }), seed: 7 });
+  assert.equal(setupLine(chance), `${TITLE} ${VERSION}. Setup: thalassor, coast, seed 7 (rival left to chance: ${chance.rival.id}).`);
+  const chosen = create({ kaiju: "thalassor", mutations: [], mission: resolveMission("coast", { seed: 7 }), rival: chance.rival.id, seed: 7 });
+  assert.equal(setupLine(chosen), `${TITLE} ${VERSION}. Setup: thalassor, coast:${chance.rival.id}, seed 7.`);
 });
 
 test("the copied review ends with the setup line, after a rule", () => {
@@ -39,4 +41,13 @@ test("playtest 002: a building walked through or eaten is not a kill", () => {
   assert.doesNotMatch(buildings, /kills/, buildings);
   const units = review(s, [ev("crush", "unit", "infantry"), ev("eat", "unit", "tank")]).paragraphs[1];
   assert.match(units, /kills|walked over one/, units);
+});
+
+// Review of #26: choosing a rival skips the die that chance would roll, so "vs squamous" and
+// "left to chance, got squamous" are different games. The line must tell them apart.
+test("a rival left to chance and the same rival chosen are different games, and the lines differ", () => {
+  const chance = create({ kaiju: "thalassor", mutations: [], mission: resolveMission("coast", { seed: 7 }), seed: 7 });
+  const chosen = create({ kaiju: "thalassor", mutations: [], mission: resolveMission("coast", { seed: 7 }), rival: chance.rival.id, seed: 7 });
+  assert.notEqual(chance.rng, chosen.rng, "the dice differ");
+  assert.notEqual(setupLine(chance), setupLine(chosen));
 });

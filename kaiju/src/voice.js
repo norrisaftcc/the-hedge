@@ -858,8 +858,10 @@ export function setupLine(state) {
   let mission = state.mission;
   if (state.target) mission += `:${state.target}`;
   if (state.objective && state.objective.kind === "none" && state.objective.id) mission += `:${state.objective.id}`;
-  const rival = state.rival ? ` vs ${state.rival.id}` : "";
-  return `${TITLE} ${VERSION}. Setup: ${k.id}${build}, ${mission}${rival}, seed ${state.seed}.`;
+  // A chosen rival is part of the setup; one left to chance is not, since choosing it skips a die.
+  if (state.rival && !state.rivalByChance) mission += `:${state.rival.id}`;
+  const chance = state.rival && state.rivalByChance ? ` (rival left to chance: ${state.rival.id})` : "";
+  return `${TITLE} ${VERSION}. Setup: ${k.id}${build}, ${mission}, seed ${state.seed}${chance}.`;
 }
 
 export function review(state, events = []) {

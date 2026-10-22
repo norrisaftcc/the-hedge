@@ -10,6 +10,7 @@ The version is in `src/version.js`. It shows on the setup page ("Edition 0.2.0")
 - The working title, **Kaiju Dashboard**, on the tab and the masthead (#23).
 - Every game ends with a review from *Cassette & Disk Monthly*, with **Copy as text**.
 - The version on the setup page and at the foot of the copied review (#26, so later playtests name their build).
+- The copied review's setup line says whether the Coast's rival was chosen (`coast:squamous`) or left to chance, since the two are different games. The bot takes `coast:<rival>` too, and `tools/damage.mjs` shows one game's damage by turn (#26).
 - The review counts only units as kills; a building walked through or eaten is not one (#26, from playtest 002).
 
 ## 0.1.0: the spike (#8 to #12, merged 10/21)

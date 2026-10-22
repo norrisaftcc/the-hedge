@@ -5,7 +5,7 @@ Games played by people, kept as data. The balance bot (`tools/sim.mjs`) plays ba
 ## Add a game
 
 1. Play to the end. Press **Copy as text** under the review.
-2. Make a file here named `NNN-monster-mission.md`, with the next free number: `002-radiosaur-coast.md`.
+2. Make a file here named `NNN-monster-mission.md`, with the next free number: `003-radiosaur-coast.md`.
 3. Use the template below. Paste the review as it was copied. Its last line names the build and the setup, so the game can be set up again.
 4. Add what you tried and how it felt. A sentence is enough. Leave your name off if you like; never name anyone else.
 
