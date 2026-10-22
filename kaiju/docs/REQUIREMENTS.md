@@ -97,7 +97,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | KAI-4 | M | A hit from the kaiju's rear arc (the three hex sides behind it) deals +1 damage. (Car Wars facing, simplified.) |
 | KAI-5 | M | Energy powers special attacks. Each kaiju refills energy by its own rule (eating, standing in water, panic around it, a power source). |
 | KAI-6 | M | Hunger rises by one each turn. At high hunger the kaiju loses 1 AP. Eating a unit or a populated structure lowers hunger. The robot has no hunger; it has a battery that drains instead. |
-| KAI-7 | M | Actions: move, turn, attack (per attack type), stomp (destroy the structure or units in an adjacent hex), eat, roar (panic test for nearby units), end phase. |
+| KAI-7 | M | Actions: move, turn, attack (per attack type), stomp (destroy the structure or units in an adjacent hex), body slam (hurt an adjacent kaiju, KAI-11), eat, roar (panic test for nearby units), end phase. |
 | KAI-8 | S | Mutations change stats or add an ability: thicker hide, longer breath, regeneration, extra AP, wider roar, and so on. |
 | KAI-9 | S | Berserk: when hunger reaches its maximum, the kaiju's next phase is played for it: it goes for the nearest food and eats. Then hunger drops. |
 | KAI-10 | S | Power plants and pylons explode when the kaiju enters, stomps or eats them, dealing heavy damage to it. The atomic tyrannosaurus takes the blast as energy instead. Ranged attacks destroy them safely. |

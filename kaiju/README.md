@@ -21,7 +21,7 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000/`. Any static server will do; opening `index.html` straight from disk will not, because browsers refuse modules from `file://`. `art.html` is a gallery of every drawing in every damage state.
 
-The page works one-thumbed on a phone in portrait and with keys on a desktop: `1` move, `2`–`4` attacks, `5` stomp, `6` eat, `7` withdraw, `F` face, `R` roar, `E` end turn, `U` undo a move, arrow keys to step through targets, `Enter` to confirm, `Esc` to cancel. The theme follows the system unless you choose; the choice and the cutaway setting are remembered in that browser.
+The page works one-thumbed on a phone in portrait and with keys on a desktop: `1` move, `2`–`4` attacks, `5` stomp, `6` eat, `7` withdraw, `8` body slam, `F` face, `R` roar, `E` end turn, `U` undo a move, arrow keys to step through targets, `Enter` to confirm, `Esc` to cancel. The theme follows the system unless you choose; the choice and the cutaway setting are remembered in that browser.
 
 ## Versions and playtests
 

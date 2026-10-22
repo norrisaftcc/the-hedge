@@ -23,7 +23,8 @@ function field(look, rival) {
 
 // Every case that fails, as a short description.
 // hungry: the kaiju is also starving (hunger at its maximum), which costs AP.
-export function failures({ cripple = PARTS.map((p) => [p]), rivals = Object.keys(KAIJU), hungry = false } = {}) {
+// drained: a battery monster is also out of charge, which costs AP.
+export function failures({ cripple = PARTS.map((p) => [p]), rivals = Object.keys(KAIJU), hungry = false, drained = false } = {}) {
   const bad = [];
   for (const look of LOOKS) {
     const def = kaijuDef(look.id, look.variant);
@@ -33,6 +34,7 @@ export function failures({ cripple = PARTS.map((p) => [p]), rivals = Object.keys
           const s = field(look, rival);
           for (const p of parts) s.kaiju.parts[p].hp = 0;
           if (hungry && s.kaiju.hunger !== null) s.kaiju.hunger = s.kaiju.hungerMax;
+          if (drained && def.energy.rule === "battery") s.kaiju.energy = 0;
           // Full AP as the rules give it with these parts: crippled legs cost AP, with a floor of 1.
           s.kaiju.apMax = computeAp(s.kaiju);
           for (const a of def.attacks) if (a.effects.oncePerMission) s.kaiju.used[a.id] = true;
@@ -55,8 +57,14 @@ test("KAI-11: every kaiju and look can hurt an adjacent rival with any one part 
 });
 
 // Not yet true: a kaiju with crippled legs that is also starving has 1 AP (the floor), and a slam
-// costs 2. It is the same case as the Squamous One's arms, one level down.
+// costs 2. It is the same case as the Squamous One's arms, one level down. (DESIGN 17.8)
 test("KAI-11 (open): crippled legs and hunger leave 1 AP, and a 2 AP slam cannot be used", { todo: true }, () => {
   const bad = failures({ cripple: [["legs"]], hungry: true });
+  assert.deepEqual(bad.slice(0, 8), [], `${bad.length} cases fail`);
+});
+
+// The same with a battery monster out of charge: crippled legs and an empty battery leave 1 AP.
+test("KAI-11 (open): crippled legs and an empty battery leave 1 AP, and a 2 AP slam cannot be used", { todo: true }, () => {
+  const bad = failures({ cripple: [["legs"]], drained: true });
   assert.deepEqual(bad.slice(0, 8), [], `${bad.length} cases fail`);
 });
