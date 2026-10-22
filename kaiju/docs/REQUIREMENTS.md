@@ -101,6 +101,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | KAI-8 | S | Mutations change stats or add an ability: thicker hide, longer breath, regeneration, extra AP, wider roar, and so on. |
 | KAI-9 | S | Berserk: when hunger reaches its maximum, the kaiju's next phase is played for it: it goes for the nearest food and eats. Then hunger drops. |
 | KAI-10 | S | Power plants and pylons explode when the kaiju enters, stomps or eats them, dealing heavy damage to it. The atomic tyrannosaurus takes the blast as energy instead. Ranged attacks destroy them safely. |
+| KAI-11 | M | A living monster can always hurt an adjacent rival kaiju. No single crippled part, and no spent once-a-mission attack, leaves it without a damaging action. (Issue #27, playtest 002.) |
 
 ### 5.4 Defense forces and rival kaiju
 

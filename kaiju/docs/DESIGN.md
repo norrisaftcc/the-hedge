@@ -761,3 +761,76 @@ A new query in `rules.js`. For a hex holding a power structure it returns what s
 - **The page:** the forecast for a move or stomp onto a power hex reports the range, and the result then matches it.
 - **Balance, before and after:** `node kaiju/tools/sim.mjs 1-20` and `node kaiju/tools/sim.mjs 21-60 squamous swathe:plant`. The pinned replays use recorded commands, so they do not move. The bot's numbers do.
 - **Version** 0.3.1, with a CHANGELOG entry.
+
+## 17. Rival reach: no living monster is left unable to fight [KAI-11; issue #27]
+
+### 17.1 What playtest 002 showed
+
+Playtest 002 was Dai-Rengō against the Squamous One on the Coast, seed 39724. The player fought the rival and left the army alone. Dai-Rengō used Final formation on turn 3. Its arms were crippled after that, and it fell on turn 8 with nothing it could do to the rival.
+
+The cause is the data, not the dice. A crippled part's attacks are refused (`attackBlocked`), and `stompTargets` allows structures and ground units only. Damaging attacks by part (`src/data/kaiju.js`):
+
+| Kaiju | Damaging attacks |
+|---|---|
+| Radiosaur | head (Bite, Atomic breath), aux (Tail sweep) |
+| Thalassor | arms (Fist, Tidal surge), aux (Trident cast) |
+| The Squamous One | arms only (Tentacle grab) |
+| Dai-Rengō | arms (Rocket punch, Beam sword), body (Final formation, once a mission) |
+
+So the Squamous One with its feelers crippled, or Dai-Rengō with its arms crippled after its finisher, is alive and cannot hurt the rival. On the Coast the rival is the objective. KAI-3 says a crippled part is "at its worst", not that the monster stops playing.
+
+### 17.2 The test [KAI-11]
+
+For every kaiju and every variant (`kaijuDef(id, variant)`):
+- with any one of head, arms, legs or aux crippled (hp 0);
+- with its once-a-mission attacks spent;
+- with full AP and full energy;
+- with the rival in an adjacent hex, in any of the six directions;
+
+there is a legal command, or a free turn followed by one, that can damage the rival: a forecast with a hit chance above 0 and a top damage above 0. The body is not in the list, since a body at 0 ends the mission.
+
+### 17.3 Four directions, tried as data
+
+Each direction is built on a scratch branch and measured with the bot. Only the one recommended goes into this PR. Their numbers are in the PR, so the owner can choose another.
+
+- **A. Stomp a kaiju.** `stompTargets` also offers an adjacent kaiju. A stomp on a kaiju is a kick or body check: `RULES.stompDamage` (3–4), 1 AP, and `kaijuAccuracy` (head damage, eldritch and cover apply). Crippled legs cannot stomp a kaiju. A stomp on a unit or structure is unchanged, so the pinned replays hold.
+- **B. A crippled part still swings, badly.** `attackBlocked` no longer refuses a crippled part. Its attacks take `RULES.crippledAccuracy` (−30) and do half damage (`RULES.crippledDamage`, rounded down, at least 1). This is the plainest reading of KAI-3.
+- **C. A second damaging part for the two that lack one.** This is data only:
+  - Dai-Rengō gains a thruster ram (aux, melee, 2 AP, 1 energy, 2–4).
+  - The Squamous One's gaze does 1–2 damage as well as its panic.
+  - This changes each monster's character.
+- **D. A body slam for everyone.** A rules-level action like stomp, using the body: 2 AP, 2–4 damage, accuracy 80, an adjacent kaiju only. The body cannot be crippled, so the slam is always there.
+
+The rival plays by the same rules. For A and D, `planRival` (`src/ai.js`) learns the new action, so the change is not the player's alone.
+
+### 17.4 The bot: a hero mode
+
+The bot attacks whatever pays best, the army included. That is not how a person played playtest 002. So `tools/sim.mjs` gains a hero mode, set by the cell `coast:<rival>:hero`:
+- it strikes only what damages the rival;
+- it moves toward the rival;
+- it still eats when hungry, since hunger costs AP;
+- it never targets units or structures for their own sake.
+
+The bot also counts **stuck turns**: turns in which the player's monster was next to the rival with AP left and had no legal damaging action against it. Before this change, stuck turns are what playtest 002 felt like. After it, the KAI-11 test says they cannot happen.
+
+### 17.5 Measuring
+
+For each direction, and for the code before any of them:
+- `node kaiju/tools/sim.mjs 1-20 all coast:<rival>` and `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`, for each of the four rivals;
+- the same on seeds 21–60, held out;
+- `node kaiju/tools/sim.mjs 1-20` for the other missions, which should barely move.
+
+These are the bot's numbers, a floor rather than a forecast.
+
+### 17.6 Choosing
+
+1. It passes the §17.2 test for every kaiju and variant.
+2. It changes the four characters least. A rule shared by all is better than new attacks for two.
+3. It moves the non-Coast numbers least.
+4. It brings the hero bot's stuck turns to 0.
+
+### 17.7 The page, motion and version
+
+- **The page:** a stomp on a kaiju (A) or a slam (D) shows in the forecast sheet like any attack. A crippled attack (B) is no longer greyed out. Its button says "crippled" and the sheet shows the penalty.
+- **Motion:** a stomp or slam on a kaiju needs a cutaway (#22). Until #22 lands, it uses the plain hit.
+- **Version:** 0.4.0, since this is a balance change with a feature behind it. It gets a CHANGELOG entry.
