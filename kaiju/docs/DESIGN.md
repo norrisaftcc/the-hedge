@@ -713,3 +713,50 @@ It may not add or remove a part or an attack. The rules already key the battery,
   - The log, the paper's headline and the review name the variant, and never the base, for a variant game.
   - Every look draws: portrait, silhouette (with five `data-part` paths), figure and token, as well-formed SVG.
 - The pinned replays do not move. NFR-1's weight test still passes.
+
+## 16. Blast risk: the bot weighs it, the page warns first [KAI-10; issue #25]
+
+### 16.1 What playtest 001 showed
+
+The bot already avoided power structures, with one exception: the mission's **objective**. `moveCommand` and `strikes` in `tools/sim.mjs` both let the bot enter, teleport onto or stomp `state.objective.at`. On the Swathe with the power plant as the target, the bot's Squamous One teleported onto the plant with Wrong angle, broke it and died of the blast (playtest 001, seed 39724). Any attack but a stomp breaks a power structure safely (§6, `strikeStructure`), so the bot had a safe way it did not take.
+
+The rules stay as they are: entering, stomping or eating a power structure sets it off.
+
+### 16.2 The rules: `blastRisk(state, key, actor = "kaiju")`
+
+A new query in `rules.js`. For a hex holding a power structure it returns what setting it off would do to this actor; otherwise `null`.
+
+```js
+{ type: "plant", name: "Power plant", damage: [6, 9] }        // most monsters
+{ type: "plant", name: "Power plant", energy: 5 }             // a monster with reactorBelly
+```
+
+- `damage` is `STRUCTURES[type].blast`; `energy` is `RULES.reactorBlastEnergy`. Both come from the data the rules use, so the warning cannot disagree with the result.
+- `lethal: true` is added when the top of the blast range could finish the monster: it is at least the body's hit points. A blast hits a rolled part and can spill to the body, so this is the cautious reading.
+
+### 16.3 The bot
+
+- **The objective is no longer exempt.** Before it enters, teleports onto or stomps a power structure, the bot asks `blastRisk`:
+  - a lethal blast is never taken;
+  - a survivable blast on the objective is taken only when no safe way to break the objective is in reach this turn. A safe way is any attack, not a stomp, whose forecast can reach the objective.
+- **Safe first.** When the objective is a power structure, the bot values attacks on it above entering or stomping it.
+- **A monster with `reactorBelly` (Radiosaur, Mekkasaurus Prime) is unchanged.** It wants the blast.
+- Eating a power structure follows the same rule (`eatCommand` already refuses non-objective power).
+
+### 16.4 The page
+
+- When the player picks a **move, Wrong angle, stomp or eat** target that would set off a power structure, the hint bar and the forecast sheet (where one shows) say so before the player confirms. The words come from `voice.js`:
+  - most monsters: "Landing here sets off the power plant: 6–9 damage.", or "Stomping it sets off…" and "Eating it sets off…" for the other verbs;
+  - lethal: the same, plus "It could be the last thing the monster does.";
+  - `reactorBelly`: "Landing here sets off the power plant: +5 energy." This is good news, so it is not styled as a warning.
+- Lit target hexes that would blast carry a small mark, so a player sees the risk before tapping.
+- The words and marks also read with no colour (UI-4).
+
+### 16.5 Tests and numbers
+
+- `blastRisk` for a plant, a pylon, a plain hex, a `reactorBelly` monster, and the lethal threshold.
+- **The bot, playtest 001's setup:** on seed 39724, Squamous with gut, reserves and bulk on swathe:plant, the bot does not take the blast. Run `node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant` before and after.
+- **The bot still feeds Radiosaur:** it still enters power structures when that pays.
+- **The page:** the forecast for a move or stomp onto a power hex reports the range, and the result then matches it.
+- **Balance, before and after:** `node kaiju/tools/sim.mjs 1-20` and `node kaiju/tools/sim.mjs 21-60 squamous swathe:plant`. The pinned replays use recorded commands, so they do not move. The bot's numbers do.
+- **Version** 0.3.1, with a CHANGELOG entry.
