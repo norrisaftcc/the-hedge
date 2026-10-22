@@ -9,7 +9,7 @@ import { create, step, forecast, phaseChance, replayEvents } from "../src/rules.
 import { RULES, KAIJU, PART_SLOTS } from "../src/data/kaiju.js";
 import { kaijuDef, VARIANTS } from "../src/data/variants.js";
 import { say, LINES } from "../src/voice.js";
-import { playBot, setupFor } from "../tools/sim.mjs";
+import { playBot, setupFor, worth, rivalEffect } from "../tools/sim.mjs";
 import { blank, paint, putUnit, rigDice, setup, at } from "./fixtures.mjs";
 
 // An open field, the player's kaiju at the start hex, the rival one hex to its east.
@@ -250,4 +250,36 @@ test("a phased hit in a whole bot game: damage 0, never on a blast, only against
     }
   }
   assert.ok(phased > 0, "some hit phased out in these games");
+});
+
+// Review of the build (#24): the balance bot plays the player's kaiju, and it must value a blow at a
+// rival with the passive as the rules do: the hit chance, less the share of landed hits that pass through.
+test("the balance bot counts the phase chance in what a blow at a Squamous rival is worth", () => {
+  const s = pair("radiosaur", "squamous");
+  const f = forecast(s, "slam", s.rival.at);
+  assert.equal(f.targets[0].phase, RULES.phaseOut);
+  const solid = { ...f, targets: f.targets.map((t) => ({ ...t, phase: 0 })) };
+  const keep = 1 - RULES.phaseOut / 100;
+  assert.ok(rivalEffect(solid).expected > 0);
+  assert.ok(Math.abs(rivalEffect(f).expected - rivalEffect(solid).expected * keep) < 1e-9, "rivalEffect scales by 1 - phase");
+  assert.equal(rivalEffect(f).hurts, true, "a phased blow still counts as one that can hurt (canHurtRival)");
+  assert.ok(Math.abs(worth(s, f).value - worth(s, solid).value * keep) < 1e-9, "worth scales by 1 - phase");
+  assert.equal(worth(s, f).goal, true);
+});
+
+// Review of the build (#24): what a phased ray does to the lingering paralysis is a decision, and it is
+// pinned here. A hit that passes through does nothing at all, so the ray adds no lingering (DESIGN 18.3).
+test("a mad scientist's ray that passes through adds no lingering; one that lands solid adds 1", () => {
+  const seen = {};
+  for (let seed = 1; seed < 300 && !(seen.solid && seen.phased); seed++) {
+    const s = create(setup(blank(), { kaiju: "squamous" }));
+    putUnit(s, "scientist", H.ray(s.kaiju.at, 3, 2)[1]);
+    s.rng = seed;
+    const out = step(s, { t: "end" });
+    const e = out.events.find((x) => x.k === "attack" && x.attacker.type === "scientist");
+    if (!e || !e.hit) continue;
+    seen[e.phased ? "phased" : "solid"] = out.state.kaiju.lingering;
+  }
+  assert.equal(seen.solid, 1, "a solid ray adds 1");
+  assert.equal(seen.phased, 0, "a ray that passes through adds nothing");
 });

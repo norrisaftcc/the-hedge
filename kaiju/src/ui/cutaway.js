@@ -132,7 +132,8 @@ export function buildScene(group, before, after, events) {
   let note = "";
   if (shots > 1) note = hits === shots ? `${shots} hits` : `${hits + phased} of ${shots} hit`;
   if (phased) note = (note ? note + ", " : "") + (phased === 1 ? "1 passed through" : `${phased} passed through`);
-  if (group.events.some((e) => e.hit && e.rear)) note = (note ? note + ", " : "") + "from behind";
+  // A phased hit does no damage, so a rear bonus did nothing.
+  if (group.events.some((e) => e.hit && e.rear && !e.phased)) note = (note ? note + ", " : "") + "from behind";
   return {
     title: cap(e0.attack.name),
     note,

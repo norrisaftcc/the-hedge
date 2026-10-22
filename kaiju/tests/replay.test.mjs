@@ -51,6 +51,22 @@ const GAMES = [
     result: { grade: "total victory", outcome: "goal", turn: 7, death: null, score: { destruction: 20, units: 10, objective: 500, time: 180, parts: 250, total: 960 } },
   },
   {
+    // Pins the body slam in a whole game (v0.4.0, DESIGN 17), against a rival that phases out (v0.5.0).
+    // Recorded with the bot: playBot(setupFor("dairengo", { mission: "coast", rival: "squamous" }, 7)) in tools/sim.mjs.
+    name: "coast slam",
+    setup: { kaiju: "dairengo", mission: "coast", target: null, rival: "squamous", seed: 7 },
+    commands: [
+      "m 5,7 | end",
+      "a finish 6,6 | a punch 6,6 | end",
+      "sl 6,6 | sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | r | end",
+    ],
+    result: { grade: "victory", outcome: "goal", turn: 7, death: null, score: { destruction: 10, units: 0, objective: 500, time: 180, parts: 200, total: 890 } },
+  },
+  {
     // The bot never withdraws; the mad scientist arrives on turn 5 and the paralysis does the rest.
     name: "rampage",
     setup: { kaiju: "radiosaur", mission: "rampage", objective: "destruction", seed: 7 },
@@ -145,3 +161,17 @@ for (const game of GAMES) {
     assert.match(h, /^[^;]+; [A-Z ]+ '[^']+'$/, `headline: ${h}`);
   });
 }
+
+// A body slam must stay in the pinned games: the rules for it are in slam.test.mjs, and this keeps a whole game
+// that uses it, by the player and by the rival, with a slam that passed through as well.
+test("replay: the pinned games include body slams, by both kaiju, and one that passed through", () => {
+  const slams = [];
+  for (const game of GAMES) {
+    for (const e of replayEvents(setupOf(game), commandsOf(game)).events) {
+      if (e.k === "attack" && e.attack.id === "slam") slams.push(e);
+    }
+  }
+  assert.ok(slams.some((e) => e.attacker.side === "kaiju" && e.hit && !e.phased), "the player's slam lands");
+  assert.ok(slams.some((e) => e.attacker.side === "rival" && e.hit), "the rival's slam lands");
+  assert.ok(slams.some((e) => e.phased), "a slam passes through the Squamous One");
+});

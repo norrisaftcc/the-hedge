@@ -63,3 +63,33 @@ test("the cutaway reads a phased hit as THROUGH, not as a miss and not as a woun
   assert.equal(scene.result.hit, false);
   assert.notEqual(scene.result.text, "MISS");
 });
+
+// Review of the build (#24): a phased hit does no damage, so a rear bonus did nothing, and the note must
+// not say "from behind" as if it had. A solid hit from behind still says so.
+test("the cutaway does not say a THROUGH hit came from behind; a solid hit from behind still does", () => {
+  const note = (facing, dice) => {
+    const s = pair("radiosaur", "squamous");
+    s.rival.facing = facing;
+    s.rng = dice;
+    const out = step(s, bite(s));
+    const [e] = attacks(out.events);
+    return { e, scene: buildScene({ events: [e], start: 0, end: 0 }, s, out.state, out.events) };
+  };
+  let rearPhased = 0;
+  let rearSolid = 0;
+  for (let facing = 0; facing < 6; facing++) {
+    const through = note(facing, hitThenPhase());
+    if (through.e.rear) {
+      rearPhased += 1;
+      assert.equal(through.scene.result.text, "THROUGH");
+      assert.doesNotMatch(through.scene.note, /from behind/, `facing ${facing}: "${through.scene.note}"`);
+      assert.match(through.scene.note, /1 passed through/);
+    }
+    const solid = note(facing, rigDice((m) => m.roll(100) <= 10 && m.roll(100) > RULES.phaseOut));
+    if (solid.e.rear) {
+      rearSolid += 1;
+      assert.match(solid.scene.note, /from behind/, `facing ${facing}`);
+    }
+  }
+  assert.ok(rearPhased > 0 && rearSolid > 0, "some facing puts the bite behind the Squamous One");
+});
