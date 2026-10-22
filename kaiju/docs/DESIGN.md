@@ -864,3 +864,55 @@ The hero bot meets both: the `stuck0` column of `node kaiju/tools/sim.mjs 1-20 a
 - slam costs 1 when the kaiju has 1 AP left (a data change, `slamAp`, and a rule);
 - hunger never takes the last AP;
 - leave it, since a starving monster with crippled legs is meant to be in trouble, and say so in KAI-11.
+
+## 18. Soft body: the Squamous One lasts by another route [KAI-12; issue #24]
+
+### 18.1 What playtest 001 showed
+
+Playtest 001 was the Squamous One with iron gut, deep reserves and bulk, on the Swathe, seed 39724. It took 39 damage and fell on turn 2. The other three monsters last by **armor**: each hit loses points. The Squamous One has armor 0. It has **eldritch**, −10 accuracy for anything that shoots at it, and **regen**, 1 hit point a turn on its worst part. Expected damage per shot, by the computation in #24 (hit chance × mean of `max(1, roll − armor)`, from `src/data/units.js` and §6.2):
+
+| Shooter (damage, accuracy) | Squamous today | Armor 2 |
+|---|---|---|
+| Tank (2–4, 65) | 1.65 | 0.87 |
+| Artillery (3–5, 65) | 2.20 | 1.30 |
+| Infantry (1–2, 60) | 0.75 | 0.60 |
+
+The heavy guns do about twice as much to it. The bot hides this because it sprints with Wrong angle and avoids fights (#24). A person fights.
+
+### 18.2 The aim
+
+A soft, regrowing horror lasts as long as bronze, steel or scales, by a different route. Its weakness is one a player can learn. It is not a trap. Meow'thprrtep, the variant, plays by the same rules (§15).
+
+### 18.3 Directions, tried as data
+
+Each is a passive in `src/data/kaiju.js`, with its numbers in `RULES`. Each is built on its own copy of the branch and measured. The ones not chosen are kept as patches in `kaiju/docs/experiments/soft-body/`, as for §17.
+
+- **Armor under another name (the yardstick).** Armor 1, then armor 2. It makes the monster play like the other three, which is what #24 wants to avoid. It is measured only to give the others a target.
+- **Blow-through.** No single hit does more than `RULES.blowThroughCap` (2) to it. Armor blunts many small hits; this blunts a few big ones. The heavy guns become the weak answer to a blob.
+- **Phase-out.** A hit that lands still has `RULES.phaseOut` (25%, and 40% as a second try) to pass through. The rules roll it on the seeded dice, after the hit roll. The event says so (`phased: true`), and the log tells it: "The shell passes through where the Crown was a moment ago." A power structure's blast does not phase out, so §16's warnings stay true.
+- **Unravel and reform.** A part other than the body brought to 0 does not cripple. It **unravels**: it is gone, with its attacks and effects, and a hit on it goes to the body, as a hit on a crippled part does now. At the start of the monster's phase, a part that has been unravelled for `RULES.reformTurns` (2) of its phases reforms at half its hit points, rounded up, for `RULES.reformEnergy` (3) energy. With too little energy it waits. Its energy comes from panic, so the army that breaks feeds its comeback. Regen does not heal an unravelled part; it heals the worst of the others.
+- **The mix the brainstorm suggests:** phase-out at 25% plus unravel and reform.
+
+### 18.4 Measuring
+
+For each direction and for the code before any of them. These are bot numbers, a floor rather than a forecast.
+- `node kaiju/tools/sim.mjs 1-20 squamous` and `node kaiju/tools/sim.mjs 21-60 squamous`: every mission.
+- `node kaiju/tools/damage.mjs 39724 squamous+gut+reserves+bulk swathe:plant`: playtest 001's setup.
+- `node kaiju/tools/sim.mjs 21-60 dairengo coast:squamous`: playtest 002's rival must stay a threat.
+- `node kaiju/tools/sim.mjs 1-20 all coast:squamous:hero`: the rival again, fought monster to monster (§17.4).
+- Damage taken per turn survived, from `damage.mjs` over the same seeds. The bot sprints, so turns survived matter more than its win rate.
+
+### 18.5 Choosing
+
+1. It is not armor by another name.
+2. Against the army, it lasts about as long per turn as an armor-2 monster.
+3. As the Coast rival it is still a threat. Playtest 002 was close.
+4. It tells the player what happened, in the log, so the weakness can be learned.
+5. It moves no other monster.
+
+### 18.6 The page, the voice and the version
+
+- **The setup card** says the monster must not stand and trade blows, and names the passive in plain words. "Eldritch: harder to hit." undersells it, and gets plainer words.
+- **The voice:** every phase-out is a log line, chosen by a hash. An unravelling and a reform are log lines.
+- **The silhouette:** an unravelled part shows like a crippled one, with its own mark.
+- **Version:** 0.5.0, with a CHANGELOG entry.
