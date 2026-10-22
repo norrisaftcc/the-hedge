@@ -7,6 +7,7 @@ import * as H from "../src/hex.js";
 import { create, step, forecast, actions, slamTargets } from "../src/rules.js";
 import { planRival } from "../src/ai.js";
 import { RULES } from "../src/data/kaiju.js";
+import { kaijuDef } from "../src/data/variants.js";
 import { blank, rigDice, setup } from "./fixtures.mjs";
 
 // An open field with the rival one hex from the player's kaiju.
@@ -100,11 +101,11 @@ test("a slam is refused with too little AP and with nothing adjacent", () => {
   assert.equal(c.events[0].k, "refuse");
 });
 
-test("actions lists the slam after the stomp, named from the data, with a reason when it is off", () => {
+test("actions lists the slam after the withdraw, so its key 8 reads in order; named from the data, with a reason when it is off", () => {
   const near = pair();
   const list = actions(near);
   const ids = list.map((a) => a.id);
-  assert.equal(ids.indexOf("slam"), ids.indexOf("stomp") + 1);
+  assert.equal(ids.indexOf("slam"), ids.indexOf("withdraw") + 1);
   const row = list.find((a) => a.id === "slam");
   assert.deepEqual({ name: row.name, kind: row.kind, ap: row.ap, energy: row.energy, enabled: row.enabled }, { name: RULES.slamName, kind: "slam", ap: RULES.slamAp, energy: 0, enabled: true });
   const far = pair();
@@ -135,4 +136,29 @@ test("the same seed gives the same slam", () => {
   const a = step(pair(), { t: "slam", target: pair().rival.at });
   const b = step(pair(), { t: "slam", target: pair().rival.at });
   assert.deepEqual(a, b);
+});
+
+// The forecast's return fire is what the other kaiju could do to the actor next phase (DESIGN 17.8).
+// The Squamous One has one damaging part, the arms. With the arms crippled and the legs hurt worse,
+// the phase-start mend goes to the legs, so the arms stay crippled and only the slam is left.
+test("the forecast's return fire counts the rival's slam when its own attacks are crippled", () => {
+  const s = pair("radiosaur", "squamous");
+  s.rival.at = H.neighbor(s.kaiju.at, 0);
+  s.rival.facing = 3;
+  s.rival.parts.arms.hp = 0;
+  s.rival.parts.legs.hp = 0;
+  s.rival.parts.legs.max = 40;
+  const fc = forecast(s, "stomp", H.neighbor(s.kaiju.at, 4));
+  const name = `${kaijuDef("squamous").name}: ${RULES.slamName}`;
+  const fire = fc.returnFire.find((r) => r.name === name);
+  assert.ok(fire, `no slam in the return fire: ${JSON.stringify(fc.returnFire)}`);
+  assert.equal(fire.hitChance, RULES.slamAccuracy);
+  assert.ok(fire.damage[1] > 0);
+  // Not beside the player's kaiju, the same rival threatens nothing with its slam.
+  const apart = pair("radiosaur", "squamous");
+  apart.rival.at = H.ray(apart.kaiju.at, 0, 4)[3];
+  apart.rival.parts.arms.hp = 0;
+  apart.rival.parts.legs.hp = 0;
+  apart.rival.parts.legs.max = 40;
+  assert.ok(!forecast(apart, "stomp", H.neighbor(apart.kaiju.at, 4)).returnFire.some((r) => /slam/i.test(r.name)));
 });

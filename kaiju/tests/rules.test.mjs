@@ -654,7 +654,7 @@ test("actions and describeHex", () => {
   const s = game({}, (m) => paintKey(m, "features", E, "2"));
   putUnit(s, "infantry", W);
   const list = actions(s);
-  assert.deepEqual(list.map((a) => a.id), ["move", "face", "bite", "tail", "breath", "stomp", "slam", "eat", "roar", "withdraw", "end"]);
+  assert.deepEqual(list.map((a) => a.id), ["move", "face", "bite", "tail", "breath", "stomp", "eat", "roar", "withdraw", "slam", "end"]);
   for (const a of list) {
     assert.equal(typeof a.enabled, "boolean");
     assert.equal(typeof a.why, "string");

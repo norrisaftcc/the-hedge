@@ -1503,8 +1503,6 @@ export function actions(state) {
   }
   let why = over ? overWhy : k.ap < RULES.stompAp ? "Not enough AP." : stompTargets(state).length ? null : "Nothing adjacent to stomp.";
   add("stomp", "Stomp", "stomp", RULES.stompAp, 0, why);
-  why = over ? overWhy : k.ap < RULES.slamAp ? "Not enough AP." : slamTargets(state).length ? null : "No kaiju adjacent to slam.";
-  add("slam", SLAM.name, "slam", RULES.slamAp, 0, why);
   if (over) why = overWhy;
   else if (k.hunger === null) why = `${kaijuDef(k.id, k.variant).name} does not eat.`;
   else if (k.ap < RULES.eatAp) why = "Not enough AP.";
@@ -1513,6 +1511,9 @@ export function actions(state) {
   why = over ? overWhy : k.used.roar ? "Already roared this turn." : k.ap < RULES.roarAp ? "Not enough AP." : null;
   add("roar", "Roar", "roar", RULES.roarAp, 0, why);
   add("withdraw", "Withdraw", "withdraw", 0, 0, over ? overWhy : state.retreat.includes(k.at) ? null : "Not on a retreat hex.");
+  // After the withdraw, so the digit keys read in order down the list (panels.js).
+  why = over ? overWhy : k.ap < RULES.slamAp ? "Not enough AP." : slamTargets(state).length ? null : "No kaiju adjacent to slam.";
+  add("slam", SLAM.name, "slam", RULES.slamAp, 0, why);
   add("end", "End turn", "end", 0, 0, over ? overWhy : null);
   return out;
 }

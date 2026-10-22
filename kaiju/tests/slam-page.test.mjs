@@ -6,7 +6,8 @@ import * as H from "../src/hex.js";
 import { create, step, forecast, actions } from "../src/rules.js";
 import { RULES, KAIJU } from "../src/data/kaiju.js";
 import { VARIANTS } from "../src/data/variants.js";
-import { say } from "../src/voice.js";
+import { say, LINES } from "../src/voice.js";
+import { planScenes, buildScene } from "../src/ui/cutaway.js";
 import { actionKeys, actions as actionBar, forecastSheet } from "../src/ui/panels.js";
 import { blank, setup } from "./fixtures.mjs";
 
@@ -25,6 +26,15 @@ test("the slam has its own key, and no action shares a key, for every kaiju and 
     assert.equal(keys.slam, "8", `${variant || id}`);
     const used = Object.values(keys);
     assert.equal(new Set(used).size, used.length, `${variant || id}: ${JSON.stringify(keys)}`);
+  }
+});
+
+test("the digit keys read in order down the action list, for every kaiju and look", () => {
+  for (const [id, variant] of LOOKS) {
+    const list = actions(pair(id, "radiosaur", variant));
+    const keys = actionKeys(list);
+    const digits = list.map((a) => keys[a.id]).filter((k) => /^\d$/.test(k));
+    assert.deepEqual(digits, [...digits].sort(), `${variant || id}: ${digits.join(" ")}`);
   }
 });
 
@@ -77,18 +87,62 @@ test("the log line for a slam is dry, names no one it should not, and is the sam
   }
 });
 
-test("the slam's lines, hit and miss, differ with the turn and carry no exclamation mark", () => {
+test("the slam's lines are the slam's own: not the generic ones, and the attack's name comes from the data", () => {
+  const base = { attacker: { side: "kaiju", type: "radiosaur", variant: null }, defender: { side: "rival", type: "squamous", variant: null }, attack: { id: "slam", name: RULES.slamName }, damage: 3, rear: false, part: "head", terrain: "open", spill: 0, at: "4,4", turn: 1 };
+  const hitTable = LINES.attack["kaijuHitsKaiju.slam"];
+  const missTable = LINES.attack["kaijuMissesKaiju.slam"];
+  assert.ok(Array.isArray(hitTable) && hitTable.length >= 3, "three hit lines");
+  assert.ok(Array.isArray(missTable) && missTable.length >= 3, "three miss lines");
+  for (const line of [...hitTable, ...missTable]) {
+    assert.ok(!line.includes(RULES.slamName), `the name is hard-coded: ${line}`);
+    assert.ok(!/closes the gap|just left/i.test(line), `a slam is thrown from beside the target: ${line}`);
+    assert.ok(!/[!]/.test(line), line);
+  }
+  for (const hit of [true, false]) {
+    const data = { ...base, hit, damage: hit ? 3 : 0 };
+    const generic = { ...data, attack: { id: "nonesuch", name: RULES.slamName } };
+    const mine = new Set();
+    for (let n = 0; n < 6; n++) {
+      const line = say("attack", { ...data, n });
+      assert.notEqual(line, say("attack", { ...generic, n }), `${hit ? "hit" : "miss"} n=${n} fell back to the generic line`);
+      assert.ok(!/[!{}]|undefined|NaN/.test(line), line);
+      if (hit) assert.match(line, /3/, "the damage figure is in the line");
+      mine.add(line);
+    }
+    assert.equal(mine.size, (hit ? hitTable : missTable).length, "every template is reachable");
+  }
+});
+
+test("a rename in the data shows in the log: no slam line says 'Body slam' when the attack is named otherwise", () => {
+  const base = { attacker: { side: "kaiju", type: "radiosaur", variant: null }, defender: { side: "rival", type: "squamous", variant: null }, attack: { id: "slam", name: "Shoulder charge" }, damage: 3, rear: false, part: "head", terrain: "open", spill: 0, at: "4,4" };
+  const lines = [];
+  for (const hit of [true, false]) for (let n = 0; n < 6; n++) lines.push(say("attack", { ...base, hit, damage: hit ? 3 : 0, turn: 1, n }));
+  for (const line of lines) assert.ok(!/body slam/i.test(line), line);
+  assert.ok(lines.some((l) => l.includes("Shoulder charge")), "the new name is used somewhere");
+});
+
+test("the slam's lines, hit and miss, differ with the turn", () => {
   const base = { attacker: { side: "kaiju", type: "radiosaur", variant: null }, defender: { side: "rival", type: "squamous", variant: null }, attack: { id: "slam", name: RULES.slamName }, damage: 3, rear: false, part: "head", terrain: "open", spill: 0, at: "4,4" };
   const hits = new Set();
   const misses = new Set();
   for (let turn = 1; turn <= 6; turn++) {
-    const h = say("attack", { ...base, hit: true, turn });
-    const m = say("attack", { ...base, hit: false, damage: 0, turn });
-    assert.ok(!/[!{}]|undefined|NaN/.test(h + m), h + m);
-    assert.match(h, /3/, "the damage figure is in the line");
-    hits.add(h);
-    misses.add(m);
+    hits.add(say("attack", { ...base, hit: true, turn }));
+    misses.add(say("attack", { ...base, hit: false, damage: 0, turn }));
   }
   assert.ok(hits.size >= 2 && misses.size >= 2, "more than one line each");
-  for (const line of [...hits, ...misses]) assert.ok(/slam|weight|leans|air|arrives|space/i.test(line), `not about a slam: ${line}`);
+});
+
+test("a slam plays the kaiju-against-kaiju cutaway in the modes that show one, titled from the data", () => {
+  const s = pair("squamous", "dairengo");
+  const out = step(s, { t: "slam", target: s.rival.at });
+  assert.equal(planScenes(out.events, "off").length, 0);
+  for (const mode of ["all", "kaiju"]) {
+    const groups = planScenes(out.events, mode);
+    assert.equal(groups.length, 1, mode);
+    const scene = buildScene(groups[0], s, out.state, out.events);
+    assert.equal(scene.title, RULES.slamName);
+    assert.equal(scene.left.name, "The Squamous One");
+    assert.equal(scene.right.name, "Dai-Rengō");
+    assert.match(scene.result.text, /^(MISS|−\d+)$/);
+  }
 });

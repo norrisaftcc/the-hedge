@@ -6,11 +6,11 @@ The version is in `src/version.js`. It shows on the setup page as the edition an
 
 ## 0.4.0: rival reach, a body slam for every monster (#27, from playtest 002)
 
-- **Body slam**: any kaiju beside the other can throw its body at it. 2 AP, 2–4 damage, 80% to hit, to a part by roll. The body cannot be crippled, so with any one of arms, legs, head or aux crippled a living monster can still hurt an adjacent rival (one exception, below). Dai-Rengō after its finisher, and the Squamous One with its feelers crippled, can still fight. The numbers and the name are in `RULES` (`src/data/kaiju.js`).
+- **Body slam**: any kaiju beside the other can throw its body at it. 2 AP, 2–4 damage, 80% to hit, to a part by roll. The body cannot be crippled, so with any one of arms, legs, head or aux crippled a living monster can still hurt an adjacent rival, at the AP the rules give (two cases are open, below). Dai-Rengō after its finisher, and the Squamous One with its feelers crippled, can still fight. The numbers and the name are in `RULES` (`src/data/kaiju.js`).
 - The rival slams by the same rules, so the change is not the player's alone.
-- The page: a "Body slam" button on key `8`, the adjacent kaiju lit, a forecast sheet, and a new log line, chosen by turn and hex, never by a die.
+- The page: a "Body slam" button on key `8` (last in the list, after Withdraw, so the digits read in order), the adjacent kaiju lit, a forecast sheet, the existing kaiju-against-kaiju cutaway, and new log lines that name the blow from the data, chosen by turn and hex, never by a die.
 - The Coast changes: its pinned replay (Squamous One against Dai-Rengō, seed 7) is re-recorded, since Dai-Rengō now slams. The other missions and replays do not move.
-- Open, for the owner: crippled legs plus hunger, or plus an empty battery, leave a monster with 1 AP, and a slam costs 2 (DESIGN §17.8). Two todo tests, `KAI-11 (open)`, keep it in view.
+- Open, for the owner: two cases, crippled legs plus hunger and crippled legs plus an empty battery, leave a monster with 1 AP, and a slam costs 2 (DESIGN §17.8). The §17.6 criterion that the hero bot's stuck turns fall to 0 is not met: they fall, but `stuck0` is above 0 for Thalassor and Dai-Rengō. Two todo tests, `KAI-11 (open)`, keep it in view.
 - The balance bot knows the slam, and gains a hero mode (`coast:<rival>:hero`) and a count of stuck turns (DESIGN §17.4).
 
 ## 0.3.1: blast risk (#25, from playtest 001)

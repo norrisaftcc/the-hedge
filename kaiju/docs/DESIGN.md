@@ -790,6 +790,8 @@ For every kaiju and every variant (`kaijuDef(id, variant)`):
 
 there is a legal command, or a free turn followed by one, that can damage the rival: a forecast with a hit chance above 0 and a top damage above 0. The body is not in the list, since a body at 0 ends the mission. The test is `kaiju/tests/reach.test.mjs`.
 
+**Narrowed in the build.** This section first said "with full AP and full energy". The slam costs 2 AP, and the AP rules can leave a kaiju with 1, so that reading was dropped for the one above: the AP the rules give with the one part crippled, and no hunger and no empty battery. That is a weaker test than the one first written. §17.8 says what it leaves open.
+
 ### 17.3 Four directions, tried as data
 
 Each direction is built on a scratch branch and measured with the bot. Only the one recommended goes into this PR. Their numbers are in the PR, so the owner can choose another.
@@ -812,7 +814,7 @@ The bot attacks whatever pays best, the army included. That is not how a person 
 - it still eats when hungry, since hunger costs AP;
 - it never targets units or structures for their own sake.
 
-The bot also counts **stuck turns**: turns in which the player's monster was next to the rival with AP left and had no legal damaging action against it. Before this change, stuck turns are what playtest 002 felt like. After it, the KAI-11 test says they cannot happen, bar the open case in §17.8.
+The bot also counts **stuck turns**: turns in which the player's monster was next to the rival with AP left and had no legal damaging action against it. Before this change, stuck turns are what playtest 002 felt like. After it, the KAI-11 test says they cannot happen, bar the two open cases in §17.8 (crippled legs with hunger, and crippled legs with an empty battery).
 
 ### 17.5 Measuring
 
@@ -833,16 +835,17 @@ These are the bot's numbers, a floor rather than a forecast.
 ### 17.7 The page, motion and version
 
 - **The page:** a stomp on a kaiju (A) or a slam (D) shows in the forecast sheet like any attack. A crippled attack (B) is no longer greyed out. Its button says "crippled" and the sheet shows the penalty.
-- **Motion:** a stomp or slam on a kaiju needs a cutaway (#22). Until #22 lands, it uses the plain hit.
+- **Motion:** a slam on a kaiju plays the existing kaiju-against-kaiju cutaway (`src/ui/cutaway.js`), titled by `RULES.slamName`. It needs nothing new. `kaiju/tests/slam-page.test.mjs` checks that `planScenes` and `buildScene` give it a scene in the "all" and "kaiju" modes. Run the smoke script with the cutaway on (the default) as well as off.
 - **Version:** 0.4.0, since this is a balance change with a feature behind it. It gets a CHANGELOG entry.
 
 ### 17.8 As built and measured
 
 **D was built**: a body slam for every kaiju. The four directions are compared in the PR (#27); this is the reason for the choice, by the §17.6 rules.
-- **It passes the test.** `node --test kaiju/tests/reach.test.mjs` runs §17.2 for every kaiju and look, in the six directions: no failing case.
+- **It passes the test as narrowed in §17.2, and no more.** `node --test kaiju/tests/reach.test.mjs` runs §17.2 for every kaiju and look, in the six directions, with the AP the rules give, no hunger and no empty battery: no failing case there. It does not pass for crippled legs plus hunger or an empty battery (below): the same command reports 48 and 72 failing cases in two todo tests, 120 in all.
 - **It changes the four characters least.** No monster gains or loses an attack. The slam is one rule that all of them share, and it takes the body, which cannot be crippled.
 - **It moves the non-Coast numbers least.** The slam needs a rival, and only the Coast has one. The fortress, swathe and rampage cells and their replays do not move.
-- **The hero bot's stuck turns fall.** `stuck0` is the column that counts the KAI-11 case: turns beside the rival with no damaging command even at the AP the rules gave. In the worst cell of `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero` it is 3.15 a game before the slam (at 87bad43) and 0.80 after. `stuck` still counts turns that end with 1 AP left, which a slam (2 AP) cannot use; it is not the KAI-11 measure.
+- **The hero bot's stuck turns fall, but not to 0. Criterion 4 of §17.6 is not met.** `stuck0` is the column that counts the KAI-11 case: turns beside the rival with no damaging command even at the AP the rules gave. In the worst cell of `node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero` it is 3.15 a game before the slam (at 87bad43) and 0.80 after (Thalassor against Thalassor). Across the sixteen cells it is 30 turns in 320 games after (26 Thalassor, 4 Dai-Rengō; the column is a mean over 20 games, so a mean of 0.30 is 6 turns). On the held-out seeds, `node kaiju/tools/sim.mjs 21-60 all coast:<rival>:hero`, it is 52 turns in 640 games (31 Thalassor, 21 Dai-Rengō), and 0.63 a game in the worst cell. These are the bot's numbers, simulated. `stuck` still counts turns that end with 1 AP left, which a slam (2 AP) cannot use; it is not the KAI-11 measure.
+- **The win rates are not evidence for the slam.** A move under about 15 points on 20 seeds is noise. The hero bot's mean win rate over the four monsters, by rival, at 87bad43 and now: the Squamous One 54% to 65%, Radiosaur 49% to 53%, Thalassor 35% to 35%, Dai-Rengō 29% to 34% (`node kaiju/tools/sim.mjs 1-20 all coast:<rival>:hero`). Only `stuck0` supports the change. One classic cell does move beyond the band: the Squamous One as the player's monster on the Coast, rival left to chance, falls from 55% to 40% (`node kaiju/tools/sim.mjs 1-20 squamous coast`). The rival slams too.
 
 What is built:
 - `RULES.slamName` ("Body slam"), `slamAp` (2), `slamDamage` (2–4) and `slamAccuracy` (80) in `src/data/kaiju.js`. The rules code holds none of them.
