@@ -467,7 +467,7 @@ export function backdrop(terrain, {structure} = {}) // <svg viewBox="0 0 400 240
 
 `art.html` shows every drawing in every state, in both themes.
 
-## 11. The page: `index.html`, `style.css`, `src/ui/` [UI-1..10]
+## 11. The page: `index.html`, `style.css`, `src/ui/` [UI-1..11]
 
 ### 11.1 Screens
 
@@ -509,6 +509,8 @@ An overlay over the map tile. `backdrop(defender's terrain, {structure})` fills 
 ### 11.4 Settings and memory [UI-8]
 
 `localStorage` keys `kaiju-theme` (`system` | `light` | `dark`) and `kaiju-cutaway` (`all` | `kaiju` | `off`), each read and written inside `try`/`catch`, so a private window still plays. Theme tokens on `:root`, the dark set under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])` and again under `:root[data-theme="dark"]`, as the hedge's page does. Body has an explicit background.
+
+**Exit to title** [UI-11]. On the play screen the dialog has a third group, *This game*, with one button: *Exit to title*. It does what the end screen's *Change monster* does (`onEnd("change")`): clear the events, copy the game's pick back into the setup screen, show setup. The monster, mutations, mission and seed stay chosen, so *Deploy* replays the same map, and changing one card compares two monsters on it. The game in progress is dropped; nothing is saved. While a turn's events are playing (`game.busy`), the button is disabled with its reason shown ("Wait for the turn to finish"), because the playing loop still writes to the view and the log. There is no single-key shortcut: a stray key must not end a game. The button is reached by keyboard through the dialog, which the settings button opens.
 
 ## 12. Tests [G1, G2]
 

@@ -155,6 +155,7 @@ Priority: **M** must (spike), **S** should (spike if time allows), **N** next (t
 | UI-8 | M | Light and dark themes follow the system; a button overrides it and the choice is remembered. |
 | UI-9 | M | The page respects `prefers-reduced-motion`: cutaways become still frames. |
 | UI-10 | S | An "undo move" for the last move, if no dice were rolled since. |
+| UI-11 | S | During play, the settings dialog offers **Exit to title**: back to the setup screen, with the monster, mutations, mission and seed still chosen. It waits while a turn is playing. |
 
 ### 5.9 Variants (issue #19)
 
