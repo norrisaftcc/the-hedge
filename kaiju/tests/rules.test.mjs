@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as H from "../src/hex.js";
 import { create, step, reach, unitReach, eatTargets, actions, forecast, attackTargets, affected, describeHex, partState, replay } from "../src/rules.js";
+import { RULES } from "../src/data/kaiju.js";
 import { blank, paint, putUnit, rigDice, setup, at, FORTRESS_LITE, COAST_LITE, CITY_LITE } from "./fixtures.mjs";
 
 const HOME = at(5, 7); // the kaiju's start in blank()
@@ -340,6 +341,9 @@ test("forecast: cover, ranged fall-off, eldritch, return fire", () => {
   const q = game({ kaiju: "squamous" });
   putUnit(q, "tank", E);
   assert.equal(forecast(q, "grab", E).returnFire[0].hitChance, 55);
+  // The Squamous One's phase-out (DESIGN 18) is reported beside the hit chance, never folded into it.
+  assert.equal(forecast(q, "grab", E).returnFire[0].phase, RULES.phaseOut);
+  assert.equal(f.returnFire[0].phase, 0, "Thalassor does not phase out");
 });
 
 function gunShot(facing) {

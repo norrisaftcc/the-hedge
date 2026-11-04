@@ -105,11 +105,11 @@ function breakChance(morale, pressure) {
 
 // What a forecast is worth, in score points, weighted toward the goal; goal is true when it
 // strikes the objective or the rival.
-function worth(state, f) {
+export function worth(state, f) {
   let value = 0;
   let goal = false;
   for (const t of f.targets) {
-    const p = t.hitChance / 100;
+    const p = (t.hitChance / 100) * (1 - (t.phase || 0) / 100);
     const mean = Math.min(t.hp, (t.damage[0] + t.damage[1]) / 2);
     if (t.kind === "kaiju") {
       value += p * mean * RIVAL_PER_HP;
@@ -142,13 +142,13 @@ function blastAllowed(state, key) {
 
 // What a forecast does to the rival kaiju: whether it can hurt it (a hit chance above 0 and a top
 // damage above 0), and the expected damage, capped at the rival's hit points in the part struck.
-function rivalEffect(f) {
+export function rivalEffect(f) {
   let hurts = false;
   let expected = 0;
   for (const t of f.targets) {
     if (t.kind !== "kaiju" || t.hitChance <= 0 || t.damage[1] <= 0) continue;
     hurts = true;
-    expected += (t.hitChance / 100) * Math.min(t.hp, (t.damage[0] + t.damage[1]) / 2);
+    expected += (t.hitChance / 100) * (1 - (t.phase || 0) / 100) * Math.min(t.hp, (t.damage[0] + t.damage[1]) / 2);
   }
   return { hurts, expected };
 }

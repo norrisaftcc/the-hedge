@@ -1,0 +1,237 @@
+diff --git a/kaiju/src/data/kaiju.js b/kaiju/src/data/kaiju.js
+index d864f36..d8fb5ea 100644
+--- a/kaiju/src/data/kaiju.js
++++ b/kaiju/src/data/kaiju.js
+@@ -79,7 +79,7 @@ export const KAIJU = {
+       atk("gaze", "The gaze", 2, 2, "special", "aux", "cone", 3, [0, 0], 100, { panic: 2 }),
+       atk("angle", "Wrong angle", 1, 3, "special", "legs", "teleport", 3, [0, 0], 100),
+     ],
+-    passives: ["regen", "eldritch"],
++    passives: ["regen", "eldritch", "phaseOut", "unravel"],
+     forbid: ["regen"],
+   },
+   dairengo: {
+@@ -117,6 +117,9 @@ export const RULES = {
+   armsMelee: { intact: 0, hurt: 0, bad: 1, crippled: 2 },
+   legsAp: { intact: 0, hurt: 1, bad: 2, crippled: 3 },
+   eldritchAccuracy: 10,
++  phaseOut: 25, // percent: a hit that lands on a phaseOut kaiju passes through this often (blasts do not)
++  reformTurns: 2, // own phases a part stays unravelled before it may reform
++  reformEnergy: 3, // energy a reform costs
+   coverAccuracy: 10,
+   coverDamage: 1,
+   rangedPerHex: 5,
+diff --git a/kaiju/src/rules.js b/kaiju/src/rules.js
+index c48a19e..123c03e 100644
+--- a/kaiju/src/rules.js
++++ b/kaiju/src/rules.js
+@@ -150,6 +150,8 @@ function makeKaiju(id, actor, start, mutations = null, variant = null) {
+     withdrawn: false,
+   };
+   for (const p of PART_SLOTS) k.parts[p] = { hp: def.parts[p].hp, max: def.parts[p].hp };
++  // unravel: null while the part is whole or crippled; a count of own phases once it has unravelled.
++  if (k.passives.includes("unravel")) for (const p of PART_SLOTS) if (p !== "body") k.parts[p].unravel = null;
+   let bodyBonus = actor === "kaiju" ? BUDGET - spent : 0;
+   for (const m of mutations) {
+     const a = MUTATIONS[m].apply;
+@@ -292,11 +294,32 @@ function nearPower(s, key) {
+   return false;
+ }
+ 
++const isUnravelled = (part) => part.unravel !== undefined && part.unravel !== null;
++
++// At the start of the monster's phase: a part unravelled for reformTurns of its phases reforms at
++// half its hit points, rounded up, if the energy is there; otherwise it waits and the count goes on.
++function reformParts(s, actor, ev) {
++  const k = s[actor];
++  for (const p of PART_SLOTS) {
++    const part = k.parts[p];
++    if (!isUnravelled(part)) continue;
++    if (part.unravel >= RULES.reformTurns && k.energy >= RULES.reformEnergy) {
++      part.hp = Math.ceil(part.max / 2);
++      part.unravel = null;
++      changeEnergy(s, actor, -RULES.reformEnergy, "reform", ev);
++      ev("reform", { actor, who: k.id, variant: k.variant, part: p, hp: part.hp, max: part.max });
++    } else {
++      part.unravel += 1;
++    }
++  }
++}
++
+ function heal(s, actor, ev) {
+   const k = s[actor];
+   let best = null;
+   for (const p of PART_SLOTS) {
+     const part = k.parts[p];
++    if (isUnravelled(part)) continue;
+     const missing = part.max - part.hp;
+     if (missing > 0 && (!best || missing > best.missing)) best = { p, missing };
+   }
+@@ -327,6 +350,7 @@ function phaseStart(s, actor, ev) {
+   if (rule === "water" && terrain.water) {
+     changeEnergy(s, actor, terrain.water === "deep" ? RULES.waterDeep : RULES.waterShallow, "water", ev);
+   }
++  if (k.passives.includes("unravel")) reformParts(s, actor, ev);
+   if (k.passives.includes("regen")) heal(s, actor, ev);
+   if (k.passives.includes("stoneBody") && terrain.water) heal(s, actor, ev);
+   if (s.lingeringGrows && k.lingering >= 1) lingeringGrows(s, actor, ev);
+@@ -606,6 +630,25 @@ function damageRange(min, max, mod, zero) {
+ 
+ // ---------- damage ----------
+ 
++// A hit that lands on a phaseOut kaiju may pass through it: a roll on the state's dice, after the
++// hit roll. Blasts and lingering do not come here.
++function phasesOut(s, t) {
++  return t.passives.includes("phaseOut") && roll(s, 100) <= RULES.phaseOut;
++}
++
++// The hit percentage a forecast shows: a phaseOut kaiju lets RULES.phaseOut of the hits through.
++function shownChance(state, v, acc) {
++  if (v.kind !== "kaiju" || !state[v.actor].passives.includes("phaseOut")) return acc;
++  return Math.round((acc * (100 - RULES.phaseOut)) / 100);
++}
++
++// The attack event for a hit that passed through. The part is the one the shot was aimed at.
++function phasedEvent(s, t, ev, base) {
++  const part = hitLocation(s, t);
++  const hp = { hp: t.parts[part].hp, max: t.parts[part].max };
++  ev("attack", { ...base, hit: true, damage: 0, phased: true, part, before: hp, after: { ...hp }, spill: 0 });
++}
++
+ function hitLocation(s, k) {
+   const table = kaijuDef(k.id, k.variant).hitTable;
+   const total = table.reduce((n, [, w]) => n + w, 0);
+@@ -630,6 +673,8 @@ function damageKaiju(s, actor, part, dmg, ev, why = "attack") {
+   const bodyBefore = partState(k.parts.body);
+   const taken = Math.min(p.hp, dmg);
+   p.hp -= taken;
++  const unravels = hitPart !== "body" && p.hp <= 0 && taken > 0 && k.passives.includes("unravel");
++  if (unravels) p.unravel = 0;
+   let spill = 0;
+   if (hitPart !== "body") {
+     spill = dmg - taken;
+@@ -642,7 +687,8 @@ function damageKaiju(s, actor, part, dmg, ev, why = "attack") {
+     after,
+     spill,
+     report: () => {
+-      if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, variant: k.variant, part: hitPart, state: partState(p) });
++      if (unravels) ev("unravel", { actor, who: k.id, variant: k.variant, part: hitPart });
++      else if (partState(p) !== stateBefore) ev("part", { actor, who: k.id, variant: k.variant, part: hitPart, state: partState(p) });
+       if (hitPart !== "body" && partState(k.parts.body) !== bodyBefore) {
+         ev("part", { actor, who: k.id, variant: k.variant, part: "body", state: partState(k.parts.body) });
+       }
+@@ -877,6 +923,7 @@ function strikeKaiju(s, actor, a, targetActor, ev) {
+     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+     return;
+   }
++  if (phasesOut(s, t)) return phasedEvent(s, t, ev, base);
+   const damage = Math.max(1, randint(s, a.damage[0], a.damage[1]) + kaijuDamageMod(s, actor, a, v));
+   const res = damageKaiju(s, targetActor, hitLocation(s, t), damage, ev);
+   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
+@@ -1097,6 +1144,10 @@ function doUfire(s, cmd, ev, fired) {
+     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+     return null;
+   }
++  if (phasesOut(s, t)) {
++    phasedEvent(s, t, ev, base);
++    return null;
++  }
+   const damage = Math.max(1, randint(s, def.attack[0], def.attack[1]) + (rear ? RULES.rearBonus : 0) - t.armor);
+   const res = damageKaiju(s, target, hitLocation(s, t), damage, ev);
+   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
+@@ -1395,7 +1446,7 @@ function returnFire(state, actor) {
+     const spots = [u.at, ...Object.keys(unitReach(state, u.id))].filter((h) => canFire(state, u, h, k.at));
+     if (!spots.length) continue;
+     const def = UNITS[u.type];
+-    const acc = clamp(def.accuracy - (k.passives.includes("eldritch") ? RULES.eldritchAccuracy : 0), RULES.accuracyMin, RULES.accuracyMax);
++    const acc = shownChance(state, { kind: "kaiju", actor }, clamp(def.accuracy - (k.passives.includes("eldritch") ? RULES.eldritchAccuracy : 0), RULES.accuracyMin, RULES.accuracyMax));
+     const rears = spots.map((h) => (H.arc(k.facing, h, k.at) === "rear" ? RULES.rearBonus : 0));
+     const lo = damageRange(def.attack[0], def.attack[1], Math.min(...rears) - k.armor, false)[0];
+     const hi = damageRange(def.attack[0], def.attack[1], Math.max(...rears) - k.armor, false)[1];
+@@ -1428,7 +1479,7 @@ function otherKaijuThreat(state, actor) {
+       const face = facings.find((d) => patternHexes(ghost, other, a, d).includes(ghost[actor].at));
+       if (face === undefined) continue;
+       o.facing = face;
+-      const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
++      const hitChance = shownChance(ghost, vs, kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at)));
+       const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
+       const value = hitChance * (damage[0] + damage[1]);
+       if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, damage } };
+@@ -1459,7 +1510,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
+       const v = { kind: "kaiju", actor: other(actor) };
+       targets.push({
+         ...victimInfo(state, v),
+-        hitChance: kaijuAccuracy(state, actor, SLAM, v, 1),
++        hitChance: shownChance(state, v, kaijuAccuracy(state, actor, SLAM, v, 1)),
+         damage: damageRange(SLAM.damage[0], SLAM.damage[1], kaijuDamageMod(state, actor, SLAM, v), false),
+       });
+     }
+@@ -1478,7 +1529,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
+         const dist = H.distance(k.at, h);
+         targets.push({
+           ...victimInfo(state, v),
+-          hitChance: zero ? 100 : kaijuAccuracy(state, actor, a, v, dist),
++          hitChance: zero ? 100 : shownChance(state, v, kaijuAccuracy(state, actor, a, v, dist)),
+           damage: damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, actor, a, v), zero),
+         });
+       }
+diff --git a/kaiju/src/voice.js b/kaiju/src/voice.js
+index 2e5cadb..c021e24 100644
+--- a/kaiju/src/voice.js
++++ b/kaiju/src/voice.js
+@@ -143,6 +143,12 @@ export const LINES = {
+     ],
+     "unitHitsKaiju.gun": ["The gun emplacement fires. {damage} on {Target}'s {part}{rear}.", "Fire from the wall. {Target}'s {part} takes {damage}{rear}."],
+     "unitHitsKaiju.jet": ["The jet comes in low. {damage} on {Target}'s {part}{rear}.", "Missiles from the jet. {Target}'s {part} takes {damage}{rear}."],
++    phased: [
++      "{Attack}: through where {Target}'s {part} was a moment ago.",
++      "{Target}'s {part} {is} not quite there. Nothing to hurt.",
++      "It lands, and {Target} declines to notice.",
++      "{Target} lets it through. No damage.",
++    ],
+     unitMissesKaiju: ["The {unit} fires at {Target} and misses.", "The {unit} fires its {weapon}. A miss.", "The {unit} misses. {Target} does not notice."],
+   },
+   destroyed: {
+@@ -199,6 +205,16 @@ export const LINES = {
+     bad: ["{Name}'s {part} {is} badly hurt.", "{Name}'s {part} {is} in poor shape.", "{Name}'s {part} {is} close to giving out."],
+     crippled: ["{Name}'s {part} {is} crippled.", "{Name}'s {part} {stops} working.", "{Name}'s {part} {is} finished."],
+   },
++  unravel: [
++    "{Name}'s {part} {has} come undone. Hits will go to the rest of it.",
++    "{Name}'s {part} {is} no longer arranged. It is somewhere else, waiting.",
++    "{Name}'s {part} {has} come apart, quietly.",
++  ],
++  reform: [
++    "{Name}'s {part} {is} back, {hp} of {max}.",
++    "Where the {part} was, there is a {part} again. {hp} of {max}.",
++    "{Name}'s {part} {has} put itself together. {hp} of {max}.",
++  ],
+   heal: ["{Name}'s {part} {heals} to {hp} of {max}.", "{Name} mends. The {part}: {hp} of {max}.", "{Name}'s {part} {closes}. {hp} of {max}."],
+   roar: [
+     "{Name} roars. Everything within {radius} hexes hears it.",
+@@ -364,7 +380,7 @@ export const HEADLINES = {
+ const PRESS = { radiosaur: "LIZARD", thalassor: "STATUE", squamous: "THING", dairengo: "ROBOT" };
+ const PLACES = { fortress: "KESSEL", swathe: "PORT HALLORAN", coast: "GULL POINT", rampage: "PORT HALLORAN" };
+ 
+-const ENERGY_WHY = { eat: "the meal", water: "the sea", panic: "fear", drain: "the drain", charge: "the grid", reactor: "the reactor" };
++const ENERGY_WHY = { reform: "the reforming", eat: "the meal", water: "the sea", panic: "fear", drain: "the drain", charge: "the grid", reactor: "the reactor" };
+ 
+ const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
+ const lower = (s) => (s ? s[0].toLowerCase() + s.slice(1) : s);
+@@ -441,6 +457,7 @@ const VARS = {
+     else if (t.side === "structure") kinds = STRUCTURES[t.type] && STRUCTURES[t.type].populated ? ["kaijuHitsBuilding", "kaijuHitsStructure"] : ["kaijuHitsStructure"];
+     else if (t.side === "unit") kinds = [d.zero ? "gaze" : d.hit ? "kaijuHitsUnit" : "kaijuMissesUnit"];
+     else kinds = [d.hit ? "kaijuHitsKaiju" : "kaijuMissesKaiju"];
++    if (onKaiju && d.phased) kinds = ["phased"];
+     const id = a.side === "unit" ? a.type : d.attack.id;
+     const tail = onKaiju && d.hit && d.spill > 0 ? ` ${d.spill} goes through to the ${bodyName(t.type, t.variant)}.` : "";
+     // A look gets the ".alt" lines first: they name the blow by its attack, not the base kaiju's word for it.
+@@ -467,6 +484,8 @@ const VARS = {
+   },
+   hunger: (d) => ({ variant: d.hunger >= 0.7 * d.max ? "high" : "normal", vars: { Name: kaijuName(d.who, d.variant), hunger: d.hunger, max: d.max } }),
+   part: (d) => ({ variant: d.state, vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part) } }),
++  unravel: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part) } }),
++  reform: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part), hp: d.hp, max: d.max } }),
+   heal: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), ...partVars(d.who, d.variant, d.part), hp: d.hp, max: d.max } }),
+   roar: (d) => ({ vars: { Name: kaijuName(d.who, d.variant), radius: d.radius } }),
+   berserk: (d) => ({ vars: { Name: kaijuName(d.who, d.variant) } }),

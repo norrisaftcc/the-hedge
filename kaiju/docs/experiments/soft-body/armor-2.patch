@@ -1,0 +1,13 @@
+diff --git a/kaiju/src/data/kaiju.js b/kaiju/src/data/kaiju.js
+index d864f36..761a15c 100644
+--- a/kaiju/src/data/kaiju.js
++++ b/kaiju/src/data/kaiju.js
+@@ -63,7 +63,7 @@ export const KAIJU = {
+     epithet: "from the City of Angles",
+     blurb: "Something from a city whose corners do not add up. It is fed by fear, and it is rarely hungry for long.",
+     ap: 6,
+-    armor: 0,
++    armor: 2,
+     parts: {
+       head: { name: "Crown", hp: 5 },
+       arms: { name: "Feelers", hp: 6, plural: true },
