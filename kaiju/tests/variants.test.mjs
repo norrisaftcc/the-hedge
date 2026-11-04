@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { create, step, replayEvents } from "../src/rules.js";
-import { KAIJU, PART_SLOTS } from "../src/data/kaiju.js";
+import { KAIJU, PART_SLOTS, RULES } from "../src/data/kaiju.js";
 import { MUTATIONS, BUDGET } from "../src/data/mutations.js";
 import { VARIANTS, LOOKS, kaijuDef } from "../src/data/variants.js";
 import { headline, review, say } from "../src/voice.js";
@@ -132,6 +132,10 @@ test("a variant game uses the variant's names in the log, and never the base's",
       // The look's own part names may contain a base word ("sensor head"): take them out first.
       let rest = all;
       for (const q of Object.values(x.parts)) rest = rest.split(q.name.toLowerCase()).join("").split(q.name).join("");
+      // Attack names are not part names: the slam's "Body slam" holds the word "body" (RULES.slamName), and
+      // the look's own attacks may too. Cut every attack name out as well, so the word check below sees parts only.
+      const attackNames = [RULES.slamName, ...Object.values(x.attacks).map((q) => q.name), ...KAIJU[x.of].attacks.map((a) => a.name)];
+      for (const n of attackNames) rest = rest.split(n).join("").split(n.toLowerCase()).join("");
       assert.ok(!all.includes(baseName), `${v}: no ${baseName} in the log`);
       for (const a of KAIJU[x.of].attacks) {
         if (Object.values(x.attacks).some((q) => q.name === a.name)) continue; // a name the look keeps

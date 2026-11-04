@@ -1,7 +1,7 @@
 // The play screen's panels as HTML strings: top bar, status, inspect, actions, the log's lines,
 // the hint bar under the map and the forecast sheet. main.js puts them on the page.
 
-import { PART_SLOTS } from "../data/kaiju.js";
+import { PART_SLOTS, RULES } from "../data/kaiju.js";
 import { kaijuDef } from "../data/variants.js";
 import { STRUCTURES } from "../data/terrain.js";
 import { UNITS } from "../data/units.js";
@@ -12,7 +12,8 @@ import { blastWords } from "../voice.js";
 
 export const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
-// Keys for each action id. Attacks take 2, 3 and 4 in the order the kaiju lists them.
+// Keys for each action id. Attacks take 2, 3 and 4 in the order the kaiju lists them; stomp 5, eat 6,
+// withdraw 7, Body slam 8. In Face mode the digits 1 to 6 turn instead.
 export function actionKeys(list) {
   const keys = {};
   let n = 2;
@@ -22,6 +23,7 @@ export function actionKeys(list) {
     else if (a.id === "stomp") keys[a.id] = "5";
     else if (a.id === "eat") keys[a.id] = "6";
     else if (a.id === "withdraw") keys[a.id] = "7";
+    else if (a.id === "slam") keys[a.id] = "8";
     else if (a.id === "face") keys[a.id] = "F";
     else if (a.id === "roar") keys[a.id] = "R";
     else if (a.id === "end") keys[a.id] = "E";
@@ -236,6 +238,28 @@ function range(d) {
   return d[0] === d[1] ? `${d[0]}` : `${d[0]}–${d[1]}`;
 }
 
+const NUMBER_WORDS = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+
+// The words for a passive on the setup card. The numbers come from RULES, so the card cannot disagree
+// with the rules. A passive with no words says nothing.
+const PASSIVE = {
+  reactorBelly: () => "Reactor belly: power blasts feed it.",
+  stoneBody: () => "Stone body: heals in water.",
+  regen: () => "Regenerates.",
+  eldritch: () => `Eldritch skin: shots at it are ${RULES.eldritchAccuracy} points less likely to hit.`,
+  phaseOut: () => `Phase-out: about ${oneIn(RULES.phaseOut)} of the hits that land pass through it and do no damage. That is luck, not armor: it must not stand and trade blows.`,
+  noHunger: () => "No hunger.",
+  thrusters: () => "Thrusters: +1 AP while they work.",
+};
+export const passiveText = (id) => (Object.hasOwn(PASSIVE, id) ? PASSIVE[id]() : "");
+
+// A chance in percent, said the way a person would: 25 is "one in four". Anything that does not divide
+// 100 into ten or fewer is said as "N in 100". The number itself is data (RULES.phaseOut).
+export function oneIn(percent) {
+  const n = 100 / percent;
+  return Number.isInteger(n) && n >= 2 && n <= 10 ? `one in ${NUMBER_WORDS[n]}` : `${percent} in 100`;
+}
+
 export function forecastSheet(fc, { name, note, panic = 0, blast = null }) {
   const costs = [`${fc.apCost} AP`];
   if (fc.energyCost) costs.push(`${fc.energyCost} energy`);
@@ -248,6 +272,12 @@ export function forecastSheet(fc, { name, note, panic = 0, blast = null }) {
     return `<tr><td>${esc(t.name)}</td><td class="num">${t.hitChance}%</td><td class="num">${range(t.damage)}</td><td class="num">${after(t)}</td></tr>`;
   };
   const rows = fc.targets.map(row).join("");
+  // The hit chance in the table is the chance to land. A target that can phase out also lets some of
+  // those hits through without harm (the rules roll it after the hit): say so, once for each name.
+  const phased = [...new Map(fc.targets.filter((t) => t.phase > 0).map((t) => [t.name, t])).values()];
+  const phaseNote = phased.length
+    ? `<p class="fc-phase">${phased.map((t) => `${esc(t.name)}: ${t.hitChance}% to hit, and ${oneIn(t.phase)} of the hits pass through and do nothing.`).join(" ")}</p>`
+    : "";
   const table = fc.targets.length
     ? `<table class="fc-table"><thead><tr><th>Target</th><th>Hit</th><th>Damage</th><th>HP after</th></tr></thead><tbody>${rows}</tbody></table>`
     : `<p class="fc-none">Nothing in the pattern to strike.</p>`;
@@ -256,17 +286,18 @@ export function forecastSheet(fc, { name, note, panic = 0, blast = null }) {
     // Units of one type can differ: each one's rear bonus is its own.
     const groups = new Map();
     for (const r of fc.returnFire) {
-      const key = `${r.name}|${r.hitChance}|${range(r.damage)}`;
+      const key = `${r.name}|${r.hitChance}|${r.phase || 0}|${range(r.damage)}`;
       const g = groups.get(key) || { n: 0, name: r.name, hit: r.hitChance, dmg: r.damage };
       g.n += 1;
       groups.set(key, g);
     }
     const most = fc.returnFire.reduce((sum, r) => sum + r.damage[1], 0);
-    const likely = Math.round(fc.returnFire.reduce((sum, r) => sum + (r.hitChance / 100) * ((r.damage[0] + r.damage[1]) / 2), 0));
-    back = "Return fire next phase: " + [...groups.values()].map((g) => `${g.n > 1 ? g.n + " × " : ""}${g.name} (${g.hit}%, ${range(g.dmg)})`).join(", ") + `. About ${likely} damage, at most ${most}.`;
+    const passes = Math.max(...fc.returnFire.map((r) => r.phase || 0));
+    const likely = Math.round(fc.returnFire.reduce((sum, r) => sum + (r.hitChance / 100) * (1 - (r.phase || 0) / 100) * ((r.damage[0] + r.damage[1]) / 2), 0));
+    back = "Return fire next phase: " + [...groups.values()].map((g) => `${g.n > 1 ? g.n + " × " : ""}${g.name} (${g.hit}%, ${range(g.dmg)})`).join(", ") + `. About ${likely} damage${passes ? `, after the ${oneIn(passes)} hits that pass through you;` : ","} at most ${most}.`;
   }
   return `<h2 class="tile-title">Forecast</h2><div class="sheet-body"><div class="fc-head"><b>${esc(name)}</b><span class="fc-cost">${costs.join(" · ")}</span></div>`
-    + (note ? `<p class="fc-note">${esc(note)}</p>` : "") + table + `<p class="fc-return">${esc(back)}</p></div>`
+    + (note ? `<p class="fc-note">${esc(note)}</p>` : "") + table + phaseNote + `<p class="fc-return">${esc(back)}</p></div>`
     // Outside the scrolling body, so a short sheet never pushes the warning out of sight.
     + (blast ? blastNote(blast, "fc-blast") : "")
     + `<div class="sheet-buttons"><button type="button" class="btn primary" data-ui="confirm"${fc.targets.length ? "" : " disabled"}>Confirm <kbd>Enter</kbd></button>`

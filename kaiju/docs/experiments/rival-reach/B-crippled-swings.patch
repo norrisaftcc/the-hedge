@@ -1,0 +1,110 @@
+diff --git a/kaiju/src/data/kaiju.js b/kaiju/src/data/kaiju.js
+index 91e3d0a..5a43b71 100644
+--- a/kaiju/src/data/kaiju.js
++++ b/kaiju/src/data/kaiju.js
+@@ -116,6 +116,8 @@ export const RULES = {
+   headAccuracy: { intact: 0, hurt: 10, bad: 20, crippled: 30 },
+   armsMelee: { intact: 0, hurt: 0, bad: 1, crippled: 2 },
+   legsAp: { intact: 0, hurt: 1, bad: 2, crippled: 3 },
++  crippledAccuracy: 30,
++  crippledDamage: 0.5,
+   eldritchAccuracy: 10,
+   coverAccuracy: 10,
+   coverDamage: 1,
+diff --git a/kaiju/src/rules.js b/kaiju/src/rules.js
+index 122cf6f..67ad5b4 100644
+--- a/kaiju/src/rules.js
++++ b/kaiju/src/rules.js
+@@ -473,12 +473,18 @@ export function attackOf(state, actor, attackId) {
+   const base = kaijuDef(k.id, k.variant).attacks.find((a) => a.id === attackId);
+   if (!base) return null;
+   const extra = (base.kind === "ranged" || base.kind === "special") && base.range > 1 ? k.range : 0;
+-  return { ...base, range: base.range + extra };
++  const out = { ...base, range: base.range + extra };
++  // A crippled part still swings, badly (DESIGN 17.3 B): less accuracy, half the damage (at least 1).
++  if (k.parts[base.uses].hp <= 0) {
++    out.crippled = true;
++    out.accuracy = base.accuracy - RULES.crippledAccuracy;
++    if (base.damage[1] > 0) out.damage = base.damage.map((d) => Math.max(1, Math.floor(d * RULES.crippledDamage)));
++  }
++  return out;
+ }
+ 
+ function attackBlocked(state, actor, a) {
+   const k = state[actor];
+-  if (k.parts[a.uses].hp <= 0) return `The ${kaijuDef(k.id, k.variant).parts[a.uses].name.toLowerCase()} is crippled.`;
+   if (a.effects.oncePerMission && k.used[a.id]) return "Already used this mission.";
+   if (k.ap < a.ap) return "Not enough AP.";
+   if (k.energy < a.energy) return "Not enough energy.";
+diff --git a/kaiju/tests/reach.test.mjs b/kaiju/tests/reach.test.mjs
+new file mode 100644
+index 0000000..ff54a41
+--- /dev/null
++++ b/kaiju/tests/reach.test.mjs
+@@ -0,0 +1,66 @@
++// KAI-11 (DESIGN §17.2, issue #27): no living kaiju is left unable to hurt an adjacent rival.
++// For every kaiju and look, with any one of head, arms, legs or aux crippled, the once-a-mission
++// attacks spent, and the rival in each of the six adjacent hexes, canHurtRival holds.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import * as H from "../src/hex.js";
++import { create } from "../src/rules.js";
++import { KAIJU, RULES } from "../src/data/kaiju.js";
++import { LOOKS, kaijuDef } from "../src/data/variants.js";
++import { canHurtRival } from "../tools/sim.mjs";
++import { blank, setup } from "./fixtures.mjs";
++
++const CRIPPLED = ["head", "arms", "legs", "aux"];
++
++// Every case: [kaiju id, variant or null, crippled part, direction of the rival].
++function cases() {
++  const out = [];
++  for (const id of Object.keys(KAIJU)) {
++    for (const look of LOOKS[id]) {
++      const variant = look === id ? null : look;
++      for (const part of CRIPPLED) for (let dir = 0; dir < 6; dir++) out.push({ id, variant, part, dir });
++    }
++  }
++  return out;
++}
++
++// The state of one case. full AP and energy: what the player has at the start of a turn with that
++// part crippled (a crippled leg costs AP; a crippled tail costs a thruster kaiju one). With
++// literal set, the kaiju gets its undamaged AP instead, as canHurtRival's fresh option does.
++function build({ id, variant, part, dir }, literal = false) {
++  const m = blank({ objective: { kind: "rival" }, rivalStart: { at: [5, 0], facing: 3 }, rivalRetreat: [] });
++  const s = create(setup(m, { kaiju: id, variant, rival: id === "squamous" ? "radiosaur" : "squamous" }));
++  const k = s.kaiju;
++  k.parts[part].hp = 0;
++  for (const a of kaijuDef(id, variant).attacks) if (a.effects.oncePerMission) k.used[a.id] = true;
++  let ap = k.apMax;
++  if (!literal) {
++    if (part === "legs") ap -= RULES.legsAp.crippled;
++    if (part === "aux" && k.passives.includes("thrusters")) ap -= 1;
++    ap = Math.max(1, ap);
++  }
++  k.ap = ap;
++  k.energy = k.energyMax;
++  s.rival.at = H.neighbor(k.at, dir);
++  return s;
++}
++
++function failures(literal) {
++  return cases().filter((c) => !canHurtRival(build(c, literal)));
++}
++
++const name = (c) => `${c.variant || c.id} ${c.part} crippled, rival in direction ${c.dir}`;
++
++test("KAI-11: with any one part crippled and the finisher spent, every kaiju can hurt an adjacent rival", () => {
++  const bad = failures(false);
++  assert.deepEqual(bad.map(name), []);
++});
++
++test("KAI-11: the same with undamaged AP (the fresh option's setup)", () => {
++  const bad = failures(true);
++  assert.deepEqual(bad.map(name), []);
++});
++
++test("KAI-11: the cases cover 4 kaiju, 8 looks, 4 parts and 6 directions", () => {
++  assert.equal(cases().length, 8 * 4 * 6);
++});

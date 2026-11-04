@@ -16,6 +16,11 @@ const ACTORS = ["kaiju", "rival"];
 // Stomp strikes like an attack that cannot miss: a damage roll for each thing in the hex.
 const STOMP = { id: "stomp", name: "Stomp", kind: "stomp", pattern: "single", range: 1, damage: RULES.stompDamage, accuracy: 100, effects: {} };
 
+// Slam: every kaiju has a body, so every kaiju can throw it at an adjacent kaiju. It is not an
+// attack of the kaiju's own list (the body cannot be crippled, so it is always there), and not
+// a melee blow, so crippled arms do not weaken it. Head damage and eldritch skin still count.
+const SLAM = { id: "slam", name: RULES.slamName, kind: "slam", uses: "body", pattern: "single", range: 1, ap: RULES.slamAp, energy: 0, damage: RULES.slamDamage, accuracy: RULES.slamAccuracy, effects: {} };
+
 // ---------- small helpers ----------
 
 const other = (actor) => (actor === "kaiju" ? "rival" : "kaiju");
@@ -36,6 +41,27 @@ function roll(s, sides) {
   const v = m.roll(sides);
   s.rng = m.state;
   return v;
+}
+
+// Phase-out (DESIGN 18.3): the chance, in percent, that a hit which landed passes through. Zero for
+// a kaiju without the passive. Blasts and lingering harm never ask it.
+export function phaseChance(k) {
+  return k.passives.includes("phaseOut") ? RULES.phaseOut : 0;
+}
+
+// Rolled on the state's dice, after the hit roll, and only for a target that can phase out.
+function phasesOut(s, k) {
+  const p = phaseChance(k);
+  return p > 0 && roll(s, 100) <= p;
+}
+
+// A hit that passed through: the hit roll said it landed, the phase roll said it did nothing. The
+// event still names the part it crossed (one more roll on the state's dice, so the log can say so),
+// carries hit: true and phased: true, and no damage. Clients must not draw a wound from it.
+function phasedHit(s, t, base, ev) {
+  const part = hitLocation(s, t);
+  const p = t.parts[part];
+  ev("attack", { ...base, hit: true, phased: true, damage: 0, part, before: { hp: p.hp, max: p.max }, after: { hp: p.hp, max: p.max }, spill: 0 });
 }
 
 function randint(s, low, high) {
@@ -177,7 +203,7 @@ function rawAp(k) {
   return ap;
 }
 
-function computeAp(k) {
+export function computeAp(k) {
   return Math.max(1, rawAp(k));
 }
 
@@ -872,6 +898,10 @@ function strikeKaiju(s, actor, a, targetActor, ev) {
     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
     return;
   }
+  if (phasesOut(s, t)) {
+    phasedHit(s, t, base, ev);
+    return;
+  }
   const damage = Math.max(1, randint(s, a.damage[0], a.damage[1]) + kaijuDamageMod(s, actor, a, v));
   const res = damageKaiju(s, targetActor, hitLocation(s, t), damage, ev);
   ev("attack", { ...base, hit: true, damage, part: res.part, before: res.before, after: res.after, spill: res.spill });
@@ -954,6 +984,23 @@ function doStomp(s, actor, cmd, ev) {
   return null;
 }
 
+// The hex of the other kaiju when it is alive and next to the actor: the one place a slam can land.
+export function slamTargets(state, actor = "kaiju") {
+  const k = state[actor];
+  const o = state[other(actor)];
+  if (!alive(k) || !alive(o) || H.distance(k.at, o.at) !== 1) return [];
+  return [o.at];
+}
+
+function doSlam(s, actor, cmd, ev) {
+  const k = s[actor];
+  if (k.ap < RULES.slamAp) return "Not enough AP.";
+  if (!slamTargets(s, actor).includes(cmd.target)) return "Nothing to slam there.";
+  k.ap -= RULES.slamAp;
+  strikeKaiju(s, actor, SLAM, other(actor), marksUse(ev));
+  return null;
+}
+
 // What an eat on this hex would take: an edible unit first, then a structure. The page reads it,
 // so a warning never names a structure the eat would leave standing.
 export function food(state, actor, key) {
@@ -1023,7 +1070,7 @@ function doWithdraw(s, actor, cmd, ev) {
   return null;
 }
 
-const KAIJU_COMMANDS = { move: doMove, face: doFace, attack: doAttack, stomp: doStomp, eat: doEat, roar: doRoar, withdraw: doWithdraw };
+const KAIJU_COMMANDS = { move: doMove, face: doFace, attack: doAttack, stomp: doStomp, slam: doSlam, eat: doEat, roar: doRoar, withdraw: doWithdraw };
 
 // ---------- the units' commands ----------
 
@@ -1073,6 +1120,10 @@ function doUfire(s, cmd, ev, fired) {
   if (!hit) {
     const body = t.parts.body;
     ev("attack", { ...base, hit: false, damage: 0, part: null, before: { hp: body.hp, max: body.max }, after: { hp: body.hp, max: body.max }, spill: 0 });
+    return null;
+  }
+  if (phasesOut(s, t)) {
+    phasedHit(s, t, base, ev);
     return null;
   }
   const damage = Math.max(1, randint(s, def.attack[0], def.attack[1]) + (rear ? RULES.rearBonus : 0) - t.armor);
@@ -1377,7 +1428,7 @@ function returnFire(state, actor) {
     const rears = spots.map((h) => (H.arc(k.facing, h, k.at) === "rear" ? RULES.rearBonus : 0));
     const lo = damageRange(def.attack[0], def.attack[1], Math.min(...rears) - k.armor, false)[0];
     const hi = damageRange(def.attack[0], def.attack[1], Math.max(...rears) - k.armor, false)[1];
-    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, damage: [lo, hi] });
+    out.push({ unit: u.id, type: u.type, name: def.name, hitChance: acc, phase: phaseChance(k), damage: [lo, hi] });
   }
   const best = otherKaijuThreat(state, actor);
   if (best) out.push(best);
@@ -1396,8 +1447,8 @@ function otherKaijuThreat(state, actor) {
   const home = o.at;
   const vs = { kind: "kaiju", actor };
   let best = null;
-  for (const base of kaijuDef(o.id, o.variant).attacks) {
-    const a = attackOf(ghost, other, base.id);
+  for (const base of [...kaijuDef(o.id, o.variant).attacks, SLAM]) {
+    const a = base === SLAM ? SLAM : attackOf(ghost, other, base.id);
     if (a.damage[1] === 0 || a.pattern === "teleport" || attackBlocked(ghost, other, a)) continue;
     for (const [spot, r] of Object.entries(spots)) {
       if (r.cost > o.ap - a.ap) continue;
@@ -1408,8 +1459,9 @@ function otherKaijuThreat(state, actor) {
       o.facing = face;
       const hitChance = kaijuAccuracy(ghost, other, a, vs, H.distance(spot, ghost[actor].at));
       const damage = damageRange(a.damage[0], a.damage[1], kaijuDamageMod(ghost, other, a, vs), false);
-      const value = hitChance * (damage[0] + damage[1]);
-      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, damage } };
+      const phase = phaseChance(state[actor]);
+      const value = hitChance * (1 - phase / 100) * (damage[0] + damage[1]);
+      if (!best || value > best.value) best = { value, entry: { unit: other, type: o.id, variant: o.variant, name: `${kaijuDef(o.id, o.variant).name}: ${a.name}`, hitChance, phase, damage } };
     }
     o.at = home;
   }
@@ -1431,6 +1483,19 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
     }
     return { apCost: RULES.stompAp, energyCost: 0, targets, returnFire: returnFire(state, actor) };
   }
+  if (attackId === "slam") {
+    const targets = [];
+    if (slamTargets(state, actor).includes(target)) {
+      const v = { kind: "kaiju", actor: other(actor) };
+      targets.push({
+        ...victimInfo(state, v),
+        hitChance: kaijuAccuracy(state, actor, SLAM, v, 1),
+        phase: phaseChance(state[v.actor]),
+        damage: damageRange(SLAM.damage[0], SLAM.damage[1], kaijuDamageMod(state, actor, SLAM, v), false),
+      });
+    }
+    return { apCost: SLAM.ap, energyCost: 0, targets, returnFire: returnFire(state, actor) };
+  }
   const a = attackOf(state, actor, attackId);
   if (!a) return { apCost: 0, energyCost: 0, targets: [], returnFire: [] };
   const hexes = affected(state, attackId, target, actor, facing);
@@ -1445,6 +1510,7 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
         targets.push({
           ...victimInfo(state, v),
           hitChance: zero ? 100 : kaijuAccuracy(state, actor, a, v, dist),
+          phase: v.kind === "kaiju" && !zero ? phaseChance(state[v.actor]) : 0,
           damage: damageRange(a.damage[0], a.damage[1], kaijuDamageMod(state, actor, a, v), zero),
         });
       }
@@ -1477,6 +1543,9 @@ export function actions(state) {
   why = over ? overWhy : k.used.roar ? "Already roared this turn." : k.ap < RULES.roarAp ? "Not enough AP." : null;
   add("roar", "Roar", "roar", RULES.roarAp, 0, why);
   add("withdraw", "Withdraw", "withdraw", 0, 0, over ? overWhy : state.retreat.includes(k.at) ? null : "Not on a retreat hex.");
+  // After the withdraw, so the digit keys read in order down the list (panels.js).
+  why = over ? overWhy : k.ap < RULES.slamAp ? "Not enough AP." : slamTargets(state).length ? null : "No kaiju adjacent to slam.";
+  add("slam", SLAM.name, "slam", RULES.slamAp, 0, why);
   add("end", "End turn", "end", 0, 0, over ? overWhy : null);
   return out;
 }

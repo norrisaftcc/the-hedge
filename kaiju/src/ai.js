@@ -6,7 +6,7 @@ import { RULES } from "./data/kaiju.js";
 import { kaijuDef } from "./data/variants.js";
 import { UNITS } from "./data/units.js";
 import { STRUCTURES, TERRAIN } from "./data/terrain.js";
-import { alive, reach, unitReach, canFire, attackOf, attackReady, attackTargets, affected, forecast, unitAt, stompTargets } from "./rules.js";
+import { alive, reach, unitReach, canFire, attackOf, attackReady, attackTargets, affected, forecast, unitAt, stompTargets, slamTargets } from "./rules.js";
 
 const ACTORS = ["kaiju", "rival"];
 const LOW_BATTERY = 2;
@@ -66,7 +66,7 @@ function expected(state, actor, attackId, target, facing) {
   const f = forecast(state, attackId, target, actor, facing);
   const foe = f.targets.find((t) => t.kind === "kaiju");
   if (!foe) return 0;
-  return (foe.hitChance / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
+  return (foe.hitChance / 100) * (1 - (foe.phase || 0) / 100) * ((foe.damage[0] + foe.damage[1]) / 2);
 }
 
 // Every way the actor can strike the other kaiju from where it stands: [{attack, facing, target, value}].
@@ -90,13 +90,17 @@ function strikes(state, actor) {
       break;
     }
   }
+  // The body slam, open to every kaiju next to the other (DESIGN 17.3 D). It faces no way.
+  if (k.ap >= RULES.slamAp && slamTargets(state, actor).includes(foe.at)) {
+    out.push({ attack: { id: "slam", kind: "slam" }, slam: true, facing: null, target: foe.at, value: expected(state, actor, "slam", foe.at, null) });
+  }
   return out;
 }
 
 function strikeCommands(actor, k, s) {
   const cmds = [];
   if (s.facing !== null && s.facing !== k.facing) cmds.push({ t: "face", actor, dir: s.facing });
-  cmds.push({ t: "attack", actor, attack: s.attack.id, target: s.target });
+  cmds.push(s.slam ? { t: "slam", actor, target: s.target } : { t: "attack", actor, attack: s.attack.id, target: s.target });
   return cmds;
 }
 

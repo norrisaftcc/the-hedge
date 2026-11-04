@@ -124,10 +124,25 @@ function eventsOf(setupArg) {
   return { events, end };
 }
 
-test("playtest 001: the bot on seed 39724 does not take the plant's blast", () => {
+// Playtest 001 (seed 39724, the Squamous One with gut, reserves and bulk, swathe:plant) took a lethal blast.
+// The test pinned a game with no blast at all. Phase-out (DESIGN 18, v0.5.0) rolls the dice after each
+// landed hit, so the bot now plays a different game on this seed and takes a blast on turn 2. DESIGN 16.3
+// allows a survivable blast on the objective, so what stays pinned is the intent: the bot never takes a
+// blast that could finish the monster (blastRisk says lethal), and the monster does not die "sudden".
+test("playtest 001: the bot on seed 39724 never takes a lethal blast from the plant", () => {
   const swathe = { kaiju: "squamous", mutations: ["gut", "reserves", "bulk"], mission: resolveMission("swathe", { seed: 39724, target: "plant" }), target: "plant", seed: 39724 };
-  const { events, end } = eventsOf(swathe);
-  assert.deepEqual(events.filter((e) => e.k === "blast"), []);
+  const { commands, state: end } = playBot(swathe);
+  let state = create(swathe);
+  for (const c of commands) {
+    const before = state;
+    const out = step(state, c);
+    for (const e of out.events.filter((x) => x.k === "blast")) {
+      const risk = blastRisk(before, e.at);
+      assert.ok(risk && !risk.lethal, `a blast at ${e.at} on turn ${before.turn} could have been lethal`);
+      assert.ok(e.after.hp > 0 || e.part !== "body", "the blast did not finish the body");
+    }
+    state = out.state;
+  }
   assert.notEqual(end.result && end.result.death, "sudden");
 });
 

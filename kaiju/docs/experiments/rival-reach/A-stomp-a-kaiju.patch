@@ -1,0 +1,198 @@
+diff --git a/kaiju/src/ai.js b/kaiju/src/ai.js
+index 4abc08e..c3becaf 100644
+--- a/kaiju/src/ai.js
++++ b/kaiju/src/ai.js
+@@ -162,6 +162,9 @@ export function planRival(state) {
+     return strikeCommands(actor, r, top);
+   }
+ 
++  // No attack to use: a kick or body check, if the player's kaiju is beside it (DESIGN 17.3 A).
++  if (r.ap >= RULES.stompAp && stompTargets(state, actor).includes(foe.at)) return [{ t: "stomp", actor, target: foe.at }];
++
+   if (def.energy.rule === "battery" && r.energy <= LOW_BATTERY) {
+     const plan = planRecharge(state, actor, foe);
+     if (plan) return plan;
+diff --git a/kaiju/src/rules.js b/kaiju/src/rules.js
+index 122cf6f..fd535b8 100644
+--- a/kaiju/src/rules.js
++++ b/kaiju/src/rules.js
+@@ -933,10 +933,16 @@ function adjacent(s, actor, key) {
+   return !!s.map.hexes[key] && H.distance(s[actor].at, key) === 1;
+ }
+ 
++// What a stomp may land on: structures and ground units, and the other kaiju when it stands
++// beside the actor and the actor's legs are not crippled (DESIGN 17.3 A).
+ export function stompTargets(state, actor = "kaiju") {
+   const k = state[actor];
+   if (!alive(k)) return [];
++  const o = state[other(actor)];
++  const foe = alive(o) && k.parts.legs.hp > 0 ? o.at : null;
+   return onMap(state, H.neighbors(k.at)).filter((h) => {
++    if (h === foe) return true;
++    if (alive(o) && o.at === h) return false;
+     const u = unitAt(state, h);
+     return !!state.map.hexes[h].structure || (u && !UNITS[u.type].air);
+   });
+@@ -948,6 +954,11 @@ function doStomp(s, actor, cmd, ev) {
+   if (!adjacent(s, actor, cmd.target) || !stompTargets(s, actor).includes(cmd.target)) return "Nothing to stomp there.";
+   k.ap -= RULES.stompAp;
+   ev = marksUse(ev);
++  const foe = kaijuAt(s, cmd.target);
++  if (foe) {
++    strikeKaiju(s, actor, STOMP, foe, ev);
++    return null;
++  }
+   const u = unitAt(s, cmd.target);
+   if (u && !UNITS[u.type].air) strikeUnit(s, actor, STOMP, u, ev);
+   if (s.map.hexes[cmd.target].structure) strikeStructure(s, actor, STOMP, cmd.target, ev);
+@@ -1425,9 +1436,14 @@ export function forecast(state, attackId, target, actor = "kaiju", facing = null
+     if (stompTargets(state, actor).includes(target)) {
+       const u = unitAt(state, target);
+       const vs = [];
+-      if (u && !UNITS[u.type].air) vs.push({ kind: "unit", unit: u });
+-      if (state.map.hexes[target].structure) vs.push({ kind: "structure", key: target });
+-      for (const v of vs) targets.push({ ...victimInfo(state, v), hitChance: 100, damage: damageRange(lo, hi, kaijuDamageMod(state, actor, STOMP, v), false) });
++      const foe = kaijuAt(state, target);
++      if (foe) vs.push({ kind: "kaiju", actor: foe });
++      else if (u && !UNITS[u.type].air) vs.push({ kind: "unit", unit: u });
++      if (!foe && state.map.hexes[target].structure) vs.push({ kind: "structure", key: target });
++      for (const v of vs) {
++        const hitChance = v.kind === "kaiju" ? kaijuAccuracy(state, actor, STOMP, v, 1) : 100;
++        targets.push({ ...victimInfo(state, v), hitChance, damage: damageRange(lo, hi, kaijuDamageMod(state, actor, STOMP, v), false) });
++      }
+     }
+     return { apCost: RULES.stompAp, energyCost: 0, targets, returnFire: returnFire(state, actor) };
+   }
+diff --git a/kaiju/tests/reach.test.mjs b/kaiju/tests/reach.test.mjs
+new file mode 100644
+index 0000000..d1fac79
+--- /dev/null
++++ b/kaiju/tests/reach.test.mjs
+@@ -0,0 +1,127 @@
++// KAI-11 (DESIGN §17.2, issue #27): a living monster can always hurt an adjacent rival. For every
++// kaiju and every variant, with any one of head, arms, legs or aux crippled, its once-a-mission
++// attacks spent, full AP and full energy, and the rival in any of the six adjacent hexes, there is
++// a legal command, after a free turn, whose forecast has a hit chance above 0 and a top damage above 0.
++import { test } from "node:test";
++import assert from "node:assert/strict";
++import * as H from "../src/hex.js";
++import { create, step, forecast, stompTargets } from "../src/rules.js";
++import { planRival } from "../src/ai.js";
++import { KAIJU, RULES } from "../src/data/kaiju.js";
++import { VARIANTS, kaijuDef } from "../src/data/variants.js";
++import { canHurtRival } from "../tools/sim.mjs";
++import { blank, putUnit, setup } from "./fixtures.mjs";
++
++const CRIPPLED = ["head", "arms", "legs", "aux"];
++
++// Every kaiju as [id, variant]: the base first, then each of its looks.
++const LOOKS = Object.keys(KAIJU).flatMap((id) => [[id, null], ...Object.values(VARIANTS).filter((v) => v.of === id).map((v) => [id, v.id])]);
++
++function field(id, variant, rival = "radiosaur") {
++  const m = blank({ objective: { kind: "rival" }, rivalStart: { at: [5, 0], facing: 3 }, rivalRetreat: [] });
++  return create(setup(m, { kaiju: id, variant: variant || undefined, rival }));
++}
++
++test("KAI-11: every kaiju and look, any one part crippled, can hurt a rival in any adjacent hex", () => {
++  const failed = [];
++  let cases = 0;
++  for (const [id, variant] of LOOKS) {
++    const def = kaijuDef(id, variant);
++    for (const part of CRIPPLED) {
++      for (let dir = 0; dir < 6; dir++) {
++        const s = field(id, variant);
++        s.kaiju.parts[part].hp = 0;
++        for (const a of def.attacks) if (a.effects && a.effects.oncePerMission) s.kaiju.used[a.id] = true;
++        s.rival.at = H.neighbor(s.kaiju.at, dir);
++        cases += 1;
++        if (!canHurtRival(s, { fresh: true })) failed.push(`${id}${variant ? "/" + variant : ""} ${part} crippled, rival in direction ${dir}`);
++      }
++    }
++  }
++  console.log(`KAI-11: ${cases} cases, ${failed.length} fail${failed.length ? ", e.g. " + failed.slice(0, 3).join("; ") : ""}`);
++  assert.equal(failed.length, 0, `${failed.length} of ${cases} cases cannot hurt the rival: ${failed.slice(0, 6).join("; ")}`);
++});
++
++// The stricter reading of "full AP": a crippled leg costs AP at the start of the turn, and a
++// hungry kaiju loses one more (RULES.legsAp, RULES.hungryAp; the floor is 1). So the AP a kaiju with
++// crippled legs really has is lower than its apMax at the start of the mission.
++test("KAI-11 strict: legs crippled and hungry, so with the AP the kaiju really has, can hurt a rival in any adjacent hex", () => {
++  const failed = [];
++  let cases = 0;
++  for (const [id, variant] of LOOKS) {
++    const def = kaijuDef(id, variant);
++    for (let dir = 0; dir < 6; dir++) {
++      const s = field(id, variant);
++      s.kaiju.parts.legs.hp = 0;
++      for (const a of def.attacks) if (a.effects && a.effects.oncePerMission) s.kaiju.used[a.id] = true;
++      const hungry = def.hunger !== null && def.hunger !== undefined ? RULES.hungryAp : 0;
++      const ap = Math.max(1, def.ap + (def.passives.includes("thrusters") ? 1 : 0) - RULES.legsAp.crippled - hungry);
++      s.kaiju.ap = ap;
++      s.kaiju.apMax = ap;
++      s.rival.at = H.neighbor(s.kaiju.at, dir);
++      cases += 1;
++      if (!canHurtRival(s)) failed.push(`${id}${variant ? "/" + variant : ""} legs crippled, ${ap} AP, rival in direction ${dir}`);
++    }
++  }
++  console.log(`KAI-11 strict: ${cases} cases, ${failed.length} fail${failed.length ? ", e.g. " + failed.slice(0, 3).join("; ") : ""}`);
++  assert.equal(failed.length, 0, `${failed.length} of ${cases} cases cannot hurt the rival: ${failed.slice(0, 6).join("; ")}`);
++});
++
++test("KAI-11: the test covers the base and every look of every kaiju", () => {
++  assert.equal(LOOKS.length, Object.keys(KAIJU).length + Object.keys(VARIANTS).length);
++  assert.ok(LOOKS.some(([, v]) => v === null) && LOOKS.some(([, v]) => v !== null));
++});
++
++// ---------- direction A: a stomp on a kaiju (DESIGN §17.3) ----------
++
++test("stomp: the rival beside the kaiju is a stomp target, and the forecast is a stomp, not an attack's", () => {
++  const s = field("squamous", null);
++  s.rival.at = H.neighbor(s.kaiju.at, 2);
++  assert.ok(stompTargets(s).includes(s.rival.at));
++  const f = forecast(s, "stomp", s.rival.at);
++  assert.equal(f.targets.length, 1);
++  assert.equal(f.targets[0].kind, "kaiju");
++  assert.ok(f.targets[0].hitChance > 0 && f.targets[0].hitChance <= 95);
++  assert.deepEqual(f.targets[0].damage[1] > 0, true);
++  assert.equal(f.apCost, 1);
++});
++
++test("stomp: a stomp on a kaiju costs 1 AP, strikes one kaiju and nothing else, and logs a stomp attack", () => {
++  const s = field("squamous", null);
++  s.rival.at = H.neighbor(s.kaiju.at, 2);
++  const ap = s.kaiju.ap;
++  const out = step(s, { t: "stomp", target: s.rival.at });
++  assert.equal(out.state.kaiju.ap, ap - 1);
++  const hits = out.events.filter((e) => e.k === "attack");
++  assert.equal(hits.length, 1);
++  assert.equal(hits[0].attack.id, "stomp");
++  assert.equal(hits[0].defender.side, "rival");
++});
++
++test("stomp: crippled legs cannot stomp a kaiju, and can still stomp a unit", () => {
++  const s = field("squamous", null);
++  const [a, b] = H.neighbors(s.kaiju.at);
++  s.rival.at = a;
++  putUnit(s, "infantry", b);
++  s.kaiju.parts.legs.hp = 0;
++  assert.ok(!stompTargets(s).includes(a));
++  assert.ok(stompTargets(s).includes(b));
++  assert.equal(step(s, { t: "stomp", target: a }).events[0].k, "refuse");
++});
++
++test("stomp: the rival's crippled legs bind it too", () => {
++  const s = field("radiosaur", null);
++  s.rival.at = H.neighbor(s.kaiju.at, 0);
++  s.rival.parts.legs.hp = 0;
++  assert.ok(!stompTargets(s, "rival").includes(s.kaiju.at));
++  assert.ok(stompTargets(s, "kaiju").includes(s.rival.at));
++});
++
++test("stomp: the rival, with no attack to use, stomps the player's kaiju", () => {
++  const s = field("radiosaur", null, "dairengo");
++  s.rival.at = H.neighbor(s.kaiju.at, 3);
++  s.rival.parts.arms.hp = 0;
++  s.rival.used.finish = true;
++  const cmds = planRival(s);
++  assert.deepEqual(cmds, [{ t: "stomp", actor: "rival", target: s.kaiju.at }]);
++});

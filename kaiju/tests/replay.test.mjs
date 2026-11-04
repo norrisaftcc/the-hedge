@@ -2,7 +2,7 @@
 // gives a fixed final score, grade and death [PLT-6]. If the rules or the data change on purpose, record
 // again with the bot and change the numbers here in the same commit.
 // Commands are written one turn to a line: "m q,r" move, "a attack q,r" attack, "f dir" face,
-// "s q,r" stomp, "e q,r" eat, "r" roar, "w" withdraw, "end" end the turn.
+// "s q,r" stomp, "sl q,r" body slam, "e q,r" eat, "r" roar, "w" withdraw, "end" end the turn.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -37,6 +37,8 @@ const GAMES = [
   {
     name: "coast",
     setup: { kaiju: "squamous", mission: "coast", target: null, rival: "dairengo", seed: 7 },
+    // Re-recorded with the bot for v0.5.0: phase-out rolls the dice after each hit that lands on the
+    // Squamous One, so the old command list no longer ends the mission (DESIGN 18.7).
     commands: [
       "m 5,7 | end",
       "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
@@ -44,18 +46,25 @@ const GAMES = [
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
       "a grab 6,6 | a grab 6,6 | a grab 6,6 | end",
       "e 5,6 | a grab 6,6 | a grab 6,6 | r | end",
-      "f 2 | a gaze 5,6 | end",
-      "end",
-      "r | f 3 | a gaze 4,7 | a gaze 4,7 | end",
-      "a gaze 4,7 | end",
-      "e 4,7 | a gaze 4,7 | end",
-      "end",
-      "e 4,7 | a gaze 4,7 | end",
-      "f 2 | a gaze 5,6 | a gaze 5,6 | end",
-      "end",
-      "a grab 6,6 | a grab 6,6 | end",
+      "a grab 6,6 | a grab 6,6",
     ],
-    result: { grade: "draw", outcome: "time", turn: 16, death: null, score: { destruction: 20, units: 30, objective: 0, time: 0, parts: 200, total: 250 } },
+    result: { grade: "total victory", outcome: "goal", turn: 7, death: null, score: { destruction: 20, units: 10, objective: 500, time: 180, parts: 250, total: 960 } },
+  },
+  {
+    // Pins the body slam in a whole game (v0.4.0, DESIGN 17), against a rival that phases out (v0.5.0).
+    // Recorded with the bot: playBot(setupFor("dairengo", { mission: "coast", rival: "squamous" }, 7)) in tools/sim.mjs.
+    name: "coast slam",
+    setup: { kaiju: "dairengo", mission: "coast", target: null, rival: "squamous", seed: 7 },
+    commands: [
+      "m 5,7 | end",
+      "a finish 6,6 | a punch 6,6 | end",
+      "sl 6,6 | sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | sl 6,6 | end",
+      "sl 6,6 | r | end",
+    ],
+    result: { grade: "victory", outcome: "goal", turn: 7, death: null, score: { destruction: 10, units: 0, objective: 500, time: 180, parts: 200, total: 890 } },
   },
   {
     // The bot never withdraws; the mad scientist arrives on turn 5 and the paralysis does the rest.
@@ -84,6 +93,7 @@ function decode(text) {
   if (op === "a") return { t: "attack", attack: a, target: b };
   if (op === "f") return { t: "face", dir: Number(a) };
   if (op === "s") return { t: "stomp", target: a };
+  if (op === "sl") return { t: "slam", target: a };
   if (op === "e") return { t: "eat", target: a };
   if (op === "r") return { t: "roar" };
   if (op === "w") return { t: "withdraw" };
@@ -151,3 +161,17 @@ for (const game of GAMES) {
     assert.match(h, /^[^;]+; [A-Z ]+ '[^']+'$/, `headline: ${h}`);
   });
 }
+
+// A body slam must stay in the pinned games: the rules for it are in slam.test.mjs, and this keeps a whole game
+// that uses it, by the player and by the rival, with a slam that passed through as well.
+test("replay: the pinned games include body slams, by both kaiju, and one that passed through", () => {
+  const slams = [];
+  for (const game of GAMES) {
+    for (const e of replayEvents(setupOf(game), commandsOf(game)).events) {
+      if (e.k === "attack" && e.attack.id === "slam") slams.push(e);
+    }
+  }
+  assert.ok(slams.some((e) => e.attacker.side === "kaiju" && e.hit && !e.phased), "the player's slam lands");
+  assert.ok(slams.some((e) => e.attacker.side === "rival" && e.hit), "the rival's slam lands");
+  assert.ok(slams.some((e) => e.phased), "a slam passes through the Squamous One");
+});

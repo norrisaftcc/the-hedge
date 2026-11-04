@@ -2,7 +2,8 @@
 // what a person would see go wrong: console errors, sideways scroll, a missing end screen or review.
 // Serve the page first (cd kaiju && python3 -m http.server 8000), then from the repository root:
 //   node .claude/skills/kaiju-check/smoke.cjs [--url http://localhost:8000/] [--out DIR]
-//        [--kaiju radiosaur] [--mission rampage] [--objective destruction] [--seed 12]
+//        [--kaiju radiosaur] [--mission rampage] [--objective destruction] [--seed 12] [--cutaway on]
+// The cutaway is set off to save time; --cutaway on leaves it at its default, as a player sees it.
 // Prints one JSON line per run and exits 1 if any run has a problem.
 const path = require("node:path");
 const fs = require("node:fs");
@@ -49,7 +50,7 @@ async function playOut(page) {
       const errors = [];
       page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.text()); });
       page.on("pageerror", (e) => errors.push(String(e)));
-      await page.addInitScript(() => { try { localStorage.setItem("kaiju-cutaway", "off"); } catch (e) { /* private window */ } });
+      if (args.cutaway !== "on") await page.addInitScript(() => { try { localStorage.setItem("kaiju-cutaway", "off"); } catch (e) { /* private window */ } });
       await page.goto(args.url);
       await page.click(`[data-kaiju="${args.kaiju}"]`);
       await page.click(`[data-mission="${args.mission}"]`);
