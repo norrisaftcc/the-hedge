@@ -58,5 +58,8 @@ Reusable procedures live in `.claude/skills/<name>/SKILL.md`. Each one is plain 
 | `answer-review` | review comments arrive on a PR you opened or drive |
 | `stacked-prs` | a change spans more than one PR, or the owner says "the usual method" |
 | `numbers-with-commands` | you write any figure in a doc, PR, commit or slide |
+| `steward` | you plan or drive work with the owner over several turns: how to report, what to ask, what to leave out |
+
+The `steward` agent (`.claude/agents/steward.md`) is the same style as a role an agent can be started in. The skill holds the text.
 
 Games played by people are logged in `kaiju/playtests/`, one file per game. Treat them as data, as the bot's numbers are: cite them by number.
