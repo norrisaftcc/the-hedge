@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Midnight Breach: a line-drawing adventure. Lock an intruder out of the company network before the moves run out.">
+<title>Midnight Breach</title>
+<!--
+  Midnight Breach, a prototype. One file, no build step, nothing installed.
+
+  The page has two halves, and the order matters:
+    RULES  the game. No DOM. step(state, line) returns a new state and a list of events.
+           Each event carries its text and the data behind it.
+    VIEW   the screen. It prints the events' text and draws the picture from the events' data.
+           It decides nothing about the game.
+
+  The picture is 280 by 160 dots, drawn with lines only, as on a 1980 home computer.
+-->
+<style>
+  :root {
+    --page: #17171b;
+    --screen: #000;
+    --ink: #f2f2f2;
+    --dim: #8f8fa6;
+    --green: #14f53c;
+    --violet: #ff6bfd;
+    --orange: #ff7a45;
+    --blue: #3fd4ff;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--page); }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 16px/1.35 ui-monospace, "SF Mono", Menlo, Consolas, "Courier New", monospace;
+  }
+  main {
+    width: min(100% - 32px, 840px, 54vh * 1.75);
+    min-width: min(100% - 32px, 320px);
+    margin: 16px auto;
+  }
+  .crt {
+    background: var(--screen);
+    border: 1px solid #33333d;
+    border-radius: 10px;
+    padding: 12px;
+    text-transform: uppercase;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 280 / 160;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+  .status {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 16px;
+    margin-top: 8px;
+    padding: 4px 0;
+    border-block: 1px solid #33333d;
+  }
+  .status .where { font-weight: 700; }
+  .bar .rest { color: var(--dim); }
+  .ok { color: var(--green); }
+  .warn { color: var(--orange); }
+  .crit { color: var(--screen); background: var(--orange); font-weight: 700; }
+  .bar .crit { color: var(--orange); background: none; }
+  .log {
+    height: 10.8em;
+    overflow-y: auto;
+    margin-top: 6px;
+    overflow-wrap: anywhere;
+    scrollbar-color: #33333d var(--screen);
+  }
+  .log p { margin: 0; white-space: pre-wrap; }
+  .log .echo { color: var(--dim); margin-top: 0.35em; }
+  .log .room { margin-top: 0.35em; }
+  .log .room b { background: var(--ink); color: var(--screen); padding: 0 0.5ch; }
+  .log .good { color: var(--green); }
+  .log .hint { color: var(--violet); }
+  .log .cool { color: var(--blue); }
+  .prompt { display: flex; gap: 1ch; margin-top: 4px; }
+  .prompt input {
+    flex: 1;
+    min-width: 0;
+    background: none;
+    border: 0;
+    outline: 0;
+    padding: 0;
+    color: var(--ink);
+    font: inherit;
+    text-transform: uppercase;
+    caret-color: var(--green);
+    caret-shape: block;
+  }
+  .prompt:focus-within span { color: var(--green); }
+  footer { color: var(--dim); font-size: 13px; margin-top: 10px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+</style>
+</head>
+<body>
+<main>
+  <div class="crt" id="crt">
+    <canvas id="pic" width="280" height="160" role="img" aria-label="Title picture"></canvas>
+    <div class="status" id="status" aria-live="off">
+      <span class="where" id="where">Midnight Breach</span>
+      <span id="counts"></span>
+      <span class="bar" id="bar"></span>
+    </div>
+    <div class="log" id="log" role="log" aria-live="polite" tabindex="0" aria-label="The story so far"></div>
+    <form class="prompt" id="form" autocomplete="off">
+      <span aria-hidden="true">&gt;</span>
+      <label class="sr" for="cmd">Your command</label>
+      <input id="cmd" name="cmd" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="60" enterkeyhint="go">
+    </form>
+  </div>
+  <footer>Midnight Breach. A prototype. Type one or two words and press Enter. HELP lists them.</footer>
+</main>
+
+<script>
+/* ==RULES== Nothing below touches the page until the VIEW marker. tests/walk.test.mjs runs this half alone. */
+const Breach = (() => {
+  'use strict';
+
+  const CARRIED = 'carried';
+  const GONE = 'gone';
+
+  // Numbers are data. A balance change is a change here.
+  const DATA = {
+    startMoves: 40,
+    start: 'security',
+    score: { take: 5, logs: 20, win: 50, perMoveLeft: 2 },
+    warn: { low: 12, critical: 5 },                  // moves left
+    bar: { width: 20, warn: 40, critical: 75 },      // percent stolen
+    ranks: [
+      { atLeast: 20, name: 'Elite Analyst' },
+      { atLeast: 10, name: 'Senior Analyst' },
+      { atLeast: 0, name: 'Junior Analyst' },
+    ],
+    skate: { item: 'skateboard', every: 2 },
+    // North is up.
+    grid: [
+      ['archive', 'exec', 'conf', 'roof'],
+      ['help', 'security', 'server', 'closet'],
+      ['garage', 'lobby', 'breakroom', 'vault'],
+    ],
+    rooms: {
+      security: { name: 'Security Office', short: 'SECURITY', desc: 'Monitors flash red: UNAUTHORIZED LOGIN DETECTED.' },
+      server: { name: 'Server Room', short: 'SERVER', desc: 'Rows of servers. One terminal is streaming data to an unknown address.' },
+      closet: { name: 'Network Closet', short: 'CLOSET', desc: 'A cramped closet of switches and cables. A safe sits open.',
+        key: 'badge', locked: 'The closet door is locked. It needs an access badge.' },
+      breakroom: { name: 'Break Room', short: 'BREAK', desc: 'A quiet break room. A vending machine hums in the corner.' },
+      archive: { name: 'Archive', short: 'ARCHIVE', desc: 'Dusty shelves of old records and unused equipment.' },
+      exec: { name: 'Executive Office', short: 'EXEC', desc: "A plush office. The CEO's computer is still logged in." },
+      lobby: { name: 'Lobby', short: 'LOBBY', desc: 'A marble lobby. The front desk is empty.' },
+      garage: { name: 'Parking Garage', short: 'GARAGE', desc: 'A concrete garage with flickering lights.',
+        light: 'flashlight', dark: 'It is pitch dark. You cannot see any items without a light.',
+        darkTake: 'It is too dark to find anything.' },
+      roof: { name: 'Roof', short: 'ROOF', desc: 'A windy rooftop covered in antennas and satellite dishes.' },
+      vault: { name: 'Vault', short: 'VAULT', desc: 'A steel vault. Backup disks sit in numbered slots.',
+        key: 'key', locked: 'The vault is locked. It needs a vault key.' },
+      conf: { name: 'Conference Room', short: 'CONF', desc: 'A long table with chairs pushed back in a hurry.' },
+      help: { name: 'Help Desk', short: 'HELP DESK', desc: 'Headsets and half-finished tickets cover the desks.' },
+    },
+    items: {
+      badge: { name: 'access badge', words: ['badge', 'access'], start: 'archive',
+        desc: "A badge marked 'NETWORK CLOSET ACCESS'.",
+        use: 'You wave the badge around. It only works on the closet door.' },
+      laptop: { name: 'laptop', words: ['laptop', 'computer'], start: 'security',
+        desc: 'A security laptop with incident-response tools installed.',
+        effect: { kind: 'lockout', room: 'server',
+          elsewhere: "The laptop shows 'No secure connection'. Try the Server Room.",
+          needs: [
+            { item: 'token', text: 'The laptop asks for an admin token.' },
+            { item: 'disk', text: 'The laptop asks for the firewall disk.' },
+          ],
+          text: 'You plug in the token, load the firewall disk, and run the lockout script...' } },
+      token: { name: 'admin token', words: ['token', 'admin'], start: 'closet',
+        desc: 'A hardware token that holds the admin lockout key.',
+        use: 'The token needs a laptop to plug into.' },
+      disk: { name: 'firewall disk', words: ['disk', 'firewall'], start: 'vault',
+        desc: "A disk labeled 'FIREWALL RULES - RESTORE'.",
+        use: 'The disk needs a laptop to load it.' },
+      key: { name: 'vault key', words: ['key'], start: 'garage',
+        desc: "A heavy steel key stamped 'VAULT'.",
+        use: 'You turn the key over. It must fit the vault door.' },
+      printout: { name: 'phishing printout', words: ['printout', 'phishing', 'email', 'paper'], start: 'breakroom',
+        desc: "A printed email: 'Urgent. Reset your password at this link.'",
+        use: "The email came from the CEO's account. The attacker has CEO credentials." },
+      usb: { name: 'usb drive', words: ['usb', 'drive'], start: 'exec',
+        desc: 'A USB drive that can save the server activity logs.',
+        effect: { kind: 'logs', room: 'server',
+          text: 'You save the server logs as evidence.',
+          elsewhere: 'Nothing to copy here. Try the Server Room.',
+          done: 'The logs are already saved.' } },
+      flashlight: { name: 'flashlight', words: ['flashlight', 'light', 'torch'], start: 'help',
+        desc: 'A heavy flashlight with fresh batteries.',
+        use: 'You click on the flashlight. The shadows retreat.' },
+      headset: { name: 'headset', words: ['headset', 'headphones'], start: 'help',
+        desc: 'A headset. Faint IT chatter plays in the earpiece.',
+        use: "IT chatter: 'The firewall disk is locked in the Vault.'" },
+      coffee: { name: 'coffee', words: ['coffee', 'cup', 'mug'], start: 'breakroom',
+        desc: 'A hot coffee. It might buy you some time.',
+        effect: { kind: 'moves', add: 3, text: 'You feel sharper.' } },
+      energy: { name: 'energy drink', words: ['energy', 'drink', 'can'], start: 'roof',
+        desc: 'A cold energy drink. Big boost, short crash.',
+        effect: { kind: 'moves', add: 5, text: 'You pop the can. Zoom.' } },
+      skateboard: { name: 'skateboard', words: ['skateboard', 'skate', 'board'], start: 'lobby',
+        desc: 'A skateboard. Every other move is free while you carry it.',
+        use: 'Just keep it with you. Every other move will be free.' },
+      map: { name: 'building map', words: ['map', 'building'], start: 'conf',
+        desc: 'A folded map of the whole building.',
+        effect: { kind: 'map', text: 'You unfold the map.' } },
+      note: { name: 'sticky note', words: ['note', 'sticky'], start: 'conf',
+        desc: 'A sticky note in messy handwriting.',
+        use: "Note: 'Vault key is in the Parking Garage. Bring a light.'" },
+    },
+    // The first hint whose items are all still missing is the one given.
+    hints: [
+      { missing: ['laptop'], text: 'You need the laptop from the Security Office.' },
+      { missing: ['token', 'badge'], text: 'Find an access badge in the Archive, the northwest corner.' },
+      { missing: ['token'], text: 'The token is in the Network Closet, east of the Server Room.' },
+      { missing: ['disk', 'key', 'flashlight'], text: 'The Garage is dark. Get a flashlight from the Help Desk.' },
+      { missing: ['disk', 'key'], text: 'The vault key is in the Parking Garage, the southwest corner.' },
+      { missing: ['disk'], text: 'The firewall disk is in the Vault, the southeast corner.' },
+      { missing: [], text: 'Use the laptop in the Server Room.' },
+    ],
+    text: {
+      help: [
+        'Type one or two words and press Enter.',
+        'NORTH, EAST, SOUTH, WEST, or N E S W.',
+        'LOOK. TAKE LAPTOP. TAKE ALL. USE LAPTOP. EXAMINE BADGE.',
+        'INVENTORY. MAP. HINT. SCORE. QUIT. RESTART.',
+        'Goal: carry the laptop, the admin token and the firewall disk to the Server Room. Use the laptop there before the moves run out.',
+        'Taking items scores points. Moves you save are a bonus.',
+      ].join('\n'),
+      noWay: 'You cannot go that way.',
+      goWhere: 'Go where?',
+      notHere: 'You do not see that here.',
+      notCarried: 'You are not carrying that.',
+      already: 'You already have it.',
+      nothing: 'You see nothing to take.',
+      empty: 'You carry nothing.',
+      drop: 'Keep it. The night is short.',
+      unlock: 'A door here opens for whoever carries the right thing. Walk at it.',
+      glide: 'You glide on the skateboard. That move was free.',
+      low: 'Warning: the intruder is copying more data.',
+      critical: 'Critical: the transfer is 95% complete.',
+      won: 'System secure. The intruder is locked out.',
+      lost: 'Data stolen. The breach is complete.',
+      quit: 'You leave the building to its visitor.',
+      over: 'The game is over. Type RESTART to play again.',
+      again: 'Type RESTART to play again.',
+    },
+  };
+
+  const DIRS = { north: [-1, 0], east: [0, 1], south: [1, 0], west: [0, -1] };
+
+  // The parser's words. A word from the player is looked up with Object.hasOwn and nothing else.
+  const DIR_WORDS = { n: 'north', north: 'north', e: 'east', east: 'east', s: 'south', south: 'south', w: 'west', west: 'west' };
+  const VERBS = {
+    go: 'go', walk: 'go', move: 'go', run: 'go',
+    l: 'look', look: 'look',
+    take: 'take', get: 'take', grab: 'take', pick: 'take',
+    use: 'use', drink: 'use', read: 'use', ride: 'use', wear: 'use', plug: 'use', load: 'use', play: 'use', unfold: 'use',
+    x: 'examine', examine: 'examine', inspect: 'examine', search: 'examine',
+    i: 'inventory', inv: 'inventory', inventory: 'inventory',
+    map: 'map', help: 'help', hint: 'hint', score: 'score',
+    quit: 'quit', exit: 'quit', q: 'quit',
+    restart: 'restart', again: 'restart',
+    drop: 'drop', unlock: 'unlock', open: 'unlock',
+  };
+  const FILLER = { the: 1, a: 1, an: 1, at: 1, up: 1, to: 1, on: 1, in: 1, with: 1, my: 1, of: 1 };
+  const ALL = { all: 1, everything: 1 };
+  const NOUNS = {};
+  for (const [id, item] of Object.entries(DATA.items)) for (const w of item.words) NOUNS[w] = id;
+
+  const has = (table, word) => Object.hasOwn(table, word);
+
+  function parse(line) {
+    const words = String(line).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(' ')
+      .filter((w) => w && !has(FILLER, w));
+    if (!words.length) return { verb: 'nothing' };
+    const [first, ...rest] = words;
+    if (has(DIR_WORDS, first)) return { verb: 'go', dir: DIR_WORDS[first] };
+    if (!has(VERBS, first)) return { verb: 'unknown', word: first };
+    let verb = VERBS[first];
+    if (verb === 'go') {
+      const d = rest.find((w) => has(DIR_WORDS, w));
+      return { verb, dir: d ? DIR_WORDS[d] : null };
+    }
+    const noun = rest.find((w) => has(NOUNS, w));
+    const item = noun ? NOUNS[noun] : null;
+    if (verb === 'look' && rest.length) verb = 'examine';
+    return { verb, item, all: rest.some((w) => has(ALL, w)), word: rest[0] || null };
+  }
+
+  // ---- reading the state ----
+
+  const carried = (s, id) => s.where[id] === CARRIED;
+
+  function exitsOf(roomId) {
+    const out = {};
+    DATA.grid.forEach((row, r) => row.forEach((id, c) => {
+      if (id !== roomId) return;
+      for (const [dir, [dr, dc]] of Object.entries(DIRS)) {
+        const to = DATA.grid[r + dr]?.[c + dc];
+        if (to) out[dir] = to;
+      }
+    }));
+    return out;
+  }
+
+  const locked = (s, roomId) => {
+    const need = DATA.rooms[roomId].key;
+    return Boolean(need) && !carried(s, need);
+  };
+
+  const dark = (s, roomId) => {
+    const need = DATA.rooms[roomId].light;
+    return Boolean(need) && !carried(s, need);
+  };
+
+  const visible = (s) => (dark(s, s.at) ? [] : Object.keys(DATA.items).filter((id) => s.where[id] === s.at));
+
+  const list = (ids) => ids.map((id) => DATA.items[id].name).join(', ');
+
+  // ---- events ----
+
+  function roomEvent(s, how) {
+    const room = DATA.rooms[s.at];
+    const here = visible(s);
+    const lines = [room.desc];
+    if (dark(s, s.at)) lines.push(room.dark);
+    else lines.push(here.length ? `You see: ${list(here)}.` : DATA.text.nothing);
+    lines.push(`Exits: ${Object.keys(exitsOf(s.at)).join(', ')}.`);
+    return { type: 'room', how, room: s.at, name: room.name, items: here, text: lines.join('\n') };
+  }
+
+  function mapEvent(s, text) {
+    const cells = {};
+    const lines = [text, `North is up. You are in the ${DATA.rooms[s.at].name}.`];
+    for (const [id, room] of Object.entries(DATA.rooms)) {
+      cells[id] = { short: room.short, locked: locked(s, id) };
+      if (cells[id].locked) lines.push(`Locked: ${room.name}. It needs the ${DATA.items[room.key].name}.`);
+    }
+    return { type: 'map', grid: DATA.grid, at: s.at, cells, text: lines.join('\n') };
+  }
+
+  // The last event of every step. The view draws its frame from this and nothing else.
+  function statusEvent(s) {
+    const { width, warn, critical } = DATA.bar;
+    const filled = Math.max(0, Math.min(width, Math.trunc((DATA.startMoves - s.moves) * width / DATA.startMoves)));
+    const percent = filled * 100 / width;
+    const exits = {};
+    for (const [dir, to] of Object.entries(exitsOf(s.at))) exits[dir] = { to, locked: locked(s, to) };
+    return {
+      type: 'status', room: s.at, name: DATA.rooms[s.at].name, dark: dark(s, s.at),
+      items: visible(s), exits, moves: s.moves, score: s.score, over: s.over,
+      stolen: { filled, width, percent, level: percent >= critical ? 'crit' : percent >= warn ? 'warn' : 'ok' },
+    };
+  }
+
+  // ---- the game ----
+
+  function newGame() {
+    const where = {};
+    for (const [id, item] of Object.entries(DATA.items)) where[id] = item.start;
+    const state = { at: DATA.start, moves: DATA.startMoves, steps: 0, score: 0, logs: false, over: null, where };
+    return { state, events: [roomEvent(state, 'entered'), statusEvent(state)] };
+  }
+
+  function step(prev, line) {
+    const cmd = parse(line);
+    if (cmd.verb === 'restart') return newGame();
+    const s = structuredClone(prev);
+    const events = [];
+    const say = (text, type = 'say', data = {}) => events.push({ type, text, ...data });
+    const T = DATA.text;
+
+    const finish = () => { say(`Final score: ${s.score}.`); say(T.again); };
+
+    const go = () => {
+      if (!cmd.dir) return say(T.goWhere);
+      const to = exitsOf(s.at)[cmd.dir];
+      if (!to) return say(T.noWay, 'blocked');
+      if (locked(s, to)) return say(DATA.rooms[to].locked, 'blocked', { room: to });
+      s.at = to;
+      s.steps += 1;
+      const free = carried(s, DATA.skate.item) && s.steps % DATA.skate.every === 0;
+      if (!free) s.moves -= 1;
+      if (s.moves <= 0) {
+        s.over = 'lost';
+        say(T.lost, 'lose');
+        return finish();
+      }
+      if (free) say(T.glide, 'free');
+      events.push(roomEvent(s, 'entered'));
+      if (s.moves <= DATA.warn.critical) say(T.critical, 'crit');
+      else if (s.moves <= DATA.warn.low) say(T.low, 'warn');
+    };
+
+    const takeOne = (id) => {
+      s.where[id] = CARRIED;
+      s.score += DATA.score.take;
+    };
+
+    const take = () => {
+      if (dark(s, s.at)) return say(DATA.rooms[s.at].darkTake, 'blocked');
+      if (cmd.all) {
+        const here = visible(s);
+        if (!here.length) return say(T.nothing);
+        here.forEach(takeOne);
+        return say(`Taken: ${list(here)}.`, 'taken', { items: here });
+      }
+      if (!cmd.item) return say(cmd.word ? T.notHere : 'Take what?');
+      if (carried(s, cmd.item)) return say(T.already);
+      if (s.where[cmd.item] !== s.at) return say(T.notHere);
+      takeOne(cmd.item);
+      say(`Taken: ${DATA.items[cmd.item].name}.`, 'taken', { items: [cmd.item], item: cmd.item });
+    };
+
+    const use = () => {
+      if (!cmd.item) return say(cmd.word ? T.notCarried : 'Use what?');
+      if (!carried(s, cmd.item)) return say(T.notCarried);
+      const item = DATA.items[cmd.item];
+      const fx = item.effect;
+      if (!fx) return say(item.use, 'used', { item: cmd.item });
+      if (fx.kind === 'map') return events.push(mapEvent(s, fx.text));
+      if (fx.kind === 'moves') {
+        s.where[cmd.item] = GONE;
+        s.moves += fx.add;
+        return say(`${fx.text} +${fx.add} moves.`, 'good', { item: cmd.item, moves: fx.add });
+      }
+      if (fx.kind === 'logs') {
+        if (s.at !== fx.room) return say(fx.elsewhere);
+        if (s.logs) return say(fx.done);
+        s.logs = true;
+        s.score += DATA.score.logs;
+        return say(`${fx.text} +${DATA.score.logs} points.`, 'good', { item: cmd.item, points: DATA.score.logs });
+      }
+      if (fx.kind === 'lockout') {
+        if (s.at !== fx.room) return say(fx.elsewhere);
+        const lack = fx.needs.find((n) => !carried(s, n.item));
+        if (lack) return say(lack.text);
+        const bonus = s.moves * DATA.score.perMoveLeft;
+        s.score += DATA.score.win + bonus;
+        s.over = 'won';
+        const rank = DATA.ranks.find((r) => s.moves >= r.atLeast).name;
+        say(fx.text);
+        say(T.won, 'win', { movesLeft: s.moves, bonus, rank, score: s.score });
+        say(`Moves left: ${s.moves}. Bonus: +${bonus}.`);
+        say(`Rank: ${rank}.`, 'good');
+        return finish();
+      }
+    };
+
+    const examine = () => {
+      if (!cmd.item) return say(cmd.word ? T.notHere : 'Examine what?');
+      if (!carried(s, cmd.item) && !visible(s).includes(cmd.item)) return say(T.notHere);
+      const item = DATA.items[cmd.item];
+      say(`${item.name}: ${item.desc}`, 'examine', { item: cmd.item, name: item.name });
+    };
+
+    const inventory = () => {
+      const ids = Object.keys(DATA.items).filter((id) => carried(s, id));
+      say(ids.length ? `You carry: ${list(ids)}.` : T.empty, 'inventory', { items: ids });
+    };
+
+    const hint = () => {
+      const h = DATA.hints.find((x) => x.missing.every((id) => !carried(s, id)));
+      say(`Hint: ${h.text}`, 'hint');
+    };
+
+    const verbs = {
+      nothing: () => {},
+      unknown: () => say(`I do not know the word "${cmd.word}". Try HELP.`),
+      go, take, use, examine, inventory, hint,
+      look: () => events.push(roomEvent(s, 'looked')),
+      map: () => events.push(mapEvent(s, 'The building.')),
+      help: () => say(T.help, 'help'),
+      score: () => say(`Moves left: ${s.moves}. Score: ${s.score}.`),
+      drop: () => say(T.drop),
+      unlock: () => say(T.unlock),
+      quit: () => { s.over = 'quit'; say(T.quit, 'quit'); finish(); },
+    };
+
+    if (s.over) say(T.over);
+    else verbs[cmd.verb]();
+
+    events.push(statusEvent(s));
+    return { state: s, events };
+  }
+
+  return { DATA, newGame, step, parse };
+})();
+/* ==VIEW== */
+
+(() => {
+  'use strict';
+
+  // ---- the plotter: 280 by 160 dots, lines only ----
+
+  const W = 280, H = 160;
+  const BLACK = 0, WHITE = 1, GREEN = 2, VIOLET = 3, ORANGE = 4, BLUE = 5, DIM = 6;
+  const PALETTE = [[0, 0, 0], [242, 242, 242], [20, 245, 60], [255, 107, 253], [255, 122, 69], [63, 212, 255], [84, 84, 132]];
+
+  const canvas = document.getElementById('pic');
+  const ctx = canvas.getContext('2d');
+  const image = ctx.createImageData(W, H);
+  const dots = new Uint32Array(image.data.buffer);
+  const INK = PALETTE.map(([r, g, b]) => ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0);
+
+  function line([x0, y0, x1, y1, c]) {
+    x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+    const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (;;) {
+      if (x0 >= 0 && x0 < W && y0 >= 0 && y0 < H) dots[y0 * W + x0] = INK[c];
+      if (x0 === x1 && y0 === y1) return;
+      const e2 = 2 * err;
+      if (e2 >= dy) { err += dy; x0 += sx; }
+      if (e2 <= dx) { err += dx; y0 += sy; }
+    }
+  }
+
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  let job = 0;
+
+  // Draw a picture. With `slowly`, the lines go down a few at a time, the way the old machines drew.
+  function paint(segs, slowly) {
+    const mine = ++job;
+    dots.fill(INK[BLACK]);
+    if (!slowly || still.matches) {
+      segs.forEach(line);
+      ctx.putImageData(image, 0, 0);
+      return;
+    }
+    const each = Math.max(2, Math.ceil(segs.length / 40));
+    let i = 0;
+    const tick = () => {
+      if (mine !== job) return;
+      for (let k = 0; k < each && i < segs.length; k += 1, i += 1) line(segs[i]);
+      ctx.putImageData(image, 0, 0);
+      if (i < segs.length) requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  // ---- shapes. Each returns a list of segments [x0, y0, x1, y1, colour]. ----
+
+  const P = (c, ...p) => {
+    const out = [];
+    for (let i = 0; i + 3 < p.length; i += 2) out.push([p[i], p[i + 1], p[i + 2], p[i + 3], c]);
+    return out;
+  };
+  const R = (c, x, y, w, h) => P(c, x, y, x + w, y, x + w, y + h, x, y + h, x, y);
+  const C = (c, cx, cy, r, n = 12) => {
+    const p = [];
+    for (let i = 0; i <= n; i += 1) p.push(cx + r * Math.cos(i * 2 * Math.PI / n), cy + r * Math.sin(i * 2 * Math.PI / n));
+    return P(c, ...p);
+  };
+  const D = (c, ...p) => {
+    const out = [];
+    for (let i = 0; i + 1 < p.length; i += 2) out.push([p[i], p[i + 1], p[i], p[i + 1], c]);
+    return out;
+  };
+  const place = (segs, dx, dy, k = 1) => segs.map(([a, b, c, d, col]) => [dx + a * k, dy + b * k, dx + c * k, dy + d * k, col]);
+
+  // A stroke alphabet on a grid three dots wide and five high. Each stroke is a run of xy pairs.
+  const FONT = {
+    A: '0401102124 0222', B: '0400102112231404 0212', C: '20000424', D: '04001021231404', E: '20000424 0212',
+    F: '200004 0212', G: '200004242212', H: '0004 2024 0222', I: '0020 1014 0424', J: '20231403',
+    K: '0004 200224', L: '000424', M: '0400122024', N: '04002420', O: '0020240400', P: '040010211202',
+    Q: '0020240400 1324', R: '040010211202 122324', S: '200002222404', T: '0020 1014', U: '00042420',
+    V: '001420', W: '0004122420', X: '0024 2004', Y: '001220 1214', Z: '00200424',
+    0: '0020240400', 1: '011014 0424', 2: '002022020424', 3: '00202404 0222', 4: '000222 2024',
+    5: '200002222404', 6: '200004242202', 7: '002014', 8: '0020240400 0222', 9: '220200202404',
+    '-': '0222', '.': '1414', ':': '1111 1313', '>': '012203', '<': '210223', '?': '0020221213 1414',
+    '/': '2004', '%': '0000 2004 2424', '=': '0121 0323', '+': '1113 0222', "'": '1011',
+  };
+  // At the smallest size three letters need their own shapes to stay apart from their neighbours.
+  const SMALL = { M: '0400 2024 0121 0222', N: '0400102124', V: '0003142320' };
+  const glyph = (ch, k) => (k === 1 && Object.hasOwn(SMALL, ch) ? SMALL[ch] : Object.hasOwn(FONT, ch) ? FONT[ch] : '');
+  const textWidth = (str, k = 1) => (str.length - 1) * 4 * k + 2 * k;
+  function T(c, x, y, str, k = 1) {
+    const out = [];
+    let at = x;
+    for (const ch of String(str).toUpperCase()) {
+      for (const st of glyph(ch, k).split(' ')) {
+        const p = [];
+        for (let i = 0; i < st.length; i += 2) p.push(at + Number(st[i]) * k, y + Number(st[i + 1]) * k);
+        if (p.length === 2) p.push(p[0], p[1]);
+        out.push(...P(c, ...p));
+      }
+      at += 4 * k;
+    }
+    return out;
+  }
+  const TC = (c, cx, y, str, k = 1) => T(c, Math.round(cx - textWidth(str, k) / 2), y, str, k);
+
+  // ---- the room, seen from the south wall ----
+
+  const SHELL = [
+    ...R(WHITE, 70, 30, 140, 80),
+    ...P(WHITE, 0, 0, 70, 30), ...P(WHITE, 279, 0, 210, 30),
+    ...P(WHITE, 0, 159, 70, 110), ...P(WHITE, 279, 159, 210, 110),
+  ];
+
+  // A door on the left wall, in perspective. `flip` puts it on the right.
+  function sideDoor(c, flip, cross) {
+    const top = (x) => x * 30 / 70, bottom = (x) => 159 - x * 49 / 70;
+    const X = (x) => (flip ? 279 - x : x);
+    const lintel = (x) => bottom(x) - 0.7 * (bottom(x) - top(x));
+    const a = 22, b = 48;
+    const out = P(c, X(a), bottom(a), X(a), lintel(a), X(b), lintel(b), X(b), bottom(b));
+    out.push(...D(c, X(b - 4), (lintel(b) + bottom(b)) / 2));
+    if (cross) out.push(...P(c, X(a), lintel(a), X(b), bottom(b)), ...P(c, X(b), lintel(b), X(a), bottom(a)));
+    return out;
+  }
+
+  // Doors are drawn from the exits the rules report. A locked one is orange and crossed.
+  function door(dir, isLocked) {
+    const c = isLocked ? ORANGE : WHITE;
+    if (dir === 'north') {
+      const out = [...P(c, 80, 110, 80, 60, 102, 60, 102, 110), ...D(c, 98, 87)];
+      if (isLocked) out.push(...P(c, 80, 60, 102, 110), ...P(c, 102, 60, 80, 110));
+      return out;
+    }
+    if (dir === 'south') {
+      const out = P(c, 116, 159, 126, 150, 154, 150, 164, 159);
+      if (isLocked) out.push(...P(c, 126, 150, 164, 159), ...P(c, 154, 150, 116, 159));
+      return out;
+    }
+    return sideDoor(c, dir === 'east', isLocked);
+  }
+
+  // ---- what stands in each room ----
+
+  const rackOf = (x, led) => {
+    const out = R(WHITE, x, 38, 26, 72);
+    for (let y = 50; y <= 98; y += 12) out.push(...P(WHITE, x, y, x + 26, y));
+    for (let y = 44; y <= 104; y += 12) out.push(...D(led, x + 4, y, x + 8, y, x + 12, y), ...P(WHITE, x + 17, y, x + 22, y));
+    return out;
+  };
+
+  const chair = (x, y, k) => [...P(WHITE, x, y, x, y + 18), ...P(WHITE, x, y + 9, x + 9 * k, y + 9, x + 9 * k, y + 18)];
+
+  const vaultSlots = () => {
+    const out = [...R(WHITE, 112, 38, 90, 60), ...P(WHITE, 142, 38, 142, 98), ...P(WHITE, 172, 38, 172, 98),
+      ...P(WHITE, 112, 58, 202, 58), ...P(WHITE, 112, 78, 202, 78)];
+    for (let n = 0; n < 9; n += 1) {
+      const x = 112 + (n % 3) * 30, y = 38 + Math.floor(n / 3) * 20;
+      out.push(...T(WHITE, x + 2, y + 2, String(n + 1)));
+      if (n !== 4 && n !== 1 && n !== 6) out.push(...R(WHITE, x + 9, y + 7, 14, 9), ...P(WHITE, x + 12, y + 7, x + 12, y + 11, x + 20, y + 11, x + 20, y + 7));
+    }
+    return out;
+  };
+
+  const binders = () => {
+    const out = P(WHITE, 84, 58, 108, 58);
+    for (let x = 84; x <= 108; x += 4) out.push(...P(WHITE, x, 58, x, 72));
+    return out;
+  };
+
+  const ROOM_ART = {
+    security: { segs: [
+      ...R(WHITE, 110, 36, 28, 20), ...T(ORANGE, 114, 44, 'ALERT'), ...P(WHITE, 124, 56, 124, 64),
+      ...R(WHITE, 142, 36, 28, 20), ...T(GREEN, 144, 44, 'DENIED'), ...P(WHITE, 156, 56, 156, 64),
+      ...R(WHITE, 178, 34, 24, 14), ...C(WHITE, 190, 38, 2, 6), ...P(WHITE, 190, 40, 190, 45), ...P(WHITE, 187, 42, 193, 42),
+      ...P(WHITE, 110, 64, 206, 64, 214, 72, 104, 72, 110, 64), ...R(WHITE, 104, 72, 110, 42),
+      ...R(WHITE, 114, 66, 9, 4), ...R(WHITE, 128, 67, 24, 3),
+      ...P(WHITE, 160, 72, 160, 114), ...P(WHITE, 160, 86, 214, 86), ...P(WHITE, 160, 100, 214, 100),
+      ...P(WHITE, 182, 79, 192, 79), ...P(WHITE, 182, 93, 192, 93), ...P(WHITE, 182, 107, 192, 107),
+    ] },
+    server: { segs: [
+      ...rackOf(110, GREEN), ...rackOf(140, GREEN), ...rackOf(170, ORANGE),
+      ...R(WHITE, 126, 118, 36, 20), ...T(ORANGE, 136, 126, 'LEAK'),
+      ...P(WHITE, 144, 138, 144, 144), ...P(WHITE, 134, 144, 154, 144),
+      ...P(ORANGE, 190, 110, 190, 128, 162, 128),
+      ...T(ORANGE, 196, 126, '>>>'),
+    ] },
+    closet: { segs: [
+      ...R(WHITE, 110, 36, 64, 12), ...D(GREEN, 116, 42, 122, 42, 128, 42, 134, 42, 140, 42, 146, 42, 152, 42, 158, 42, 164, 42, 168, 42),
+      ...R(WHITE, 110, 66, 64, 8), ...R(WHITE, 110, 80, 64, 8), ...R(WHITE, 110, 94, 64, 8),
+      ...D(GREEN, 114, 70, 118, 70, 122, 70, 114, 84, 118, 84, 114, 98, 118, 98, 122, 98),
+      ...P(GREEN, 116, 48, 114, 66), ...P(GREEN, 128, 48, 132, 66), ...P(BLUE, 140, 48, 138, 80),
+      ...P(GREEN, 152, 48, 158, 66), ...P(BLUE, 164, 48, 160, 94), ...P(GREEN, 122, 48, 148, 66),
+      ...R(WHITE, 180, 62, 24, 30), ...P(WHITE, 184, 92, 184, 110), ...P(WHITE, 200, 92, 200, 110),
+      ...P(WHITE, 204, 62, 214, 56, 214, 98, 204, 92), ...C(WHITE, 209, 77, 2, 6),
+    ] },
+    breakroom: { segs: [
+      ...R(WHITE, 170, 36, 34, 74), ...R(WHITE, 174, 40, 20, 38), ...P(WHITE, 174, 52, 194, 52), ...P(WHITE, 174, 64, 194, 64),
+      ...R(WHITE, 176, 44, 3, 7), ...R(WHITE, 182, 44, 3, 7), ...R(WHITE, 188, 56, 3, 7), ...R(WHITE, 176, 68, 3, 7),
+      ...D(WHITE, 199, 44, 199, 50, 199, 56, 199, 62, 199, 68),
+      ...T(WHITE, 173, 84, 'SODA'), ...R(WHITE, 176, 96, 22, 8),
+      ...R(WHITE, 110, 86, 52, 24), ...P(WHITE, 136, 86, 136, 110), ...D(WHITE, 132, 98, 140, 98),
+      ...R(WHITE, 116, 70, 12, 16), ...P(WHITE, 118, 76, 126, 76), ...R(WHITE, 144, 80, 5, 6),
+      ...P(WHITE, 92, 124, 180, 124, 190, 136, 82, 136, 92, 124),
+      ...P(WHITE, 86, 136, 86, 154), ...P(WHITE, 186, 136, 186, 154), ...P(WHITE, 96, 136, 96, 148), ...P(WHITE, 176, 136, 176, 148),
+    ] },
+    archive: { segs: [
+      ...R(WHITE, 78, 36, 124, 74), ...P(WHITE, 78, 54, 202, 54), ...P(WHITE, 78, 72, 202, 72), ...P(WHITE, 78, 90, 202, 90),
+      ...R(WHITE, 84, 40, 16, 14), ...R(WHITE, 104, 40, 16, 14), ...R(WHITE, 128, 42, 22, 12), ...R(WHITE, 156, 40, 16, 14), ...R(WHITE, 178, 40, 18, 14),
+      ...binders(), ...R(WHITE, 118, 58, 22, 14), ...T(WHITE, 122, 63, '1998'), ...R(WHITE, 146, 58, 22, 14), ...T(WHITE, 150, 63, '2003'), ...R(WHITE, 176, 60, 20, 12),
+      ...R(WHITE, 86, 75, 20, 15), ...R(WHITE, 88, 77, 12, 10), ...R(WHITE, 114, 77, 18, 13), ...R(WHITE, 170, 76, 22, 14),
+      ...R(WHITE, 84, 95, 22, 15), ...R(WHITE, 160, 96, 18, 14), ...R(WHITE, 182, 94, 16, 16),
+      ...D(DIM, 100, 130, 140, 126, 180, 134, 120, 145, 200, 128, 90, 142, 160, 140, 224, 146),
+    ] },
+    exec: { segs: [
+      ...R(WHITE, 82, 38, 62, 36),
+      ...P(BLUE, 82, 66, 90, 66, 90, 54, 98, 54, 98, 60, 108, 60, 108, 48, 116, 48, 116, 62, 126, 62, 126, 56, 134, 56, 134, 66, 144, 66),
+      ...C(WHITE, 134, 45, 3, 8),
+      ...R(WHITE, 166, 40, 30, 22), ...P(WHITE, 170, 58, 178, 48, 184, 54, 190, 46, 192, 58),
+      ...P(WHITE, 100, 94, 192, 94, 200, 104, 92, 104, 100, 94), ...R(WHITE, 92, 104, 108, 24),
+      ...R(WHITE, 124, 72, 34, 20), ...T(GREEN, 129, 80, 'CEO-PC'), ...P(WHITE, 141, 92, 141, 94),
+      ...R(WHITE, 130, 132, 32, 8), ...P(WHITE, 133, 140, 133, 149), ...P(WHITE, 159, 140, 159, 149),
+    ] },
+    lobby: { segs: [
+      ...T(WHITE, 116, 38, 'WELCOME', 2),
+      ...C(WHITE, 192, 44, 8, 12), ...P(WHITE, 192, 44, 192, 38),
+      ...P(WHITE, 112, 84, 198, 84, 206, 94, 104, 94, 112, 84), ...R(WHITE, 104, 94, 102, 22), ...T(WHITE, 136, 103, 'FRONT DESK'),
+      ...P(WHITE, 58, 140, 62, 150, 72, 150, 76, 140, 58, 140),
+      ...P(GREEN, 67, 140, 67, 126), ...P(GREEN, 67, 132, 60, 124), ...P(GREEN, 67, 130, 74, 122),
+    ] },
+    garage: { segs: [
+      ...R(WHITE, 112, 30, 12, 80),
+      ...R(WHITE, 134, 40, 24, 16), ...T(WHITE, 139, 43, 'P2', 2),
+      ...P(WHITE, 186, 30, 186, 40), ...P(WHITE, 178, 40, 194, 40), ...P(WHITE, 178, 40, 181, 44, 191, 44, 194, 40),
+      ...P(ORANGE, 176, 48, 172, 53), ...P(ORANGE, 186, 48, 186, 54), ...P(ORANGE, 196, 48, 200, 53),
+      ...P(WHITE, 150, 110, 150, 102, 158, 100, 164, 92, 186, 92, 192, 100, 202, 102, 202, 110),
+      ...C(WHITE, 160, 110, 4, 8), ...C(WHITE, 192, 110, 4, 8),
+      ...P(WHITE, 40, 150, 40, 138, 52, 135, 62, 122, 100, 122, 110, 135, 124, 138, 124, 150, 40, 150),
+      ...P(WHITE, 66, 134, 70, 126, 96, 126, 100, 134, 66, 134),
+      ...C(WHITE, 56, 150, 6, 10), ...C(WHITE, 108, 150, 6, 10),
+      ...P(WHITE, 140, 159, 150, 122), ...P(WHITE, 230, 159, 208, 122),
+    ] },
+    // The roof has no walls. Its two ways down are part of the drawing: the stair hut, and the edge behind you.
+    roof: { open: true, segs: [
+      ...P(WHITE, 0, 132, 40, 96, 240, 96, 279, 132), ...P(WHITE, 0, 159, 40, 108, 240, 108, 279, 159),
+      ...P(WHITE, 40, 96, 40, 108), ...P(WHITE, 240, 96, 240, 108),
+      ...R(WHITE, 48, 60, 34, 48), ...P(WHITE, 48, 60, 54, 54, 88, 54, 82, 60), ...P(WHITE, 88, 54, 88, 100),
+      ...P(WHITE, 56, 108, 56, 74, 72, 74, 72, 108), ...D(WHITE, 69, 92),
+      ...P(WHITE, 116, 159, 126, 150, 154, 150, 164, 159),
+      ...C(WHITE, 236, 26, 9, 14),
+      ...D(WHITE, 20, 14, 44, 40, 98, 10, 156, 22, 180, 8, 206, 34, 262, 58, 14, 62, 100, 48),
+      ...P(WHITE, 128, 30, 128, 96), ...P(WHITE, 118, 40, 138, 40), ...P(WHITE, 121, 48, 135, 48), ...P(WHITE, 124, 56, 132, 56),
+      ...P(WHITE, 128, 30, 108, 96), ...P(WHITE, 128, 30, 148, 96),
+      ...C(WHITE, 200, 62, 14, 12), ...C(WHITE, 200, 62, 3, 6), ...P(WHITE, 200, 62, 212, 48),
+      ...P(WHITE, 200, 76, 200, 96), ...P(WHITE, 192, 96, 208, 96),
+      ...P(BLUE, 30, 22, 70, 22), ...P(BLUE, 52, 30, 96, 30), ...P(BLUE, 150, 36, 178, 36), ...P(BLUE, 226, 76, 262, 76),
+    ] },
+    vault: { segs: [
+      ...vaultSlots(), ...T(WHITE, 143, 102, 'BACKUPS'),
+      ...C(WHITE, 246, 84, 12, 12), ...P(WHITE, 234, 84, 258, 84), ...P(WHITE, 246, 72, 246, 96), ...C(WHITE, 246, 84, 3, 6),
+    ] },
+    conf: { segs: [
+      ...R(WHITE, 96, 38, 88, 38), ...P(WHITE, 100, 78, 180, 78),
+      ...P(BLUE, 102, 46, 132, 46), ...P(BLUE, 102, 52, 124, 52),
+      ...R(ORANGE, 140, 44, 14, 10), ...P(ORANGE, 154, 49, 164, 49), ...P(ORANGE, 161, 46, 164, 49, 161, 52), ...R(ORANGE, 164, 44, 14, 10),
+      ...T(WHITE, 104, 64, 'WHO HAS ROOT?'),
+      ...P(WHITE, 90, 118, 190, 118, 206, 138, 74, 138, 90, 118), ...P(WHITE, 80, 138, 80, 154), ...P(WHITE, 200, 138, 200, 154),
+      ...chair(54, 130, 1), ...chair(228, 128, -1), ...chair(236, 140, -1),
+    ] },
+    help: { segs: [
+      ...R(WHITE, 112, 34, 90, 16), ...T(WHITE, 123, 37, 'HELP DESK', 2),
+      ...R(WHITE, 112, 56, 34, 12), ...T(ORANGE, 116, 60, 'TKT: 47'),
+      ...P(WHITE, 108, 92, 204, 92, 212, 100, 100, 100, 108, 92), ...R(WHITE, 100, 100, 112, 16),
+      ...R(WHITE, 112, 74, 22, 14), ...P(WHITE, 123, 88, 123, 92),
+      ...T(WHITE, 106, 106, '4521'), ...T(WHITE, 148, 106, '4522'), ...T(WHITE, 190, 106, '4523'),
+    ] },
+  };
+
+  // ---- the things you can carry: a small drawing in a box 24 by 16, and where it lies ----
+
+  const G = GREEN;
+  const ICON = {
+    badge: [...R(G, 6, 2, 12, 13), ...R(G, 10, 0, 4, 2), ...C(G, 12, 7, 2, 8), ...P(G, 9, 12, 15, 12)],
+    laptop: [...R(G, 4, 1, 16, 10), ...P(G, 4, 11, 1, 15, 23, 15, 20, 11), ...P(G, 5, 13, 19, 13)],
+    token: [...R(G, 8, 2, 8, 10), ...R(G, 10, 4, 4, 3), ...C(G, 12, 14, 2, 8)],
+    disk: [...R(G, 5, 1, 14, 14), ...R(G, 9, 1, 6, 5), ...R(G, 8, 9, 8, 6)],
+    key: [...C(G, 5, 8, 4, 10), ...P(G, 9, 8, 22, 8), ...P(G, 18, 8, 18, 12), ...P(G, 21, 8, 21, 11)],
+    printout: [...R(G, 6, 1, 12, 14), ...P(G, 8, 4, 16, 4), ...P(G, 8, 7, 16, 7), ...P(G, 8, 10, 14, 10)],
+    usb: [...R(G, 3, 5, 14, 6), ...R(G, 17, 6, 4, 4)],
+    flashlight: [...R(G, 2, 6, 12, 4), ...P(G, 14, 6, 19, 3, 19, 13, 14, 10), ...P(G, 21, 5, 23, 3), ...P(G, 21, 8, 24, 8), ...P(G, 21, 11, 23, 13)],
+    headset: [...P(G, 5, 9, 5, 5, 8, 2, 16, 2, 19, 5, 19, 9), ...R(G, 3, 9, 4, 6), ...R(G, 17, 9, 4, 6), ...P(G, 5, 15, 10, 15)],
+    coffee: [...P(G, 7, 6, 8, 15, 16, 15, 17, 6, 7, 6), ...P(G, 17, 8, 20, 8, 20, 12, 17, 12), ...P(G, 10, 4, 11, 2, 10, 0), ...P(G, 14, 4, 15, 2, 14, 0)],
+    energy: [...R(G, 8, 2, 8, 13), ...P(G, 9, 2, 9, 1, 15, 1, 15, 2), ...P(G, 13, 5, 11, 9, 13, 9, 11, 13)],
+    skateboard: [...P(G, 1, 8, 3, 10, 21, 10, 23, 8), ...C(G, 6, 13, 2, 8), ...C(G, 18, 13, 2, 8)],
+    map: [...P(G, 2, 3, 9, 1, 15, 3, 22, 1, 22, 13, 15, 15, 9, 13, 2, 15, 2, 3), ...P(G, 9, 1, 9, 13), ...P(G, 15, 3, 15, 15), ...P(G, 11, 7, 13, 9), ...P(G, 13, 7, 11, 9)],
+    note: [...P(G, 5, 2, 19, 2, 19, 11, 15, 15, 5, 15, 5, 2), ...P(G, 19, 11, 15, 11, 15, 15), ...P(G, 8, 6, 16, 6), ...P(G, 8, 9, 13, 9)],
+  };
+  const ITEM_AT = {
+    badge: [124, 93], laptop: [178, 52], token: [180, 70], disk: [145, 60], key: [176, 128],
+    printout: [100, 112], usb: [164, 84], flashlight: [150, 80], headset: [178, 78], coffee: [146, 112],
+    energy: [156, 81], skateboard: [150, 128], map: [100, 110], note: [150, 110],
+  };
+
+  // ---- pictures ----
+
+  function roomPicture(st) {
+    const art = Object.hasOwn(ROOM_ART, st.room) ? ROOM_ART[st.room] : { segs: [] };
+    let segs = [];
+    if (!art.open) {
+      segs.push(...SHELL);
+      for (const dir of ['north', 'west', 'east', 'south']) {
+        if (Object.hasOwn(st.exits, dir)) segs.push(...door(dir, st.exits[dir].locked));
+      }
+    }
+    segs.push(...art.segs);
+    for (const id of st.items) {
+      if (Object.hasOwn(ICON, id)) segs.push(...place(ICON[id], ...ITEM_AT[id]));
+    }
+    if (st.dark) segs = segs.map(([a, b, c, d]) => [a, b, c, d, DIM]);
+    return segs;
+  }
+
+  function itemPicture(id, name) {
+    if (!Object.hasOwn(ICON, id)) return [];
+    return [...R(WHITE, 60, 12, 160, 104), ...place(ICON[id], 80, 24, 5), ...TC(WHITE, 140, 128, name, 2)];
+  }
+
+  function mapPicture(e) {
+    const segs = [];
+    const BW = 58, BH = 28;
+    e.grid.forEach((row, r) => row.forEach((id, c) => {
+      const cell = e.cells[id];
+      const x = 12 + c * 66, y = 14 + r * 42;
+      const here = id === e.at;
+      const col = here ? GREEN : cell.locked ? ORANGE : WHITE;
+      segs.push(...R(col, x, y, BW, BH));
+      if (here) segs.push(...R(col, x + 2, y + 2, BW - 4, BH - 4));
+      segs.push(...TC(col, x + BW / 2, y + (here || cell.locked ? 7 : 11), cell.short));
+      if (here) segs.push(...TC(col, x + BW / 2, y + 16, 'YOU'));
+      else if (cell.locked) segs.push(...TC(col, x + BW / 2, y + 16, 'LOCKED'));
+      if (c < row.length - 1) segs.push(...P(WHITE, x + BW, y + BH / 2, x + 66, y + BH / 2));
+      if (r < e.grid.length - 1) segs.push(...P(WHITE, x + BW / 2, y + BH, x + BW / 2, y + 42));
+    }));
+    segs.push(...P(WHITE, 140, 150, 140, 142), ...P(WHITE, 137, 145, 140, 142, 143, 145), ...T(WHITE, 146, 144, 'NORTH'));
+    return segs;
+  }
+
+  const windows = () => {
+    const out = [];
+    for (let r = 0; r < 3; r += 1) for (let c = 0; c < 8; c += 1) {
+      const lit = r === 1 && c === 5;
+      const x = 68 + c * 19, y = 98 + r * 17;
+      out.push(...R(lit ? GREEN : WHITE, x, y, 10, 9));
+      if (lit) out.push(...P(GREEN, x + 5, y, x + 5, y + 9), ...P(GREEN, x, y + 4, x + 10, y + 4));
+    }
+    return out;
+  };
+
+  const PICTURES = {
+    title: [
+      ...TC(WHITE, 140, 18, 'MIDNIGHT', 4), ...TC(ORANGE, 140, 48, 'BREACH', 4),
+      ...P(WHITE, 0, 150, 279, 150), ...P(WHITE, 60, 150, 60, 90, 220, 90, 220, 150),
+      ...windows(), ...C(WHITE, 248, 24, 10, 14),
+      ...T(BLUE, 62, 80, '01001101 01001001 01000100'), ...T(WHITE, 186, 80, '12:00 AM'),
+    ],
+    won: [
+      ...P(GREEN, 140, 22, 184, 36, 184, 76, 140, 114, 96, 76, 96, 36, 140, 22),
+      ...P(GREEN, 118, 66, 134, 84, 164, 48),
+      ...TC(GREEN, 140, 124, 'SYSTEM SECURE', 2), ...TC(WHITE, 140, 144, 'INTRUDER LOCKED OUT'),
+    ],
+    lost: [
+      ...TC(ORANGE, 140, 14, 'DATA STOLEN', 2),
+      ...R(ORANGE, 60, 34, 160, 14),
+      ...Array.from({ length: 52 }, (_, i) => P(ORANGE, 63 + i * 3, 37, 63 + i * 3, 45)).flat(),
+      ...TC(ORANGE, 140, 54, '100%'),
+      ...C(WHITE, 140, 96, 20, 16), ...R(WHITE, 130, 114, 20, 10),
+      ...P(WHITE, 135, 114, 135, 124), ...P(WHITE, 140, 114, 140, 124), ...P(WHITE, 145, 114, 145, 124),
+      ...P(WHITE, 129, 90, 136, 97), ...P(WHITE, 136, 90, 129, 97), ...P(WHITE, 144, 90, 151, 97), ...P(WHITE, 151, 90, 144, 97),
+      ...P(WHITE, 140, 100, 138, 105, 142, 105, 140, 100),
+      ...TC(WHITE, 140, 144, 'THE BREACH IS COMPLETE'),
+    ],
+  };
+
+  // ---- the page ----
+
+  const $ = (id) => document.getElementById(id);
+  const log = $('log'), input = $('cmd');
+  const KIND = { blocked: 'warn', warn: 'warn', crit: 'crit', lose: 'crit', taken: 'good', good: 'good', win: 'good', free: 'cool', hint: 'hint', echo: 'echo' };
+
+  function print(text, type) {
+    for (const row of String(text).split('\n')) {
+      const p = document.createElement('p');
+      if (Object.hasOwn(KIND, type)) p.className = KIND[type];
+      p.textContent = row;
+      log.append(p);
+    }
+  }
+
+  function printRoom(e) {
+    const p = document.createElement('p');
+    p.className = 'room';
+    const b = document.createElement('b');
+    b.textContent = e.name;
+    p.append(b);
+    log.append(p);
+    print(e.text);
+  }
+
+  function showStatus(st) {
+    $('where').textContent = st.name;
+    $('counts').textContent = `Moves ${st.moves}  Score ${st.score}`;
+    const bar = $('bar');
+    const fill = document.createElement('span'), rest = document.createElement('span'), pct = document.createElement('span');
+    fill.className = pct.className = st.stolen.level;
+    rest.className = 'rest';
+    fill.textContent = '#'.repeat(st.stolen.filled);
+    rest.textContent = '-'.repeat(st.stolen.width - st.stolen.filled);
+    pct.textContent = `${st.stolen.percent}%`;
+    bar.replaceChildren('Stolen [', fill, rest, '] ', pct);
+  }
+
+  let state = null;
+  let shown = null;        // the room whose picture is on the screen, or null for any other picture
+
+  // Print the events, then draw the one picture they call for.
+  function show(events) {
+    let picture = null, slowly = false, label = '';
+    let status = null;
+    for (const e of events) {
+      if (e.type === 'room') {
+        printRoom(e);
+        slowly = true;
+      } else if (e.type === 'status') {
+        status = e;
+      } else if (e.text) {
+        print(e.text, e.type);
+      }
+      if (e.type === 'map') { picture = mapPicture(e); label = 'Map of the building'; }
+      if ((e.type === 'examine' || e.type === 'taken') && e.item) {
+        const name = Breach.DATA.items[e.item].name;
+        picture = itemPicture(e.item, name);
+        label = `Close view: ${name}`;
+      }
+    }
+    showStatus(status);
+    if (status.over === 'won' || status.over === 'lost') {
+      picture = PICTURES[status.over];
+      label = status.over === 'won' ? 'A shield with a tick' : 'A skull under a full progress bar';
+      slowly = events.some((e) => e.type === 'win' || e.type === 'lose');
+    }
+    if (picture) {
+      shown = null;
+    } else {
+      picture = roomPicture(status);
+      label = `Line drawing: ${status.name}`;
+      slowly = slowly || shown !== status.room;
+      shown = status.room;
+    }
+    canvas.setAttribute('aria-label', label);
+    paint(picture, slowly);
+    while (log.childElementCount > 300) log.firstElementChild.remove();
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function begin() {
+    const game = Breach.newGame();
+    state = game.state;
+    shown = null;
+    log.replaceChildren();
+    show(game.events);
+  }
+
+  function title() {
+    paint(PICTURES.title, true);
+    print('An intruder is stealing company data.');
+    print('Carry the laptop, the admin token and the firewall disk to the Server Room. Lock the intruder out before the moves run out.');
+    print('Press Enter to begin.', 'good');
+  }
+
+  const past = [];
+  let recall = 0;
+
+  $('form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const text = input.value.trim();
+    input.value = '';
+    if (!state) return begin();
+    if (!text) return;
+    past.push(text);
+    recall = past.length;
+    print(`> ${text}`, 'echo');
+    const restart = Breach.parse(text).verb === 'restart';
+    const result = Breach.step(state, text);
+    state = result.state;
+    if (restart) { shown = null; log.replaceChildren(); }
+    show(result.events);
+  });
+
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+    ev.preventDefault();
+    recall = Math.max(0, Math.min(past.length, recall + (ev.key === 'ArrowUp' ? -1 : 1)));
+    input.value = recall < past.length ? past[recall] : '';
+  });
+
+  // A click anywhere on the screen goes to the command line, unless you are selecting text to copy.
+  $('crt').addEventListener('click', () => {
+    if (!getSelection().toString()) input.focus();
+  });
+
+  title();
+  input.focus();
+})();
+</script>
+</body>
+</html>
